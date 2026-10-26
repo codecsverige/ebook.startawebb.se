@@ -169,7 +169,7 @@ const en = {
   ready: "Complete",
   words: "words",
   loginTitle: "Your next chapter starts here.",
-  loginBody: "We’ll email you a secure sign-in link. No password to remember.",
+  loginBody: "Continue with Google or receive a secure sign-in link by email.",
   email: "Email address",
   sendLink: "Email me a sign-in link",
   checkEmail: "Check your inbox",
@@ -188,7 +188,7 @@ const en = {
   settings: "Account",
   deleteAccount: "Delete account and books",
   deleteAccountConfirm:
-    "Permanently delete your account, books, and artwork? Billing records may be retained where required. This cannot be undone.",
+    "Permanently delete your Ebook Studio profile, books, and artwork? Your Google account and access to our other services remain available. Billing records may be retained. This cannot be undone.",
 };
 export type Copy = typeof en;
 const ar: Copy = {
@@ -348,7 +348,7 @@ const ar: Copy = {
   ready: "مكتمل",
   words: "كلمة",
   loginTitle: "فصلك القادم يبدأ هنا.",
-  loginBody: "نرسل رابط دخول آمن إلى بريدك. دون كلمة مرور.",
+  loginBody: "ادخل بحساب Google أو احصل على رابط دخول آمن في بريدك.",
   email: "البريد الإلكتروني",
   sendLink: "أرسل لي رابط الدخول",
   checkEmail: "تفقّد بريدك",
@@ -366,7 +366,7 @@ const ar: Copy = {
   settings: "الحساب",
   deleteAccount: "حذف الحساب والكتب",
   deleteAccountConfirm:
-    "حذف حسابك وكتبك وصورها نهائيًا؟ قد تُحفظ سجلات الفوترة حيث يفرض القانون ذلك. لا يمكن التراجع.",
+    "حذف ملفك وكتبك وصورها في Ebook Studio نهائيًا؟ يبقى حساب Google ودخولك إلى خدماتنا الأخرى. قد تُحفظ سجلات الفوترة. لا يمكن التراجع.",
 };
 const sv: Copy = {
   navHow: "Så fungerar det",
@@ -533,7 +533,7 @@ const sv: Copy = {
   words: "ord",
   loginTitle: "Ditt nästa kapitel börjar här.",
   loginBody:
-    "Vi skickar en säker inloggningslänk till din e-post. Inget lösenord behövs.",
+    "Fortsätt med Google eller få en säker inloggningslänk via e-post.",
   email: "E-postadress",
   sendLink: "Skicka inloggningslänk",
   checkEmail: "Kolla din inkorg",
@@ -552,11 +552,22 @@ const sv: Copy = {
   settings: "Konto",
   deleteAccount: "Radera konto och böcker",
   deleteAccountConfirm:
-    "Radera ditt konto, böcker och bilder permanent? Faktureringsuppgifter kan sparas när lagen kräver det. Detta går inte att ångra.",
+    "Radera din Ebook Studio-profil, böcker och bilder permanent? Ditt delade Google/Firebase-konto finns kvar för andra tjänster. Faktureringsuppgifter kan sparas. Detta går inte att ångra.",
 };
 export const copy: Record<Locale, Copy> = { en, ar, sv };
 export function errorMessage(code: string, l: Locale): string {
   const map: Record<string, [string, string, string]> = {
+    popup_blocked: [
+      "Allow the Google sign-in popup, or use an email link.",
+      "اسمح بفتح نافذة Google أو استخدم رابط البريد.",
+      "Tillåt Googles inloggningsfönster eller använd en e-postlänk.",
+    ],
+    invalid_login_link: [
+      "This link is invalid or expired. Request a new sign-in link.",
+      "الرابط غير صالح أو انتهت صلاحيته. اطلب رابط دخول جديدًا.",
+      "Länken är ogiltig eller har gått ut. Begär en ny inloggningslänk.",
+    ],
+
     not_configured: [
       "The service is still being connected. Please try again later.",
       "الخدمة ما زالت قيد التوصيل. حاول لاحقًا.",

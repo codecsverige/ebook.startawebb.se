@@ -1,6 +1,6 @@
 import "server-only";
 import { getRun } from "workflow/api";
-import { adminClient } from "./supabase";
+import { studioStore } from "./firebase-admin";
 import type { Job } from "./domain";
 
 export async function reconcileJob(job: Job | null): Promise<Job | null> {
@@ -14,19 +14,11 @@ export async function reconcileJob(job: Job | null): Promise<Job | null> {
       return job;
     }
   }
-  if (failed) {
-    const { data } = await adminClient()
-      .from("jobs")
-      .update({
-        status: "failed",
-        error_code: "generation_failed",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", job.id)
-      .in("status", ["queued", "running"])
-      .select("*")
-      .maybeSingle();
-    return (data as Job | null) || job;
-  }
-  return job;
+  return failed
+    ? (await studioStore().finishJob(
+        job.id,
+        "generation_failed",
+        !job.run_id,
+      )) || job
+    : job;
 }

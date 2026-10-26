@@ -110,6 +110,11 @@ export type Job = {
   created_at: string;
 };
 export type BookWithCover = Book & { cover_url?: string | null };
+export type BookshelfBook = Omit<BookWithCover, "chapters"> & {
+  word_count: number;
+  completed_chapters: number;
+  complete: boolean;
+};
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/u).filter(Boolean).length;
 }

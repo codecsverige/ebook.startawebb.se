@@ -17,9 +17,7 @@ import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
 import {
   briefSchema,
-  isComplete,
-  bookWords,
-  type BookWithCover,
+  type BookshelfBook,
   type Locale,
   type Brief,
 } from "@/lib/domain";
@@ -40,7 +38,7 @@ export function Dashboard({
 }) {
   const t = copy[locale];
   const router = useRouter();
-  const [books, setBooks] = useState<BookWithCover[]>([]);
+  const [books, setBooks] = useState<BookshelfBook[]>([]);
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,7 +57,7 @@ export function Dashboard({
   });
   async function load() {
     try {
-      const d = await request<{ books: BookWithCover[]; credits: number }>(
+      const d = await request<{ books: BookshelfBook[]; credits: number }>(
         "/api/books",
       );
       setBooks(d.books);
@@ -238,9 +236,9 @@ export function Dashboard({
               </div>
               <div className="shelf-book-meta">
                 <span
-                  className={`status-tag ${isComplete(book) ? "tag-green" : ""}`}
+                  className={`status-tag ${book.complete ? "tag-green" : ""}`}
                 >
-                  {isComplete(book)
+                  {book.complete
                     ? t.ready
                     : book.unlocked
                       ? t.unlocked
@@ -250,9 +248,8 @@ export function Dashboard({
               </div>
               <h2>{book.title || clipIdea(book.idea)}</h2>
               <p>
-                {Object.keys(book.chapters).length}/{book.chapter_count}{" "}
-                {t.chapters} · {bookWords(book).toLocaleString(locale)}{" "}
-                {t.words}
+                {book.completed_chapters}/{book.chapter_count} {t.chapters} ·{" "}
+                {book.word_count.toLocaleString(locale)} {t.words}
               </p>
             </Link>
           ))}

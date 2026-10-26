@@ -1,6 +1,6 @@
-import { adminClient } from "@/lib/supabase";
+import { studioStore } from "@/lib/firebase-admin";
 import { validSignature, orderWebhookSchema } from "@/lib/webhook";
-import { apiError, json, dbError, AppError } from "@/lib/http";
+import { apiError, json, AppError } from "@/lib/http";
 
 export async function POST(request: Request) {
   try {
@@ -46,14 +46,13 @@ export async function POST(request: Request) {
     if (!credits) throw new AppError("invalid_input");
     if (!a.refunded && !["paid", "partial_refund"].includes(a.status))
       return json({ ignored: true });
-    const { error } = await adminClient().rpc("apply_order", {
-      p_order: `${a.store_id}:${event.data.id}`,
-      p_user: event.meta.custom_data.user_id,
-      p_credits: credits,
-      p_refunded: a.refunded,
-      p_test: a.test_mode,
-    });
-    dbError(error);
+    await studioStore().applyOrder(
+      `${a.store_id}:${event.data.id}`,
+      event.meta.custom_data.user_id,
+      credits as 1 | 3,
+      a.refunded,
+      a.test_mode,
+    );
     return json({ ok: true });
   } catch (e) {
     return apiError(e);

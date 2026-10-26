@@ -3,17 +3,15 @@ import "server-only";
 export function appUrl(): string {
   const raw =
     process.env.APP_URL ||
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`
       : "http://localhost:3000");
   return new URL(raw).origin;
 }
 export function configuration() {
   return {
     accounts: !!(
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
     ),
     ai: !!(
       process.env.AI_GATEWAY_MODEL &&

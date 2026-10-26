@@ -42,38 +42,19 @@ export async function readJson<T>(
     throw new AppError("invalid_input");
   }
 }
-const databaseCodes = new Set([
-  "insufficient_credits",
-  "free_preview_used",
-  "rate_limit",
-  "busy",
-  "conflict",
-  "not_found",
-  "no_outline",
-  "incomplete",
-  "invalid_input",
-]);
-export function dbError(error: { message: string } | null) {
-  if (!error) return;
-  if (databaseCodes.has(error.message))
-    throw new AppError(
-      error.message,
-      error.message === "conflict" || error.message === "busy"
-        ? 409
-        : error.message === "rate_limit"
-          ? 429
-          : 400,
-    );
-  console.error("database_operation_failed", { code: "database_error" });
-  throw new AppError("service_error", 503);
-}
 export function apiError(error: unknown) {
   if (error instanceof AppError)
-    return Response.json({ error: error.code }, { status: error.status });
+    return Response.json(
+      { error: error.code },
+      { status: error.status, headers: { "Cache-Control": "no-store" } },
+    );
   console.error("request_failed", {
     type: error instanceof Error ? error.name : "unknown",
   });
-  return Response.json({ error: "service_error" }, { status: 500 });
+  return Response.json(
+    { error: "service_error" },
+    { status: 500, headers: { "Cache-Control": "no-store" } },
+  );
 }
 export function json(data: unknown, status = 200) {
   return Response.json(data, {

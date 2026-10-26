@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireUser } from "@/lib/supabase";
+import { requireUser } from "@/lib/firebase-session";
 import { takeRate } from "@/lib/books";
 import { assertOrigin, readJson, apiError, json, AppError } from "@/lib/http";
 import { appUrl, configuration } from "@/lib/config";

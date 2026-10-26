@@ -10,3 +10,9 @@ coverage/
 playwright-report/
 test-results/
 /.swc
+
+# Firebase emulator data and credentials
+.firebase/
+*-debug.log
+*service-account*.json
+*serviceAccount*.json

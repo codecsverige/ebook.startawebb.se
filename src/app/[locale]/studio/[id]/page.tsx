@@ -3,7 +3,7 @@ import { Header } from "@/components/brand";
 import { Editor } from "@/components/editor";
 import { isLocale } from "@/lib/domain";
 import { configuration } from "@/lib/config";
-import { sessionClient } from "@/lib/supabase";
+import { sessionUser } from "@/lib/firebase-session";
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Book editor",
@@ -18,10 +18,7 @@ export default async function BookEditor({
   if (!isLocale(locale) || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const config = configuration();
   if (!config.accounts) redirect(`/${locale}/login`);
-  const db = await sessionClient();
-  const {
-    data: { user },
-  } = await db.auth.getUser();
+  const user = await sessionUser();
   if (!user) redirect(`/${locale}/login`);
   return (
     <>

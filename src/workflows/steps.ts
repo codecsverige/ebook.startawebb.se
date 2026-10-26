@@ -1,50 +1,30 @@
 import { generateText, Output } from "ai";
 import { FatalError, getWorkflowMetadata } from "workflow";
 import { z } from "zod";
-import { adminClient } from "@/lib/supabase";
-import { dbError, AppError } from "@/lib/http";
+import { studioStore, studioBucket } from "@/lib/firebase-admin";
+import { coverPrefix } from "@/lib/books";
+import { AppError } from "@/lib/http";
 import {
   outlineSchema,
   chapterSchema,
   usableGeneratedChapter,
-  type Book,
-  type Job,
 } from "@/lib/domain";
 
-type WorkerJob = Job & { result_units: Record<string, boolean> };
 async function context(jobId: string) {
-  const db = adminClient();
-  const { data: job, error } = await db
-    .from("jobs")
-    .select("*")
-    .eq("id", jobId)
-    .maybeSingle();
-  dbError(error);
-  if (!job || !["queued", "running"].includes(job.status))
-    throw new FatalError("not_found");
-  const { data: book, error: bError } = await db
-    .from("books")
-    .select("*")
-    .eq("id", job.book_id)
-    .eq("user_id", job.user_id)
-    .maybeSingle();
-  dbError(bError);
-  if (!book) throw new FatalError("not_found");
-  return { db, job: job as WorkerJob, book: book as Book };
-}
-async function reserve(jobId: string, operation: string, model: string) {
-  const { data, error } = await adminClient().rpc("reserve_ai", {
-    p_job: jobId,
-    p_operation: operation,
-    p_model: model,
-  });
   try {
-    dbError(error);
+    return await studioStore().context(jobId);
   } catch (e) {
-    if (e instanceof AppError && e.status !== 503) throw new FatalError(e.code);
+    if (e instanceof AppError && e.status < 500) throw new FatalError(e.code);
     throw e;
   }
-  return data as string;
+}
+async function reserve(jobId: string, operation: string, model: string) {
+  try {
+    return await studioStore().reserveAi(jobId, operation, model);
+  } catch (e) {
+    if (e instanceof AppError && e.status < 500) throw new FatalError(e.code);
+    throw e;
+  }
 }
 async function structured<T>(
   jobId: string,
@@ -67,14 +47,13 @@ async function structured<T>(
     prompt,
     providerOptions: { gateway: { safetyIdentifier: jobId } },
   });
-  const { error } = await adminClient()
-    .from("ai_usage")
-    .update({
-      input_tokens: result.usage.inputTokens ?? 0,
-      output_tokens: result.usage.outputTokens ?? 0,
-    })
-    .eq("id", usageId);
-  if (error) console.warn("usage_record_update_failed", { jobId });
+  await studioStore()
+    .recordUsage(
+      usageId,
+      result.usage.inputTokens ?? 0,
+      result.usage.outputTokens ?? 0,
+    )
+    .catch(() => console.warn("usage_record_update_failed", { jobId }));
   if (!result.output) throw new Error("invalid_generation");
   if (
     result.finishReason === "length" ||
@@ -88,23 +67,14 @@ async function commit(
   patch: Record<string, unknown>,
   progress: number,
 ) {
-  const { error } = await adminClient().rpc("commit_generated", {
-    p_job: jobId,
-    p_patch: patch,
-    p_progress: progress,
-  });
-  dbError(error);
+  await studioStore().commitGenerated(jobId, patch, progress);
 }
 export async function claimJob(jobId: string) {
   "use step";
   const { workflowRunId } = getWorkflowMetadata();
-  const { data, error } = await adminClient().rpc("claim_job", {
-    p_job: jobId,
-    p_run: workflowRunId,
-  });
-  dbError(error);
-  console.info("generation_claimed", { jobId, claimed: data === true });
-  return data === true;
+  const claimed = await studioStore().claimJob(jobId, workflowRunId);
+  console.info("generation_claimed", { jobId, claimed });
+  return claimed;
 }
 export async function loadPlan(jobId: string) {
   "use step";
@@ -189,7 +159,7 @@ export async function createChapter(
 }
 export async function createCover(jobId: string) {
   "use step";
-  const { job, book, db } = await context(jobId);
+  const { job, book } = await context(jobId);
   if (job.result_units.cover) return;
   const model = process.env.AI_GATEWAY_IMAGE_MODEL;
   if (!model) throw new FatalError("not_configured");
@@ -204,7 +174,7 @@ export async function createCover(jobId: string) {
   const file = result.files.find((f) =>
     ["image/png", "image/jpeg", "image/webp"].includes(f.mediaType),
   );
-  if (!file || file.uint8Array.length > 10_485_760)
+  if (!file || file.uint8Array.length > 3_000_000)
     throw new Error("invalid_generation");
   const ext =
     file.mediaType === "image/jpeg"
@@ -212,35 +182,26 @@ export async function createCover(jobId: string) {
       : file.mediaType === "image/webp"
         ? "webp"
         : "png";
-  const path = `${book.user_id}/${book.id}/${jobId}.${ext}`;
-  const { error } = await db.storage
-    .from("covers")
-    .upload(path, file.uint8Array, {
-      contentType: file.mediaType,
-      upsert: true,
+  const path = `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
+  await studioBucket()
+    .file(path)
+    .save(Buffer.from(file.uint8Array), {
+      resumable: false,
+      metadata: {
+        contentType: file.mediaType,
+        cacheControl: "private, no-store",
+      },
     });
-  dbError(error);
   await commit(jobId, { cover_path: path }, 95);
-  await db
-    .from("ai_usage")
-    .update({
-      input_tokens: result.usage.inputTokens ?? 0,
-      output_tokens: result.usage.outputTokens ?? 0,
-    })
-    .eq("id", usageId);
+  await studioStore().recordUsage(
+    usageId,
+    result.usage.inputTokens ?? 0,
+    result.usage.outputTokens ?? 0,
+  );
 }
 export async function finishJob(jobId: string) {
   "use step";
-  const { error } = await adminClient()
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", jobId)
-    .in("status", ["queued", "running"]);
-  dbError(error);
+  await studioStore().finishJob(jobId);
   console.info("generation_completed", { jobId });
 }
 export async function failJob(jobId: string, reason: string) {
@@ -254,15 +215,6 @@ export async function failJob(jobId: string, reason: string) {
   ].includes(reason)
     ? reason
     : "generation_failed";
-  const { error } = await adminClient()
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_code: code,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", jobId)
-    .in("status", ["queued", "running"]);
-  dbError(error);
+  await studioStore().finishJob(jobId, code);
   console.warn("generation_failed", { jobId, code });
 }

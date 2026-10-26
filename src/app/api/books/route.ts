@@ -1,31 +1,31 @@
-import { requireUser, adminClient } from "@/lib/supabase";
-import { assertOrigin, readJson, apiError, json, dbError } from "@/lib/http";
-import { briefSchema, type Book } from "@/lib/domain";
+import { requireUser } from "@/lib/firebase-session";
+import { studioStore } from "@/lib/firebase-admin";
+import { assertOrigin, readJson, apiError, json } from "@/lib/http";
+import { briefSchema, bookWords, isComplete } from "@/lib/domain";
 import { withCover, takeRate } from "@/lib/books";
 
 export async function GET() {
   try {
-    const { user, db } = await requireUser();
-    const [{ data: books, error }, { data: profile, error: pError }] =
-      await Promise.all([
-        db
-          .from("books")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(30),
-        db
-          .from("profiles")
-          .select("credits,free_book_id")
-          .eq("id", user.id)
-          .single(),
-      ]);
-    dbError(error);
-    dbError(pError);
+    const { user } = await requireUser(),
+      store = studioStore();
+    const [books, profile] = await Promise.all([
+      store.listBooks(user.id),
+      store.profile(user.id),
+    ]);
     return json({
-      books: await Promise.all(((books ?? []) as Book[]).map(withCover)),
-      credits: profile?.credits ?? 0,
-      free_book_id: profile?.free_book_id ?? null,
+      books: await Promise.all(
+        books.map(async (book) => {
+          const { chapters, ...summary } = await withCover(book);
+          return {
+            ...summary,
+            word_count: bookWords(book),
+            completed_chapters: Object.keys(chapters).length,
+            complete: isComplete(book),
+          };
+        }),
+      ),
+      credits: profile?.credits || 0,
+      free_book_id: profile?.free_book_id || null,
     });
   } catch (e) {
     return apiError(e);
@@ -37,12 +37,7 @@ export async function POST(request: Request) {
     const { user } = await requireUser();
     const brief = await readJson(request, briefSchema, 6000);
     await takeRate(`create:${user.id}`, 10);
-    const { data, error } = await adminClient().rpc("create_book", {
-      p_user: user.id,
-      p_brief: brief,
-    });
-    dbError(error);
-    return json({ id: data }, 201);
+    return json({ id: await studioStore().createBook(user.id, brief) }, 201);
   } catch (e) {
     return apiError(e);
   }

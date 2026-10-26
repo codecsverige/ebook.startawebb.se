@@ -37,7 +37,12 @@ import {
   type JobKind,
 } from "@/lib/domain";
 
-type Version = { id: string; created_at: string; snapshot: Book };
+type Version = {
+  id: string;
+  created_at: string;
+  title: string;
+  has_outline: boolean;
+};
 type Tab = "outline" | "write" | "design" | "preview";
 export function Editor({
   id,
@@ -258,7 +263,7 @@ export function Editor({
       const d = await request<{ versions: Version[] }>(
         `/api/books/${id}/versions`,
       );
-      setVersions(d.versions.filter((v) => v.snapshot.outline.length > 0));
+      setVersions(d.versions.filter((v) => v.has_outline));
       setModal("history");
     } catch (e) {
       setError(codeOf(e));
@@ -266,7 +271,7 @@ export function Editor({
       setPending("");
     }
   }
-  function restore(version: Version) {
+  async function restore(version: Version) {
     if (
       !window.confirm(
         tr(
@@ -278,16 +283,27 @@ export function Editor({
       )
     )
       return;
-    change((b) => ({
-      ...b,
-      title: version.snapshot.title,
-      subtitle: version.snapshot.subtitle,
-      author: version.snapshot.author,
-      cover_style: version.snapshot.cover_style,
-      outline: version.snapshot.outline,
-      chapters: version.snapshot.chapters,
-    }));
-    setModal(null);
+    setPending("restore");
+    setError("");
+    try {
+      const { snapshot } = await request<{ snapshot: Book }>(
+        `/api/books/${id}/versions?version=${version.id}`,
+      );
+      change((b) => ({
+        ...b,
+        title: snapshot.title,
+        subtitle: snapshot.subtitle,
+        author: snapshot.author,
+        cover_style: snapshot.cover_style,
+        outline: snapshot.outline,
+        chapters: snapshot.chapters,
+      }));
+      setModal(null);
+    } catch (e) {
+      setError(codeOf(e));
+    } finally {
+      setPending("");
+    }
   }
   async function download(format: "pdf" | "docx") {
     if (dirtyRef.current && !(await save())) return;
@@ -983,14 +999,12 @@ export function Editor({
                       <strong>
                         {new Date(v.created_at).toLocaleString(locale)}
                       </strong>
-                      <p>
-                        {v.snapshot.title} ·{" "}
-                        {bookWords(v.snapshot).toLocaleString(locale)} {t.words}
-                      </p>
+                      <p>{v.title}</p>
                     </div>
                     <button
                       className="button button-small button-outline"
-                      onClick={() => restore(v)}
+                      disabled={pending === "restore"}
+                      onClick={() => void restore(v)}
                     >
                       {t.restore}
                     </button>

@@ -14,7 +14,11 @@ export const orderWebhookSchema = z.object({
   meta: z.object({
     event_name: z.enum(["order_created", "order_refunded"]),
     custom_data: z.object({
-      user_id: z.string().uuid(),
+      user_id: z
+        .string()
+        .min(1)
+        .max(128)
+        .regex(/^[a-zA-Z0-9_-]+$/),
       delivery_consent: z.literal("yes"),
     }),
   }),

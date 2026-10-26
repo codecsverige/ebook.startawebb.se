@@ -11,15 +11,12 @@ export const metadata = {
 };
 export default async function Login({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = copy[locale];
-  const { error } = await searchParams;
   return (
     <>
       <Header locale={locale} compact />
@@ -33,11 +30,7 @@ export default async function Login({
           </span>
         </div>
         <div className="login-card">
-          <LoginForm
-            locale={locale}
-            enabled={configuration().accounts}
-            expired={!!error}
-          />
+          <LoginForm locale={locale} enabled={configuration().accounts} />
           <p className="legal-note">
             <Link href={`/${locale}/terms`}>{t.terms}</Link> ·{" "}
             <Link href={`/${locale}/privacy`}>{t.privacy}</Link>

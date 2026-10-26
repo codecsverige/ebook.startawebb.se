@@ -1,32 +1,46 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { Book, BookWithCover } from "./domain";
-import { adminClient } from "./supabase";
-import { AppError, dbError } from "./http";
+import { studioStore, studioBucket } from "./firebase-admin";
+import { STUDIO_PATH } from "./firebase-config";
+import { AppError } from "./http";
 
-export async function ownedBook(id: string, userId: string): Promise<Book> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new AppError("not_found", 404);
-  const { data, error } = await adminClient()
-    .from("books")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", userId)
-    .maybeSingle();
-  dbError(error);
-  if (!data) throw new AppError("not_found", 404);
-  return data as Book;
-}
+export const ownedBook = (id: string, userId: string) =>
+  studioStore().ownedBook(id, userId);
 export async function withCover(book: Book): Promise<BookWithCover> {
-  if (!book.cover_path) return { ...book, cover_url: null };
-  const { data } = await adminClient()
-    .storage.from("covers")
-    .createSignedUrl(book.cover_path, 3600);
-  return { ...book, cover_url: data?.signedUrl ?? null };
+  // Serve artwork through an ownership-checked route. No public download token
+  // or project-wide Storage permission is granted to the browser.
+  return {
+    ...book,
+    cover_url: book.cover_path
+      ? `/api/books/${book.id}/cover?r=${book.revision}`
+      : null,
+  };
 }
-export async function takeRate(key: string, limit: number, seconds = 3600) {
-  const { error } = await adminClient().rpc("take_rate", {
-    p_key: key,
-    p_limit: limit,
-    p_seconds: seconds,
-  });
-  dbError(error);
+export const takeRate = (key: string, limit: number, seconds = 3600) =>
+  studioStore().takeRate(key, limit, seconds);
+export const coverPrefix = (uid: string, bookId: string) =>
+  `${STUDIO_PATH}/covers/${createHash("sha256").update(uid).digest("hex")}/${bookId}/`;
+export async function coverArtwork(book: Book) {
+  if (!book.cover_path) return undefined;
+  if (!book.cover_path.startsWith(coverPrefix(book.user_id, book.id)))
+    throw new AppError("forbidden", 403);
+  const file = studioBucket().file(book.cover_path);
+  const [metadata] = await file.getMetadata();
+  if (
+    Number(metadata.size) > 3_000_000 ||
+    !["image/png", "image/jpeg", "image/webp"].includes(
+      metadata.contentType || "",
+    )
+  )
+    throw new AppError("service_error", 503);
+  const [data] = await file.download();
+  return { data: new Uint8Array(data), type: metadata.contentType! };
+}
+export async function deleteBookArtwork(uid: string, id: string) {
+  try {
+    await studioBucket().deleteFiles({ prefix: coverPrefix(uid, id) });
+  } catch (e) {
+    if (Number((e as { code?: number }).code) !== 404) throw e;
+  }
 }

@@ -1,8 +1,9 @@
-import { requireUser, adminClient } from "@/lib/supabase";
-import { ownedBook, takeRate } from "@/lib/books";
+import { requireUser } from "@/lib/firebase-session";
+import { studioStore } from "@/lib/firebase-admin";
+import { ownedBook, takeRate, coverArtwork } from "@/lib/books";
 import { isComplete, filename } from "@/lib/domain";
 import { makePdf, makeDocx } from "@/lib/export";
-import { apiError, AppError, dbError } from "@/lib/http";
+import { apiError, AppError } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 export async function GET(
@@ -18,27 +19,10 @@ export async function GET(
     if (format !== "pdf" && format !== "docx")
       throw new AppError("invalid_input");
     await takeRate(`export:${user.id}`, 20);
-    const db = adminClient();
-    const { data: active, error } = await db
-      .from("jobs")
-      .select("id")
-      .eq("book_id", id)
-      .in("status", ["queued", "running"])
-      .limit(1);
-    dbError(error);
-    if (active?.length) throw new AppError("busy", 409);
-    let artwork: { data: Uint8Array; type: string } | undefined;
-    if (book.cover_path && book.use_artwork) {
-      const { data, error } = await db.storage
-        .from("covers")
-        .download(book.cover_path);
-      dbError(error);
-      if (data)
-        artwork = {
-          data: new Uint8Array(await data.arrayBuffer()),
-          type: data.type,
-        };
-    }
+    const job = await studioStore().latestJob(id);
+    if (job && ["queued", "running"].includes(job.status))
+      throw new AppError("busy", 409);
+    const artwork = book.use_artwork ? await coverArtwork(book) : undefined;
     const data =
       format === "pdf"
         ? await makePdf(book, artwork)

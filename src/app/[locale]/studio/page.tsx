@@ -3,7 +3,7 @@ import { Header } from "@/components/brand";
 import { Dashboard } from "@/components/dashboard";
 import { isLocale } from "@/lib/domain";
 import { configuration } from "@/lib/config";
-import { sessionClient } from "@/lib/supabase";
+import { sessionUser } from "@/lib/firebase-session";
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Workspace",
@@ -20,10 +20,7 @@ export default async function Studio({
   if (!isLocale(locale)) notFound();
   const config = configuration();
   if (!config.accounts) redirect(`/${locale}/login`);
-  const db = await sessionClient();
-  const {
-    data: { user },
-  } = await db.auth.getUser();
+  const user = await sessionUser();
   if (!user) redirect(`/${locale}/login`);
   const q = await searchParams;
   return (
