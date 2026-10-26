@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.vercel/
+.workflow-data/
+src/app/.well-known/workflow/
+.env*
+!.env.example
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+/.swc

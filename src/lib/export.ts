@@ -1,0 +1,220 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+  PageBreak,
+  ImageRun,
+  Footer,
+  PageNumber,
+} from "docx";
+import type { Book } from "./domain";
+import { escapeHtml as esc, markdownHtml } from "./export-text";
+
+const palettes: Record<
+  Book["cover_style"],
+  { bg: string; ink: string; accent: string }
+> = {
+  cobalt: { bg: "#3159df", ink: "#fffdf6", accent: "#a7bcff" },
+  sage: { bg: "#d8decd", ink: "#293e34", accent: "#879978" },
+  clay: { bg: "#e6bba1", ink: "#5b342a", accent: "#c17b58" },
+};
+export async function pdfHtml(
+  book: Book,
+  artwork?: { data: Uint8Array; type: string },
+) {
+  const [latin, arabic] = await Promise.all([
+    readFile(
+      path.join(
+        process.cwd(),
+        "node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
+      ),
+    ),
+    readFile(
+      path.join(
+        process.cwd(),
+        "node_modules/@fontsource/noto-naskh-arabic/files/noto-naskh-arabic-arabic-400-normal.woff2",
+      ),
+    ),
+  ]);
+  const colors = palettes[book.cover_style];
+  const rtl = book.language === "ar";
+  const toc = { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language];
+  const image =
+    artwork && book.use_artwork
+      ? `<img class="cover-image" src="data:${esc(artwork.type)};base64,${Buffer.from(artwork.data).toString("base64")}" alt="">`
+      : "";
+  return `<!doctype html><html lang="${book.language}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>
+  @font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}
+  @font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}
+  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:175mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.25}.cover h1{font-size:${rtl ? "32" : "29"}pt;margin:7mm 0;position:relative}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:page}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}
+  </style></head><body><section class="cover">${image}<small>EBOOK STUDIO</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section><section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}</body></html>`;
+}
+export async function makePdf(
+  book: Book,
+  artwork?: { data: Uint8Array; type: string },
+) {
+  const [{ default: chromium }, { default: puppeteer }] = await Promise.all([
+    import("@sparticuz/chromium"),
+    import("puppeteer-core"),
+  ]);
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    executablePath:
+      process.env.CHROMIUM_EXECUTABLE_PATH || (await chromium.executablePath()),
+    headless: true,
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setJavaScriptEnabled(false);
+    await page.setRequestInterception(true);
+    page.on("request", (r) => {
+      if (r.url().startsWith("data:") || r.url() === "about:blank")
+        void r.continue();
+      else void r.abort();
+    });
+    await page.setContent(await pdfHtml(book, artwork), {
+      waitUntil: "load",
+      timeout: 30_000,
+    });
+    await page.evaluate("document.fonts.ready");
+    return await page.pdf({
+      format: "A5",
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate:
+        '<div style="font-size:8px;width:100%;text-align:center;color:#888"><span class="pageNumber"></span></div>',
+      margin: { top: "17mm", bottom: "17mm", left: "14mm", right: "14mm" },
+    });
+  } finally {
+    await browser.close();
+  }
+}
+export async function makeDocx(
+  book: Book,
+  artwork?: { data: Uint8Array; type: string },
+) {
+  const rtl = book.language === "ar";
+  const font = rtl ? "Arial" : "Calibri";
+  const base = {
+    bidirectional: rtl,
+    alignment: rtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
+  };
+  const text = (value: string, bold = false) =>
+    new TextRun({
+      text: value,
+      bold,
+      font,
+      rightToLeft: rtl,
+      size: rtl ? 26 : 22,
+    });
+  const children: Paragraph[] = [
+    new Paragraph({
+      ...base,
+      heading: HeadingLevel.TITLE,
+      children: [text(book.title, true)],
+    }),
+    new Paragraph({ ...base, children: [text(book.subtitle)] }),
+    new Paragraph({ ...base, children: [text(book.author)] }),
+  ];
+  if (
+    artwork &&
+    book.use_artwork &&
+    ["image/png", "image/jpeg"].includes(artwork.type)
+  ) {
+    children.push(
+      new Paragraph({
+        children: [
+          new ImageRun({
+            data: artwork.data,
+            type: artwork.type === "image/png" ? "png" : "jpg",
+            transformation: { width: 340, height: 440 },
+          }),
+        ],
+      }),
+    );
+  }
+  children.push(
+    new Paragraph({ children: [new PageBreak()] }),
+    new Paragraph({
+      ...base,
+      heading: HeadingLevel.HEADING_1,
+      children: [
+        text(
+          { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language],
+          true,
+        ),
+      ],
+    }),
+  );
+  book.outline.forEach((c, i) =>
+    children.push(
+      new Paragraph({ ...base, children: [text(`${i + 1}. ${c.title}`)] }),
+    ),
+  );
+  for (const c of book.outline) {
+    children.push(
+      new Paragraph({ children: [new PageBreak()] }),
+      new Paragraph({
+        ...base,
+        heading: HeadingLevel.HEADING_1,
+        children: [text(c.title, true)],
+      }),
+    );
+    for (const line of (book.chapters[c.id]?.content || "").split("\n")) {
+      const heading = /^#{1,4} /.test(line);
+      const value = line.replace(/^#{1,4} /, "").replace(/\*\*/g, "");
+      children.push(
+        new Paragraph({
+          ...base,
+          ...(heading ? { heading: HeadingLevel.HEADING_2 } : {}),
+          spacing: { after: 120 },
+          children: [text(value, heading)],
+        }),
+      );
+    }
+  }
+  return Packer.toBuffer(
+    new Document({
+      creator: book.author || "Ebook Studio",
+      title: book.title,
+      description: book.subtitle,
+      styles: {
+        default: { document: { run: { font, size: 22 }, paragraph: base } },
+      },
+      sections: [
+        {
+          properties: {
+            page: {
+              size: { width: 8391, height: 11906 },
+              margin: { top: 800, bottom: 800, left: 800, right: 800 },
+            },
+          },
+          footers: {
+            default: new Footer({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      children: [PageNumber.CURRENT],
+                      size: 18,
+                      color: "777777",
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          },
+          children,
+        },
+      ],
+    }),
+  );
+}

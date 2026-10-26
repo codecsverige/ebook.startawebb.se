@@ -1,0 +1,4 @@
+node_modules
+.next
+src/app/.well-known
+package-lock.json
