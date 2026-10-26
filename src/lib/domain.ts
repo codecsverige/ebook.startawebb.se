@@ -113,6 +113,9 @@ export type BookWithCover = Book & { cover_url?: string | null };
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/u).filter(Boolean).length;
 }
+export function usableGeneratedChapter(text: string): boolean {
+  return wordCount(text) >= 350;
+}
 export function bookWords(book: Book): number {
   return Object.values(book.chapters).reduce(
     (n, c) => n + wordCount(c.content),

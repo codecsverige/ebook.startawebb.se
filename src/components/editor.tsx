@@ -25,6 +25,7 @@ import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
 import { request, codeOf } from "@/lib/client";
+import { allowStudioNavigation } from "@/lib/navigation";
 import {
   bookWords,
   isComplete,
@@ -111,9 +112,66 @@ export function Editor({
         e.returnValue = "";
       }
     };
+    const askBeforeNavigation = (e: Event) => {
+      if (
+        dirtyRef.current &&
+        !window.confirm(
+          tr(
+            locale,
+            "Leave without saving your changes?",
+            "المغادرة دون حفظ تعديلاتك؟",
+            "Lämna utan att spara ändringarna?",
+          ),
+        )
+      )
+        e.preventDefault();
+    };
+    const guardLink = (e: MouseEvent) => {
+      if (
+        !dirtyRef.current ||
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return;
+      const anchor =
+        e.target instanceof Element
+          ? e.target.closest<HTMLAnchorElement>("a[href]")
+          : null;
+      if (
+        !anchor ||
+        anchor.target === "_blank" ||
+        anchor.hasAttribute("download")
+      )
+        return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (!["https:", "http:"].includes(destination.protocol)) return;
+      if (
+        destination.origin === location.origin &&
+        destination.pathname === location.pathname &&
+        destination.search === location.search
+      )
+        return;
+      if (!allowStudioNavigation()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
     window.addEventListener("beforeunload", guard);
-    return () => window.removeEventListener("beforeunload", guard);
-  }, []);
+    window.addEventListener("ebook:before-navigation", askBeforeNavigation);
+    document.addEventListener("click", guardLink, true);
+    return () => {
+      window.removeEventListener("beforeunload", guard);
+      window.removeEventListener(
+        "ebook:before-navigation",
+        askBeforeNavigation,
+      );
+      document.removeEventListener("click", guardLink, true);
+    };
+  }, [locale]);
   function change(fn: (b: BookWithCover) => BookWithCover) {
     setDraft((b) => (b ? fn(b) : b));
     dirtyRef.current = true;
@@ -290,24 +348,7 @@ export function Editor({
   return (
     <div className="editor-shell">
       <div className="editor-topbar">
-        <Link
-          className="text-link"
-          href={`/${locale}/studio`}
-          onClick={(e) => {
-            if (
-              dirtyRef.current &&
-              !window.confirm(
-                tr(
-                  locale,
-                  "Leave without saving your changes?",
-                  "المغادرة دون حفظ تعديلاتك؟",
-                  "Lämna utan att spara ändringarna?",
-                ),
-              )
-            )
-              e.preventDefault();
-          }}
-        >
+        <Link className="text-link" href={`/${locale}/studio`}>
           <ArrowLeft size={17} />
           <span>{t.back}</span>
         </Link>

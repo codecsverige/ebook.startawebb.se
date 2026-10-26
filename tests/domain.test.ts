@@ -6,10 +6,20 @@ import {
   editBookSchema,
   filename,
   wordCount,
+  usableGeneratedChapter,
 } from "../src/lib/domain";
 import { escapeHtml, markdownHtml } from "../src/lib/export-text";
 import { validSignature } from "../src/lib/webhook";
 import { matchesPackCatalog } from "../src/lib/commerce";
+
+test("a short chapter is not accepted as a complete generated draft", () => {
+  assert.equal(
+    usableGeneratedChapter("This is only a short introduction."),
+    false,
+  );
+  assert.equal(usableGeneratedChapter("useful ".repeat(349)), false);
+  assert.equal(usableGeneratedChapter("كلمة ".repeat(350)), true);
+});
 
 test("checkout refuses a different currency, price or recurring product", () => {
   const price = {

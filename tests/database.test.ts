@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 
 test("PostgreSQL migration: ownership, free trial, atomic credits, jobs, versions and refunds", async () => {
@@ -11,12 +11,15 @@ test("PostgreSQL migration: ownership, free trial, atomic credits, jobs, version
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;
       create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`);
-    await db.exec(
-      await readFile(
-        new URL("../supabase/migrations/001_studio.sql", import.meta.url),
-        "utf8",
-      ),
+    const migrationDirectory = new URL(
+      "../supabase/migrations/",
+      import.meta.url,
     );
+    for (const name of (await readdir(migrationDirectory))
+      .filter((name) => name.endsWith(".sql"))
+      .sort()) {
+      await db.exec(await readFile(new URL(name, migrationDirectory), "utf8"));
+    }
     const u = "00000000-0000-4000-8000-000000000001";
     const other = "00000000-0000-4000-8000-000000000002";
     await db.query("insert into auth.users(id) values($1),($2)", [u, other]);
@@ -215,6 +218,64 @@ test("PostgreSQL migration: ownership, free trial, atomic credits, jobs, version
       db.query("select public.take_rate('test',1,3600)"),
       /rate_limit/,
     );
+    // A purchased credit recovers the SAME draft after free provider failures.
+    const exhaustedBook = await scalar<string>(
+      "select public.create_book($1,$2::jsonb) as v",
+      [other, JSON.stringify(brief)],
+    );
+    const freeJob = await scalar<{ id: string }>(
+      "select public.prepare_job($1,$2,'outline',null,gen_random_uuid()) as v",
+      [other, exhaustedBook],
+    );
+    for (let i = 0; i < 8; i++)
+      await db.query("select public.reserve_ai($1,'outline','test/model')", [
+        freeJob.id,
+      ]);
+    await assert.rejects(
+      db.query("select public.reserve_ai($1,'outline','test/model')", [
+        freeJob.id,
+      ]),
+      /rate_limit/,
+    );
+    await db.query("update public.jobs set status='failed' where id=$1", [
+      freeJob.id,
+    ]);
+    await assert.rejects(
+      db.query(
+        "select public.prepare_job($1,$2,'outline',null,gen_random_uuid())",
+        [other, exhaustedBook],
+      ),
+      /insufficient_credits/,
+    );
+    await db.query(
+      "select public.apply_order('recovery-order',$1,1,false,false)",
+      [other],
+    );
+    const recoveryRequest = "00000000-0000-4000-8000-000000000099";
+    const recoveryJob = await scalar<{ id: string }>(
+      "select public.prepare_job($1,$2,'outline',null,$3) as v",
+      [other, exhaustedBook, recoveryRequest],
+    );
+    await db.query("select public.prepare_job($1,$2,'outline',null,$3)", [
+      other,
+      exhaustedBook,
+      recoveryRequest,
+    ]);
+    assert.equal(
+      await scalar("select credits as v from public.profiles where id=$1", [
+        other,
+      ]),
+      0,
+    );
+    assert.equal(
+      await scalar("select unlocked as v from public.books where id=$1", [
+        exhaustedBook,
+      ]),
+      true,
+    );
+    await db.query("select public.reserve_ai($1,'outline','test/model')", [
+      recoveryJob.id,
+    ]);
   } finally {
     await db.close();
   }

@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Globe2 } from "lucide-react";
 import { languageNames, locales, type Locale } from "@/lib/domain";
+import { allowStudioNavigation } from "@/lib/navigation";
 export function LanguageSwitch({ locale }: { locale: Locale }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -12,6 +13,10 @@ export function LanguageSwitch({ locale }: { locale: Locale }) {
       <select
         value={locale}
         onChange={(e) => {
+          if (!allowStudioNavigation()) {
+            e.currentTarget.value = locale;
+            return;
+          }
           const parts = pathname.split("/");
           parts[1] = e.target.value;
           router.push(parts.join("/"));

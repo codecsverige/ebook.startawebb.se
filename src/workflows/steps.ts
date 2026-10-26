@@ -6,6 +6,7 @@ import { dbError, AppError } from "@/lib/http";
 import {
   outlineSchema,
   chapterSchema,
+  usableGeneratedChapter,
   type Book,
   type Job,
 } from "@/lib/domain";
@@ -75,6 +76,11 @@ async function structured<T>(
     .eq("id", usageId);
   if (error) console.warn("usage_record_update_failed", { jobId });
   if (!result.output) throw new Error("invalid_generation");
+  if (
+    result.finishReason === "length" ||
+    result.finishReason === "content-filter"
+  )
+    throw new Error("incomplete_generation");
   return result.output;
 }
 async function commit(
@@ -177,6 +183,8 @@ export async function createChapter(
     `Write a substantial 700–1100 word chapter for a short ${book.kind}. Use Markdown with ## subheadings, short paragraphs, bullet points and concrete examples. Do not repeat the chapter title or include a table of contents. Include useful exercises if a workbook. Keep continuity and avoid repeating earlier chapters. Return content and a short factual summary for continuity. Language code: ${book.language}. Data: ${JSON.stringify({ title: book.title, idea: book.idea, audience: book.audience, tone: book.tone, outline: book.outline, currentChapter: chapter, previousSummaries: book.outline.filter((c) => c.id !== chapterId && book.chapters[c.id]).map((c) => ({ title: c.title, summary: book.chapters[c.id].summary })) })}`,
     6500,
   );
+  if (!usableGeneratedChapter(result.content))
+    throw new Error("incomplete_generation");
   await commit(jobId, { chapter_id: chapterId, chapter: result }, progress);
 }
 export async function createCover(jobId: string) {
