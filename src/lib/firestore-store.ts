@@ -280,6 +280,7 @@ export class FirestoreStudio {
     kind: JobKind,
     chapter: string | null,
     requestId: string,
+    ownerTrial = false,
   ): Promise<WorkerJob> {
     if (!uuid(id) || !uuid(requestId)) fail("invalid_input");
     const jobId = digest(`${uid}:${requestId}`);
@@ -288,6 +289,9 @@ export class FirestoreStudio {
         bRef = this.books().doc(id),
         jRef = this.jobs().doc(jobId);
       const [p, b, j] = await tx.getAll(pRef, bRef, jRef);
+      // Permanent owner-only grant marker; survives book and profile deletion.
+      const trialRef = this.root.collection("ownerTrialGrants").doc(digest(uid));
+      const trial = ownerTrial ? await tx.get(trialRef) : null;
       const profile = this.checkedProfile(p.data() as Profile | undefined);
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (j.exists) {
@@ -321,8 +325,12 @@ export class FirestoreStudio {
           book.state.ai_calls >= 8 ||
           (kind === "outline" && free && free !== id)
         ) {
-          if (credits < 1) fail("insufficient_credits");
-          credits--;
+          if (credits < 1 && ownerTrial && trial && !trial.exists) {
+            tx.create(trialRef, { book_id: id, created_at: new Date(now).toISOString() });
+          } else {
+            if (credits < 1) fail("insufficient_credits");
+            credits--;
+          }
           book.unlocked = true;
           book.revision++;
           book.updated_at = new Date(now).toISOString();
