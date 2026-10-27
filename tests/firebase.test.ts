@@ -46,9 +46,9 @@ test(
       await foreign.set({
         role: "admin",
         credits: 999,
-        marker: "belongs-to-MashrooHub",
+        marker: "belongs-to-HyrNara",
       });
-      const foreignListing = db.doc(`companies/${randomUUID()}`);
+      const foreignListing = db.doc(`listings/${randomUUID()}`);
       await foreignListing.set({
         ownerId: uid,
         title: "Existing business listing",
@@ -220,7 +220,7 @@ test(
       assert.equal((await store.profile(other))!.free_book_id, trial);
       assert.equal((await store.profile(other))!.book_count, 0);
 
-      // Load the actual MashrooHub rules when available; do not modify/deploy them.
+      // Load the actual HyrNära rules when available; do not modify/deploy them.
       const rules = await readFile(
         process.env.EBOOK_SHARED_RULES_PATH ||
           new URL("../firebase/emulator.firestore.rules", import.meta.url),
@@ -242,7 +242,7 @@ test(
       await assertFails(getDoc(doc(anonymous, `${STUDIO_PATH}/books/${book}`)));
       if (process.env.EBOOK_SHARED_RULES_PATH) {
         const own = await getDoc(doc(client, `users/${uid}`));
-        assert.equal(own.get("marker"), "belongs-to-MashrooHub");
+        assert.equal(own.get("marker"), "belongs-to-HyrNara");
       }
       let sharedAuth;
       if (process.env.FIREBASE_AUTH_EMULATOR_HOST) {
@@ -286,10 +286,7 @@ test(
       await store.deleteAccountRecords(uid);
       assert.equal(await store.profile(uid), null);
       if (sharedAuth) assert.equal((await sharedAuth.getUser(uid)).uid, uid);
-      assert.equal(
-        (await foreign.get()).get("marker"),
-        "belongs-to-MashrooHub",
-      );
+      assert.equal((await foreign.get()).get("marker"), "belongs-to-HyrNara");
       assert.equal((await foreignListing.get()).exists, true);
       await store.ensureProfile(uid);
       // An old detached order cannot charge a newly recreated studio profile.

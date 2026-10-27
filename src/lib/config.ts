@@ -11,7 +11,10 @@ export function appUrl(): string {
 export function configuration() {
   return {
     accounts: !!(
-      process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
+      process.env.EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_HYRNARA ||
+      (process.env.EBOOK_FIREBASE_CLIENT_EMAIL &&
+        process.env.EBOOK_FIREBASE_PRIVATE_KEY)
     ),
     ai: !!(
       process.env.AI_GATEWAY_MODEL &&

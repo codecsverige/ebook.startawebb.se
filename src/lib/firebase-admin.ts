@@ -11,14 +11,34 @@ function adminApp() {
   const projectId = firebaseWebConfig.projectId;
   const existing = getApps().find((app) => app.name === "ebook-studio-admin");
   if (existing) return existing;
-  const email = process.env.FIREBASE_CLIENT_EMAIL;
-  const key = process.env.FIREBASE_PRIVATE_KEY;
+
+  const rawServiceAccount =
+    process.env.EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_HYRNARA;
+  let email = process.env.EBOOK_FIREBASE_CLIENT_EMAIL;
+  let key = process.env.EBOOK_FIREBASE_PRIVATE_KEY;
+
+  if (rawServiceAccount) {
+    try {
+      const parsed = JSON.parse(rawServiceAccount) as {
+        project_id?: unknown;
+        client_email?: unknown;
+        private_key?: unknown;
+      };
+      if (
+        parsed.project_id !== projectId ||
+        typeof parsed.client_email !== "string" ||
+        typeof parsed.private_key !== "string"
+      )
+        throw new Error("invalid service account");
+      email = parsed.client_email;
+      key = parsed.private_key;
+    } catch {
+      throw new AppError("not_configured", 503);
+    }
+  }
+
   if (!email || !key) throw new AppError("not_configured", 503);
-  if (
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_PROJECT_ID !== projectId
-  )
-    throw new AppError("not_configured", 503);
   return initializeApp(
     {
       credential: cert({
