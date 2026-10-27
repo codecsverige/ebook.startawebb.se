@@ -16,9 +16,13 @@ export function configuration() {
       (process.env.EBOOK_FIREBASE_CLIENT_EMAIL &&
         process.env.EBOOK_FIREBASE_PRIVATE_KEY)
     ),
+    // Vercel AI SDK resolves project OIDC authentication at request time.
+    // Runtime OIDC is not guaranteed to appear in process.env.
     ai: !!(
       process.env.AI_GATEWAY_MODEL &&
-      (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN)
+      (process.env.AI_GATEWAY_API_KEY ||
+        process.env.VERCEL_OIDC_TOKEN ||
+        process.env.VERCEL === "1")
     ),
     artwork: !!process.env.AI_GATEWAY_IMAGE_MODEL,
     billing: !!(
