@@ -377,6 +377,30 @@ export function Editor({
       setPending("");
     }
   }
+  async function decideCoverSuggestion(accept: boolean) {
+    if (!book?.cover_candidate_path || disabled) return;
+    let revision = book.revision;
+    if (dirtyRef.current) {
+      if (!(await save())) return;
+      revision++;
+    }
+    setPending(accept ? "accept-cover" : "reject-cover");
+    setError("");
+    try {
+      const { book: updated } = await request<{ book: BookWithCover }>(
+        `/api/books/${id}/cover`,
+        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision }) },
+      );
+      setBook(updated);
+      setDraft(updated);
+      dirtyRef.current = false;
+      setDirty(false);
+    } catch (e) {
+      setError(codeOf(e));
+    } finally {
+      setPending("");
+    }
+  }
   async function clearCoverArtwork() {
     if (!book || disabled || !book.cover_path) return;
     let revision = book.revision;
@@ -1067,7 +1091,7 @@ export function Editor({
                     author={draft.author}
                     style={draft.cover_style}
                     language={draft.language}
-                    image={draft.use_artwork ? draft.cover_url : null}
+                    image={draft.cover_candidate_url || (draft.use_artwork ? draft.cover_url : null)}
                   />
                 </div>
                 <div className="stack">
@@ -1126,7 +1150,24 @@ export function Editor({
                     <Sparkles size={17} />
                     {t.aiCover}
                   </button>
-                  <p className="muted">{t.artworkNote}</p>
+                  <p className="muted">{tr(locale,
+                    "Generated cover art appears here for your review. It is never included in exports until you approve it.",
+                    "ستظهر صورة الغلاف المقترحة هنا لمراجعتها. لن تُستخدم في التنزيل قبل موافقتك.",
+                    "Den genererade omslagsbilden visas här för granskning. Den används inte i exporten förrän du godkänner den.")}</p>
+                  {draft.cover_candidate_url && (
+                    <div className="cover-confirm" role="group" aria-label={tr(locale, "Review AI cover image", "مراجعة الغلاف المقترح", "Granska AI-omslag")}>
+                      <strong>{tr(locale, "AI cover suggestion", "غلاف مقترح بالذكاء الاصطناعي", "Förslag på AI-omslag")}</strong>
+                      <p>{tr(locale, "The preview on the left shows the suggestion. Accept it, or discard it without changing your current book cover.", "المعاينة على اليسار تُظهر الصورة المقترحة. وافق عليها أو ارفضها دون تغيير الغلاف الحالي.", "Förhandsvisningen till vänster visar förslaget. Godkänn eller avvisa det utan att ändra ditt aktuella omslag.")}</p>
+                      <div className="cover-confirm-buttons">
+                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(true)}>
+                          <Check size={15} /> {tr(locale, "Use this cover", "اعتماد هذا الغلاف", "Använd detta omslag")}
+                        </button>
+                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(false)}>
+                          <Trash2 size={15} /> {tr(locale, "Discard suggestion", "رفض الصورة المقترحة", "Avvisa förslag")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <label className="cover-upload-label">
                     <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
                     <input
