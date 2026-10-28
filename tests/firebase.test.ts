@@ -294,7 +294,7 @@ test(
       // Fail before starting a new workflow, instead of silently burning
       // another job request and presenting a generic failure to the author.
       await assert.rejects(
-        store.prepareJob(artist, artworkBook, "cover", null, randomUUID(), true),
+        store.prepareJob(artist, artworkBook, "cover", null, randomUUID()),
         /ai_image_daily_limit/,
       );
 
