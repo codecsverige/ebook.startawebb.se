@@ -8,6 +8,8 @@ import {
   outlineSchema,
   chapterSchema,
   usableGeneratedChapter,
+  matchesBookLanguage,
+  languageNames,
 } from "@/lib/domain";
 
 async function context(jobId: string) {
@@ -142,15 +144,27 @@ export async function createOutline(jobId: string) {
   const outlineInstruction = fiction
     ? `Plan an original ${book.chapter_count}-chapter ${book.kind} with memorable characters, clear setting, inciting incident, escalating tension and satisfying resolution. Describe specific scenes and their consequences, not advice or lecture headings. Keep character names, timeline and locations consistent. For children's stories be age-appropriate and warm.`
     : `Develop a coherent practical nonfiction outline for ${book.chapter_count} chapters, with concrete value for the reader. Workbook chapters should include exercises.`;
-  const result = await structured(
-    jobId,
-    "outline",
-    outlineSchema,
-    `${outlineInstruction} Make exactly ${book.chapter_count} chapters. Entire output in language code ${book.language}. Brief: ${JSON.stringify(brief)}`,
-    4000,
-  );
+  const language = languageNames[book.language];
+  const outlinePrompt = `${outlineInstruction} Make exactly ${book.chapter_count} chapters. CRITICAL: Write the title, subtitle, every chapter title and summary entirely in ${language}. Do not translate the user's language preference from the interface; the selected book language is ${language}. Brief: ${JSON.stringify(brief)}`;
+  let result = await structured(jobId, "outline", outlineSchema, outlinePrompt, 4000);
+  const validOutlineLanguage = (value: typeof result) =>
+    matchesBookLanguage(
+      [value.title, value.subtitle, ...value.chapters.flatMap((chapter) => [chapter.title, chapter.summary])].join(" "),
+      book.language,
+    );
+  if (!validOutlineLanguage(result)) {
+    // Never commit an English outline to an Arabic-language book.
+    result = await structured(
+      jobId,
+      "outline_language_retry",
+      outlineSchema,
+      `REWRITE THE REQUESTED OUTLINE IN ${language} ONLY. Do not output another language. Keep exactly ${book.chapter_count} chapters. This is an original ${book.kind}. ${outlinePrompt}`,
+      4000,
+    );
+  }
+  if (!validOutlineLanguage(result)) throw new Error("ai_wrong_language");
   if (result.chapters.length !== book.chapter_count)
-    throw new Error("invalid_generation");
+    throw new Error("ai_generation_invalid");
   await commit(
     jobId,
     {
@@ -200,14 +214,16 @@ export async function createChapter(
       jobId,
       "chapter",
       chapterSchema,
-      `${writing} Entire output in language code ${book.language}. Data: ${contextData}`,
+      `${writing} IMPORTANT: The selected book language is ${languageNames[book.language]}. Write the entire chapter and continuity summary strictly in ${languageNames[book.language]}, never in English unless the selected language is English. Data: ${contextData}`,
       6500,
     );
     if (!usableGeneratedChapter(result.content))
       throw new Error("ai_generation_incomplete");
+    if (!matchesBookLanguage(result.content + " " + result.summary, book.language))
+      throw new Error("ai_wrong_language");
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";
-    if (reason !== "ai_generation_invalid" && reason !== "ai_generation_incomplete")
+    if (!["ai_generation_invalid", "ai_generation_incomplete", "ai_wrong_language"].includes(reason))
       throw error;
     // Recover once from malformed or truncated structured responses. Preserve prior chapters.
     console.info("chapter_recovery_attempt", { jobId, chapterId, reason });
@@ -215,11 +231,13 @@ export async function createChapter(
       jobId,
       "chapter_recovery",
       chapterSchema,
-      `Write an original 450–650 word ${fiction ? "narrative story" : "informative"} chapter in language ${book.language}. Return a JSON object with two fields: content (full chapter, at least 400 words) and summary (a 30–90 word continuity summary). Keep names and events consistent. ${fiction ? "Use vivid prose and dialogue without Markdown headings." : "Use paragraphs and simple well-formed Markdown headings."} Data: ${contextData}`,
+      `Write an original 450–650 word ${fiction ? "narrative story" : "informative"} chapter entirely in ${languageNames[book.language]} (including summary), with no untranslated English. Return a JSON object with two fields: content (full chapter, at least 400 words) and summary (a 30–90 word continuity summary). Keep names and events consistent. ${fiction ? "Use vivid prose and dialogue without Markdown headings." : "Use paragraphs and simple well-formed Markdown headings."} Data: ${contextData}`,
       5500,
     );
     if (!usableGeneratedChapter(result.content))
       throw new Error("ai_generation_incomplete");
+    if (!matchesBookLanguage(result.content + " " + result.summary, book.language))
+      throw new Error("ai_wrong_language");
   }
   await commit(jobId, { chapter_id: chapterId, chapter: result }, progress);
 }
@@ -236,7 +254,7 @@ export async function createCover(jobId: string) {
     maxRetries: 0,
     abortSignal: AbortSignal.timeout(120_000),
     aspectRatio: "2:3",
-    prompt: `Create exactly one polished editorial cover illustration, vertical book composition. Subject: ${JSON.stringify({ idea: book.idea, audience: book.audience, kind: book.kind })}. Palette: ${book.cover_style}. Give the image artistic depth and a strong focal point while leaving the upper quarter calm for a title overlaid later. Original image only. Absolutely no text, letters, typography, watermarks or logos.`,
+    prompt: `Create exactly one polished editorial cover illustration, vertical book composition. Subject: ${JSON.stringify({ idea: book.idea, audience: book.audience, kind: book.kind })}. Palette: ${book.cover_style}. Give the image artistic depth and a strong focal point while leaving the upper quarter calm for a title overlaid later. Original image only. No screenshots, real websites, phone screens, user interfaces, social media posts, news articles, document pages, logos, watermarks or typography. Do not reproduce a screenshot from the book idea. Absolutely no text, letters or numbers.`,
   });
   const file = result.image;
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
@@ -281,6 +299,7 @@ export async function failJob(jobId: string, reason: string) {
     "ai_provider_unavailable",
     "ai_generation_invalid",
     "ai_generation_incomplete",
+    "ai_wrong_language",
   ];
   const code = recognized.find((candidate) =>
     new RegExp(`\\b${candidate}\\b`).test(reason),
