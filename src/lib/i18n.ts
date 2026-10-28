@@ -161,6 +161,7 @@ const en = {
   previewTitle: "Read it like your reader will.",
   exportPdf: "Download PDF",
   exportDocx: "Download Word",
+  exportEpub: "Download EPUB",
   exportHint:
     "Complete and unlock your book to export it. Review all facts and rights before publishing.",
   reviewNote:
@@ -347,6 +348,7 @@ const ar: Copy = {
   previewTitle: "اقرأه بعين القارئ.",
   exportPdf: "تنزيل PDF",
   exportDocx: "تنزيل Word",
+  exportEpub: "تنزيل EPUB",
   exportHint:
     "أكمل الكتاب وافتحه بالرصيد لتصديره. راجع الحقائق والحقوق قبل النشر.",
   reviewNote:
@@ -536,6 +538,7 @@ const sv: Copy = {
   previewTitle: "Läs med läsarens ögon.",
   exportPdf: "Ladda ner PDF",
   exportDocx: "Ladda ner Word",
+  exportEpub: "Ladda ner EPUB",
   exportHint:
     "Färdigställ och lås upp boken för export. Granska fakta och rättigheter innan publicering.",
   reviewNote:

@@ -345,7 +345,7 @@ export function Editor({
       setPending("");
     }
   }
-  async function download(format: "pdf" | "docx") {
+  async function download(format: "pdf" | "docx" | "epub") {
     if (dirtyRef.current && !(await save())) return;
     setPending(format);
     setError("");
@@ -985,6 +985,14 @@ export function Editor({
                     <Download size={17} />
                   )}{" "}
                   {t.exportDocx}
+                </button>
+                <button
+                  className="button button-outline"
+                  disabled={!canExport || !!pending}
+                  onClick={() => download("epub")}
+                >
+                  {pending === "epub" ? <Loader2 size={17} className="spin" /> : <Download size={17} />}{" "}
+                  {t.exportEpub}
                 </button>
               </div>
               <div
