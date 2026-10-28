@@ -35,7 +35,7 @@ export function BookCover({
         {subtitle && <p>{subtitle}</p>}
       </div>
       <div className="cover-bottom">
-        <span>{author || "EBOOK STUDIO"}</span>
+        <span>{author || "\u00a0"}</span>
         <span className="cover-star" aria-hidden="true">
           ✳
         </span>
