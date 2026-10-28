@@ -587,15 +587,14 @@ export class FirestoreStudio {
       const imageTimes = recent(profile.image_times || [], now);
       const global = g.get("hits") || 0;
       const globalImages = imageCount.get("hits") || 0;
-      if (
-        book.state.active_job !== id ||
-        times.length >= limits.user ||
-        book.state.ai_calls >= (book.unlocked ? limits.book : 8) ||
-        global >= limits.global ||
-        (imageRequest && (imageTimes.length >= limits.imagesUser ||
+      if (book.state.active_job !== id) fail("conflict");
+      if (book.state.ai_calls >= (book.unlocked ? limits.book : 8))
+        fail("ai_book_limit");
+      if (times.length >= limits.user || global >= limits.global)
+        fail("ai_daily_limit");
+      if (imageRequest && (imageTimes.length >= limits.imagesUser ||
           globalImages >= limits.imagesGlobal))
-      )
-        fail("rate_limit");
+        fail("ai_image_daily_limit");
       tx.update(pRef, {
         ai_times: [...times, now],
         ...(imageRequest ? { image_times: [...imageTimes, now] } : {}),
