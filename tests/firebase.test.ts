@@ -241,6 +241,35 @@ test(
       assert.equal((await store.profile(other))!.free_book_id, trial);
       assert.equal((await store.profile(other))!.book_count, 0);
 
+      // Cost protection: image attempts are counted BEFORE an image request.
+      // An aggressive client cannot exceed three generated images per day.
+      const artist = `coverTester-${randomUUID()}`;
+      await store.ensureProfile(artist);
+      const artworkBook = await store.createBook(artist, brief);
+      const outlineJob = await store.prepareJob(
+        artist, artworkBook, "outline", null, randomUUID(),
+      );
+      await store.commitGenerated(outlineJob.id, {
+        title: "Test protected cover",
+        subtitle: "",
+        outline: [1, 2, 3].map((number) => ({
+          id: randomUUID(), title: `Chapter ${number}`, summary: "Details",
+        })),
+      }, 95);
+      await store.finishJob(outlineJob.id);
+      const protectedCover = await store.prepareJob(
+        artist, artworkBook, "cover", null, randomUUID(), true,
+      );
+      for (let i = 0; i < 3; i++)
+        await store.reserveAi(protectedCover.id, "cover", "test/model");
+      await assert.rejects(
+        store.reserveAi(protectedCover.id, "cover", "test/model"),
+        /rate_limit/,
+      );
+      assert.equal((await store.profile(artist))?.image_times?.length, 3);
+      await store.finishJob(protectedCover.id, "generation_failed");
+      assert.equal((await store.ownedBook(artworkBook, artist)).cover_path, null);
+
       // Load the actual HyrNära rules when available; do not modify/deploy them.
       const rules = await readFile(
         process.env.EBOOK_SHARED_RULES_PATH ||
