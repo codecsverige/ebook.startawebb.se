@@ -657,7 +657,7 @@ export function Editor({
                 tr(locale, "Your next book", "كتابك القادم", "Din nästa bok")}
             </h1>
             <span className="status-tag">
-              {book.unlocked ? t.unlocked : config.ownerTrial ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test") : t.sampleBadge}
+              {book.unlocked ? (config.ownerTrial ? tr(locale, "Ready to test", "جاهز للتجربة", "Redo att testa") : t.unlocked) : config.ownerTrial ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test") : t.sampleBadge}
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
@@ -1301,7 +1301,12 @@ export function Editor({
               <div className="panel-heading">
                 <span className="eyebrow">04 / {t.preview}</span>
                 <h2>{t.previewTitle}</h2>
-                <p>{t.exportHint}</p>
+                <p>{config.ownerTrial
+                  ? tr(locale,
+                      "Complete every chapter, then download your book in PDF, Word or EPUB. No site payment is required for your private test.",
+                      "أكمل كل الفصول ثم نزّل كتابك بصيغة PDF أو Word أو EPUB. لا يلزم أي دفع داخل الموقع أثناء تجربتك.",
+                      "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.")
+                  : t.exportHint}</p>
               </div>
               <div className="export-buttons">
                 <button
