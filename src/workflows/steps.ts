@@ -251,12 +251,20 @@ export async function createCover(jobId: string) {
   if (!model) throw new FatalError("not_configured");
   const usageId = await reserve(jobId, "cover", model);
   console.info("cover_started", { jobId });
+  const genreDirection: Record<string, string> = {
+    novel: "A cinematic, emotionally expressive fiction illustration. Suggest a key character, atmosphere and central conflict without imitating an existing novel cover.",
+    short_story: "A thoughtful literary illustration with one arresting symbol or scene and strong negative space.",
+    children_story: "Whimsical, joyful and age-appropriate illustrated characters and scenery. Warm and imaginative, not a photo.",
+    workbook: "A refined geometric editorial composition expressing learning and progress, with elegant shapes and visual rhythm.",
+    guide: "A restrained, authoritative nonfiction editorial illustration that expresses the actual topic through a clear visual metaphor.",
+    ebook: "An elegant contemporary publishing design with a memorable visual concept and simple hierarchy.",
+  };
   const result = await generateImage({
     model,
-    maxRetries: 0,
+    maxRetries: 1,
     abortSignal: AbortSignal.timeout(120_000),
     aspectRatio: "2:3",
-    prompt: `Create exactly one polished editorial cover illustration, vertical book composition. Subject: ${JSON.stringify({ idea: book.idea, audience: book.audience, kind: book.kind })}. Palette: ${book.cover_style}. Give the image artistic depth and a strong focal point while leaving the upper quarter calm for a title overlaid later. Original image only. No screenshots, real websites, phone screens, user interfaces, social media posts, news articles, document pages, logos, watermarks or typography. Do not reproduce a screenshot from the book idea. Absolutely no text, letters or numbers.`,
+    prompt: `Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`,
   });
   const file = result.image;
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
