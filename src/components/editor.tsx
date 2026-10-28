@@ -564,8 +564,19 @@ export function Editor({
             </div>
           )}
           {job?.status === "failed" && !busy && (
-            <div className="notice">
-              {errorMessage(job.error_code || "generation_failed", locale)}
+            <div className="notice" role="alert">
+              <p>{errorMessage(job.error_code || "generation_failed", locale)}</p>
+              {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
+                <button
+                  type="button"
+                  className="button button-small button-outline"
+                  disabled={disabled}
+                  onClick={() => void generate(job.kind, job.chapter_id || undefined)}
+                >
+                  <RotateCcw size={15} />
+                  {tr(locale, "Retry generation", "إعادة محاولة التوليد", "Försök generera igen")}
+                </button>
+              )}
             </div>
           )}
           {tab === "outline" && (
