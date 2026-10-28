@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       throw new AppError("unauthorized", 401);
     });
     const customToken = await adminAuth().createCustomToken(uid);
-    return json({ customToken }, 200, { "Cache-Control": "no-store" });
+    return json({ customToken });
   } catch (error) {
     return apiError(error);
   }
