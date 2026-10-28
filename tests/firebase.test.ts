@@ -278,8 +278,9 @@ test(
         })),
       }, 95);
       await store.finishJob(outlineJob.id);
+      await store.applyOrder(`trial-test:${artist}`, artist, 1, false, false);
       const protectedCover = await store.prepareJob(
-        artist, artworkBook, "cover", null, randomUUID(), true,
+        artist, artworkBook, "cover", null, randomUUID(),
       );
       for (let i = 0; i < 3; i++)
         await store.reserveAi(protectedCover.id, "cover", "test/model");
