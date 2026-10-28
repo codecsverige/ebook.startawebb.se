@@ -56,7 +56,7 @@ export function Editor({
 }: {
   id: string;
   locale: Locale;
-  config: { ai: boolean; billing: boolean; artwork: boolean };
+  config: { ai: boolean; billing: boolean; artwork: boolean; ownerTrial: boolean };
 }) {
   const t = copy[locale];
   const [book, setBook] = useState<BookWithCover | null>(null);
@@ -277,7 +277,7 @@ export function Editor({
     } catch (e) {
       const code = codeOf(e);
       setError(code);
-      if (code === "insufficient_credits" || code === "free_preview_used")
+      if (config.billing && (code === "insufficient_credits" || code === "free_preview_used"))
         setModal("credits");
       if (code === "busy") await load();
     } finally {
@@ -482,7 +482,7 @@ export function Editor({
                 tr(locale, "Your next book", "كتابك القادم", "Din nästa bok")}
             </h1>
             <span className="status-tag">
-              {book.unlocked ? t.unlocked : t.sampleBadge}
+              {book.unlocked ? t.unlocked : config.ownerTrial ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test") : t.sampleBadge}
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
@@ -520,13 +520,17 @@ export function Editor({
               </small>
             </div>
           </div>
-          <button
-            className="credit-pill sidebar-credits"
-            onClick={() => setModal("credits")}
-          >
-            <Coins size={16} />
-            <b>{credits}</b> {t.credits}
-          </button>
+          {config.billing ? (
+            <button
+              className="credit-pill sidebar-credits"
+              onClick={() => setModal("credits")}
+            >
+              <Coins size={16} />
+              <b>{credits}</b> {t.credits}
+            </button>
+          ) : config.ownerTrial ? (
+            <span className="status-tag sidebar-credits">{tr(locale, "Free private testing", "اختبار مجاني خاص", "Gratis privat test")}</span>
+          ) : null}
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
@@ -723,7 +727,7 @@ export function Editor({
                         ? Object.keys(book.chapters).length
                           ? t.resume
                           : t.generateBook
-                        : t.unlock}
+                        : config.ownerTrial ? tr(locale, "Generate complete book for free", "توليد الكتاب كاملًا مجانًا", "Skapa hela boken gratis") : t.unlock}
                     </button>
                   </div>
                 </>
@@ -866,7 +870,7 @@ export function Editor({
               )}
               <div className="editor-bottom-actions">
                 <p className="muted">
-                  {book.unlocked ? t.background : t.unlockBody}
+                  {book.unlocked ? t.background : config.ownerTrial ? tr(locale, "Your private test: generate a full book without buying credits.", "تجربتك الخاصة: أنشئ كتابًا كاملًا دون شراء رصيد.", "Din privata test: skapa en hel bok utan att köpa krediter.") : t.unlockBody}
                 </p>
                 {!complete && (
                   <button
@@ -875,7 +879,7 @@ export function Editor({
                     onClick={() => generate("book")}
                   >
                     <BookOpen size={17} />
-                    {book.unlocked ? t.resume : t.unlock}
+                    {book.unlocked ? t.resume : config.ownerTrial ? tr(locale, "Generate complete book for free", "توليد الكتاب كاملًا مجانًا", "Skapa hela boken gratis") : t.unlock}
                   </button>
                 )}
               </div>
@@ -988,7 +992,7 @@ export function Editor({
                       onClick={() => generate("book")}
                       disabled={disabled || !config.ai}
                     >
-                      {t.unlock}
+                      {config.ownerTrial ? tr(locale, "Generate book for free", "توليد الكتاب مجانًا", "Skapa boken gratis") : t.unlock}
                     </button>
                   )}
                 </div>
