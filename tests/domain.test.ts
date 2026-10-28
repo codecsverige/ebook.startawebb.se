@@ -7,6 +7,10 @@ import {
   filename,
   wordCount,
   usableGeneratedChapter,
+  coverStyles,
+  recommendedCoverStyles,
+  isArabicBrief,
+  matchesBookLanguage,
 } from "../src/lib/domain";
 import { escapeHtml, markdownHtml } from "../src/lib/export-text";
 import { validSignature } from "../src/lib/webhook";
@@ -130,4 +134,27 @@ test("editor prevents duplicate and unrelated chapter identifiers", () => {
     }).success,
     false,
   );
+});
+
+test("genre-aware covers provide 18 valid templates and sensible defaults", () => {
+  assert.equal(coverStyles.length, 18);
+  assert.equal(new Set(coverStyles).size, coverStyles.length);
+  for (const kind of ["novel", "short_story", "children_story", "workbook", "guide", "ebook"] as const) {
+    const suggested = recommendedCoverStyles(kind);
+    assert.equal(suggested.length, 5);
+    assert.ok(suggested.every((style) => coverStyles.includes(style)));
+  }
+  assert.equal(recommendedCoverStyles("novel")[0], "noir");
+  assert.equal(recommendedCoverStyles("children_story")[0], "sky");
+});
+
+test("Arabic text detection and generated language safeguards", () => {
+  const arabic = "مغامرة زهراء والكنز المفقود تدور أحداثها في قرية عربية جميلة وسط الغابات والوديان.";
+  const english = "Zahra explores a distant magical kingdom and finds a hidden map.";
+  assert.equal(isArabicBrief(arabic), true);
+  assert.equal(isArabicBrief(english), false);
+  assert.equal(matchesBookLanguage(arabic, "ar"), true);
+  assert.equal(matchesBookLanguage(english, "ar"), false);
+  assert.equal(matchesBookLanguage(arabic, "en"), false);
+  assert.equal(matchesBookLanguage(english, "en"), true);
 });
