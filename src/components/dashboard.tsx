@@ -57,6 +57,31 @@ export function Dashboard({
     author: "",
     chapter_count: 6,
   });
+  const draftStorageKey = `ebook-studio:new-book:${locale}`;
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(draftStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Partial<Brief>;
+      setBrief((current) => ({
+        ...current,
+        idea: typeof saved.idea === "string" ? saved.idea.slice(0, 2000) : current.idea,
+        audience: typeof saved.audience === "string" ? saved.audience.slice(0, 300) : current.audience,
+        author: typeof saved.author === "string" ? saved.author.slice(0, 100) : current.author,
+        kind: (["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as string[]).includes(saved.kind || "") ? saved.kind! : current.kind,
+        language: (["ar", "en", "sv"] as string[]).includes(saved.language || "") ? saved.language! : current.language,
+        tone: (["clear", "friendly", "professional", "literary", "dramatic", "playful"] as string[]).includes(saved.tone || "") ? saved.tone! : current.tone,
+        chapter_count: typeof saved.chapter_count === "number" && saved.chapter_count >= 3 && saved.chapter_count <= 10 ? Math.floor(saved.chapter_count) : current.chapter_count,
+      }));
+    } catch {
+      // Browsers that disable session storage still support the cloud editor.
+    }
+  }, [draftStorageKey]);
+  useEffect(() => {
+    if (!brief.idea && !brief.audience) return;
+    try { sessionStorage.setItem(draftStorageKey, JSON.stringify(brief)); } catch {}
+  }, [brief, draftStorageKey]);
+
   async function load() {
     try {
       const d = await request<{ books: BookshelfBook[]; credits: number }>(
@@ -95,6 +120,7 @@ export function Dashboard({
         method: "POST",
         body: JSON.stringify(parsed.data),
       });
+      try { sessionStorage.removeItem(draftStorageKey); } catch {}
       router.push(`/${locale}/studio/${d.id}`);
     } catch (e) {
       setError(codeOf(e));
