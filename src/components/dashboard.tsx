@@ -32,7 +32,7 @@ export function Dashboard({
 }: {
   locale: Locale;
   email: string;
-  config: { ai: boolean; billing: boolean };
+  config: { ai: boolean; billing: boolean; ownerTrial: boolean };
   initialPack: boolean;
   checkoutReturned: boolean;
 }) {
@@ -43,7 +43,7 @@ export function Dashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [modal, setModal] = useState<"new" | "credits" | "account" | null>(
-    initialPack ? "credits" : null,
+    initialPack && config.billing ? "credits" : null,
   );
   const [pending, setPending] = useState(false);
   const [brief, setBrief] = useState<Brief>({
@@ -133,11 +133,17 @@ export function Dashboard({
           {email}
         </span>
         <div className="workspace-tools">
-          <button className="credit-pill" onClick={() => setModal("credits")}>
-            <Coins size={16} />
-            <b>{credits}</b> {t.credits}
-            <Plus size={14} />
-          </button>
+          {config.billing ? (
+            <button className="credit-pill" onClick={() => setModal("credits")}>
+              <Coins size={16} />
+              <b>{credits}</b> {t.credits}
+              <Plus size={14} />
+            </button>
+          ) : config.ownerTrial ? (
+            <span className="status-tag" role="status">
+              {tr(locale, "Private free trial", "تجربة مجانية خاصة", "Privat gratis test")}
+            </span>
+          ) : null}
           <button
             className="icon-button"
             aria-label={t.settings}
