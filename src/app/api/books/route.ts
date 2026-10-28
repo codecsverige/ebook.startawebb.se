@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/firebase-session";
 import { studioStore } from "@/lib/firebase-admin";
-import { assertOrigin, readJson, apiError, json } from "@/lib/http";
-import { briefSchema, bookWords, isComplete } from "@/lib/domain";
+import { assertOrigin, readJson, apiError, json, AppError } from "@/lib/http";
+import { briefSchema, bookWords, isComplete, isArabicBrief } from "@/lib/domain";
 import { withCover, takeRate } from "@/lib/books";
 
 export async function GET() {
@@ -36,6 +36,8 @@ export async function POST(request: Request) {
     assertOrigin(request);
     const { user } = await requireUser();
     const brief = await readJson(request, briefSchema, 6000);
+    if (isArabicBrief(brief.idea) && brief.language !== "ar")
+      throw new AppError("language_mismatch");
     await takeRate(`create:${user.id}`, 10);
     return json({ id: await studioStore().createBook(user.id, brief) }, 201);
   } catch (e) {
