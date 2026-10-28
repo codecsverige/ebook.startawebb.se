@@ -54,5 +54,6 @@ function adminApp() {
 }
 
 export const adminAuth = () => getAuth(adminApp());
+export const studioDb = () => getFirestore(adminApp());
 export const studioStore = () => new FirestoreStudio(getFirestore(adminApp()));
 export const studioBucket = () => getStorage(adminApp()).bucket();
