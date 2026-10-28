@@ -262,10 +262,14 @@ export async function createChapter(
       `Write an original 450–650 word ${fiction ? "narrative story" : "informative"} chapter entirely in ${languageNames[book.language]} (including summary), with no untranslated English. Return a JSON object with two fields: content (full chapter, at least 400 words) and summary (a 30–90 word continuity summary). Keep names and events consistent. ${fiction ? "Use vivid prose and dialogue without Markdown headings." : "Use paragraphs and simple well-formed Markdown headings."} Data: ${contextData}`,
       5500,
     );
-    if (!usableGeneratedChapter(result.content))
-      throw new Error("ai_generation_incomplete");
-    if (!matchesBookLanguage(result.content + " " + result.summary, book.language))
-      throw new Error("ai_wrong_language");
+    if (!usableGeneratedChapter(result.content)) {
+      await persistFailure(jobId, "ai_generation_incomplete");
+      throw new FatalError("ai_generation_incomplete");
+    }
+    if (!matchesBookLanguage(result.content + " " + result.summary, book.language)) {
+      await persistFailure(jobId, "ai_wrong_language");
+      throw new FatalError("ai_wrong_language");
+    }
   }
   await commit(jobId, { chapter_id: chapterId, chapter: result }, progress);
 }
@@ -302,7 +306,10 @@ export async function createCover(jobId: string) {
   }
   const file = result.image;
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
-      file.uint8Array.length > 8_000_000) throw new Error("invalid_generation");
+      file.uint8Array.length > 8_000_000) {
+    await persistFailure(jobId, "ai_generation_invalid");
+    throw new FatalError("ai_generation_invalid");
+  }
   const ext = file.mediaType === "image/jpeg" ? "jpg" :
     file.mediaType === "image/webp" ? "webp" : "png";
   const path = `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
@@ -317,11 +324,13 @@ export async function createCover(jobId: string) {
     });
   await commit(jobId, { cover_path: path }, 95);
   const imageUsage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
+  // Cover was already saved. A non-critical accounting update must never
+  // turn a successfully generated book cover into a failed user operation.
   await studioStore().recordUsage(
     usageId,
     imageUsage?.inputTokens ?? 0,
     imageUsage?.outputTokens ?? 0,
-  );
+  ).catch(() => console.warn("image_usage_record_failed", { jobId }));
 }
 export async function finishJob(jobId: string) {
   "use step";
