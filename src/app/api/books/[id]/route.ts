@@ -49,19 +49,24 @@ export async function POST(request: Request, ctx: Context) {
       { user } = await requireUser();
     const input = await readJson(
       request,
-      z.object({
-        action: z.literal("restart"),
-        revision: z.number().int().nonnegative(),
-        language: z.enum(["en", "ar", "sv"]),
-      }),
+      z.discriminatedUnion("action", [
+        z.object({
+          action: z.literal("restart"),
+          revision: z.number().int().nonnegative(),
+          language: z.enum(["en", "ar", "sv"]),
+        }),
+        z.object({
+          action: z.literal("manual_outline"),
+          revision: z.number().int().nonnegative(),
+        }),
+      ]),
       1200,
     );
-    await takeRate(`restart:${user.id}`, 15);
-    return json({
-      book: await withCover(
-        await studioStore().restartBook(user.id, id, input.language, input.revision)
-      ),
-    });
+    await takeRate(`book-actions:${user.id}`, 15);
+    const book = input.action === "restart"
+      ? await studioStore().restartBook(user.id, id, input.language, input.revision)
+      : await studioStore().createManualOutline(user.id, id, input.revision);
+    return json({ book: await withCover(book) });
   } catch (e) {
     return apiError(e);
   }
