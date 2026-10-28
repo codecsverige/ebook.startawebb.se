@@ -260,7 +260,7 @@ export class FirestoreStudio {
         use_artwork: false,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
-        state: { ...book.state, latest_job: null, rewrites: {} },
+        state: { ...book.state, latest_job: null, rewrites: {}, covers: 0 },
       };
       this.writeVersion(tx, ref, book, versions);
       tx.set(ref, next);
@@ -384,7 +384,7 @@ export class FirestoreStudio {
         fail("invalid_input");
       if (kind === "chapter" && !book.outline.some((c) => c.id === chapter))
         fail("invalid_input");
-      if (kind === "cover" && book.state.covers >= 2) fail("rate_limit");
+      if (kind === "cover" && book.state.covers >= 5) fail("rate_limit");
       if (kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
         fail("rate_limit");
       let credits = profile.credits,
