@@ -345,6 +345,34 @@ export function Editor({
       setPending("");
     }
   }
+  async function uploadCover(file: File) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+        file.size > 3_000_000) {
+      setError("invalid_input");
+      return;
+    }
+    if (dirtyRef.current && !(await save())) return;
+    setPending("upload-cover");
+    setError("");
+    try {
+      const response = await fetch("/api/books/" + id + "/cover/upload", {
+        method: "POST", cache: "no-store",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const payload = await response.json().catch(() => ({ error: "service_error" }));
+      if (!response.ok) {
+        setError(payload.error || "service_error");
+        return;
+      }
+      setBook(payload.book as BookWithCover);
+      setDraft(payload.book as BookWithCover);
+    } catch {
+      setError("service_error");
+    } finally {
+      setPending("");
+    }
+  }
   async function download(format: "pdf" | "docx" | "epub") {
     if (dirtyRef.current && !(await save())) return;
     setPending(format);
@@ -925,6 +953,19 @@ export function Editor({
                     {t.aiCover}
                   </button>
                   <p className="muted">{t.artworkNote}</p>
+                  <label className="cover-upload-label">
+                    <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      disabled={disabled || !book.unlocked}
+                      onChange={(e) => {
+                        const file = e.currentTarget.files?.[0];
+                        e.currentTarget.value = "";
+                        if (file) void uploadCover(file);
+                      }}
+                    />
+                  </label>
                   {draft.cover_path && (
                     <label className="checkbox-label">
                       <input

@@ -238,6 +238,25 @@ export class FirestoreStudio {
       return bookOnly(next);
     });
   }
+  async setUploadedCover(uid: string, id: string, coverPath: string): Promise<Book> {
+    if (!uuid(id) || !coverPath.startsWith(STUDIO_PATH + "/covers/")) fail("invalid_input");
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.books().doc(id);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (!book.unlocked) fail("insufficient_credits");
+      if (book.state.active_job) fail("busy");
+      const versions = await this.versionPlan(tx, ref);
+      const next: StoredBook = {
+        ...book, cover_path: coverPath, use_artwork: true,
+        revision: book.revision + 1, updated_at: new Date().toISOString(),
+      };
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
   async versions(uid: string, id: string): Promise<VersionSummary[]> {
     await this.ownedBook(id, uid);
     const result = await this.books()
