@@ -13,7 +13,7 @@ const en = {
   hero1: "A good idea deserves",
   hero2: "a book of its own.",
   heroBody:
-    "Turn what you know into a practical ebook, guide, or workbook. Shape the outline, make it yours, and export a beautifully formatted book.",
+    "Create a polished guide, ebook, novel or story from one idea. Shape the chapters, edit the writing, design the cover, then download PDF, EPUB or Word.",
   freeNote: "Start with a free outline and sample chapter. No card needed.",
   viewExample: "Explore an example",
   human: "Your ideas. Your voice. You’re the editor.",
@@ -21,7 +21,7 @@ const en = {
   heroSubtitle: "A practical guide to turning big ideas into everyday progress",
   heroAuthor: "YOUR NEXT CHAPTER",
   heroTag: "MADE WITH EBOOK STUDIO",
-  formats: "PDF & Word export",
+  formats: "PDF · EPUB · Word",
   languages: "English · Arabic · Swedish",
   editEverything: "Edit every chapter",
   ownWork: "Keep your finished work",
@@ -38,7 +38,7 @@ const en = {
     "Generate chapters, edit the text, design the cover, and download your book.",
   examplesTitle: "What will you create?",
   examplesBody:
-    "Three formats. A thousand possibilities. These are editorial examples, not AI-generated customer books.",
+    "Create practical guides, stories or workbooks. These are editorial examples, not AI-generated customer books.",
   guide: "Practical guide",
   ebook: "Short ebook",
   workbook: "Workbook",
@@ -209,7 +209,7 @@ const ar: Copy = {
   hero1: "فكرتك تستحق",
   hero2: "أن تصبح كتابًا.",
   heroBody:
-    "حوّل معرفتك إلى كتاب إلكتروني أو دليل عملي أو كراسة تمارين. راجع الفهرس، عدّل المحتوى، وصدّر كتابًا منسّقًا وجاهزًا للمشاركة.",
+    "حوّل فكرتك إلى كتاب أو دليل أو رواية أو قصة. راجع الفصول، حرّر النص، صمّم الغلاف، ثم نزّل كتابك بصيغة PDF أو EPUB أو Word.",
   freeNote: "ابدأ بفهرس وفصل تجريبي مجاني. دون بطاقة بنكية.",
   viewExample: "تصفّح مثالًا",
   human: "أفكارك وصوتك. وأنت صاحب القرار.",
@@ -217,7 +217,7 @@ const ar: Copy = {
   heroSubtitle: "دليل عملي لتحويل الأفكار الكبيرة إلى خطوات يومية",
   heroAuthor: "فصلك القادم",
   heroTag: "صُنع مع EBOOK STUDIO",
-  formats: "تصدير PDF وWord",
+  formats: "PDF · EPUB · Word",
   languages: "العربية · الإنجليزية · السويدية",
   editEverything: "تعديل كل فصل",
   ownWork: "احتفظ بكتابك النهائي",
@@ -232,7 +232,7 @@ const ar: Copy = {
   step3Body: "ولّد الفصول، حرّر النص، صمّم الغلاف، ثم نزّل كتابك.",
   examplesTitle: "أي كتاب ستصنع؟",
   examplesBody:
-    "ثلاثة أنواع وإمكانات كثيرة. هذه أمثلة تحريرية للتوضيح، وليست كتب عملاء ولّدها الذكاء الاصطناعي.",
+    "أنشئ أدلة عملية أو قصصًا أو كراسات عمل. هذه أمثلة تحريرية للتوضيح، وليست كتب عملاء.",
   guide: "دليل عملي",
   ebook: "كتاب قصير",
   workbook: "كراسة تمارين",
@@ -393,7 +393,7 @@ const sv: Copy = {
   hero1: "En bra idé förtjänar",
   hero2: "en alldeles egen bok.",
   heroBody:
-    "Gör din kunskap till en praktisk e-bok, guide eller arbetsbok. Forma innehållet, sätt din prägel på texten och exportera en välformgiven bok.",
+    "Förvandla en idé till en guide, e-bok, roman eller berättelse. Redigera kapitlen, utforma omslaget och exportera PDF, EPUB eller Word.",
   freeNote:
     "Börja med en gratis disposition och ett provkapitel. Inget kort behövs.",
   viewExample: "Utforska ett exempel",
@@ -402,7 +402,7 @@ const sv: Copy = {
   heroSubtitle: "En praktisk guide från stora idéer till framsteg i vardagen",
   heroAuthor: "DITT NÄSTA KAPITEL",
   heroTag: "SKAPAD MED EBOOK STUDIO",
-  formats: "Export till PDF och Word",
+  formats: "PDF · EPUB · Word",
   languages: "Svenska · Engelska · Arabiska",
   editEverything: "Redigera varje kapitel",
   ownWork: "Behåll din färdiga bok",
@@ -419,7 +419,7 @@ const sv: Copy = {
     "Generera kapitel, redigera texten, utforma omslaget och ladda ner boken.",
   examplesTitle: "Vad vill du skapa?",
   examplesBody:
-    "Tre format. Många möjligheter. Det här är redaktionella exempel, inte AI-genererade kundböcker.",
+    "Skapa guider, berättelser eller arbetsböcker. Detta är redaktionella exempel, inte kundskapade AI-böcker.",
   guide: "Praktisk guide",
   ebook: "Kort e-bok",
   workbook: "Arbetsbok",
