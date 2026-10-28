@@ -6,6 +6,7 @@ import type {
 } from "firebase-admin/firestore";
 import {
   briefSchema,
+  recommendedCoverStyles,
   editBookSchema,
   type Book,
   type Brief,
@@ -164,7 +165,7 @@ export class FirestoreStudio {
         subtitle: "",
         outline: [],
         chapters: {},
-        cover_style: "cobalt",
+        cover_style: recommendedCoverStyles(brief.kind)[0],
         cover_path: null,
         use_artwork: true,
         unlocked: false,
