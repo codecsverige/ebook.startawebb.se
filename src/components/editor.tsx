@@ -827,7 +827,7 @@ export function Editor({
                     <legend>
                       {tr(locale, "Color direction", "ألوان الغلاف", "Färgval")}
                     </legend>
-                    {(["cobalt", "sage", "clay"] as const).map((s, i) => (
+                    {(["cobalt", "sage", "clay", "midnight", "plum", "ivory"] as const).map((s, i) => (
                       <button
                         key={s}
                         type="button"
@@ -837,6 +837,9 @@ export function Editor({
                             tr(locale, "Cobalt", "أزرق", "Kobolt"),
                             tr(locale, "Sage", "أخضر", "Salvia"),
                             tr(locale, "Clay", "طيني", "Lera"),
+                            tr(locale, "Midnight", "ليلي", "Midnatt"),
+                            tr(locale, "Plum", "بنفسجي", "Plommon"),
+                            tr(locale, "Ivory", "عاجي", "Elfenben"),
                           ][i]
                         }
                         className={`color-swatch swatch-${s}`}

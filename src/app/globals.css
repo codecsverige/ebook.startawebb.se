@@ -463,6 +463,9 @@ h3 {
   --cover-accent: #c27c59;
   background: var(--cover-bg);
 }
+.cover-midnight { --cover-bg:#17243f; --cover-ink:#fff8eb; --cover-accent:#9cbbef; background:var(--cover-bg); }
+.cover-plum { --cover-bg:#603b68; --cover-ink:#fff7ef; --cover-accent:#cda7d4; background:var(--cover-bg); }
+.cover-ivory { --cover-bg:#f5eddf; --cover-ink:#322b29; --cover-accent:#b99573; background:var(--cover-bg); }
 .cover-top {
   font-family: var(--sans);
   display: flex;
@@ -1879,6 +1882,12 @@ select:disabled {
   background: #d59b7a;
   color: #633e2a;
 }
+.swatch-midnight { background:#17243f; }
+.swatch-plum { background:#603b68; }
+.swatch-ivory { background:#f5eddf; color:#322b29; }
+.color-picker { flex-wrap:wrap; }
+.color-picker legend { font-size:15px; }
+.design-layout > .stack .button, .design-layout p { font-size:14px; }
 .design-layout > .stack .button {
   font-size: 11px;
   white-space: normal;

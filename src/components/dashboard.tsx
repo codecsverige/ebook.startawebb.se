@@ -310,7 +310,7 @@ export function Dashboard({
                       field("kind", e.target.value as Brief["kind"])
                     }
                   >
-                    {["guide", "ebook", "workbook"].map((k) => (
+                    {["guide", "ebook", "workbook", "novel", "short_story", "children_story"].map((k) => (
                       <option key={k} value={k}>
                         {t[k as Brief["kind"]]}
                       </option>
@@ -338,7 +338,7 @@ export function Dashboard({
                       field("tone", e.target.value as Brief["tone"])
                     }
                   >
-                    {["clear", "friendly", "professional"].map((k) => (
+                    {["clear", "friendly", "professional", "literary", "dramatic", "playful"].map((k) => (
                       <option key={k} value={k}>
                         {t[k as Brief["tone"]]}
                       </option>

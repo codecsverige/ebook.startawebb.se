@@ -9,9 +9,9 @@ export const languageNames: Record<Locale, string> = {
   ar: "العربية",
   sv: "Svenska",
 };
-export const kinds = ["guide", "ebook", "workbook"] as const;
-export const tones = ["clear", "friendly", "professional"] as const;
-export const coverStyles = ["cobalt", "sage", "clay"] as const;
+export const kinds = ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const;
+export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
+export const coverStyles = ["cobalt", "sage", "clay", "midnight", "plum", "ivory"] as const;
 
 const cleanText = (min: number, max: number) =>
   z.string().trim().min(min).max(max);

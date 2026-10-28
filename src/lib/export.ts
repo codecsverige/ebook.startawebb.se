@@ -23,6 +23,9 @@ const palettes: Record<
   cobalt: { bg: "#3159df", ink: "#fffdf6", accent: "#a7bcff" },
   sage: { bg: "#d8decd", ink: "#293e34", accent: "#879978" },
   clay: { bg: "#e6bba1", ink: "#5b342a", accent: "#c17b58" },
+  midnight: { bg: "#17243f", ink: "#fff8eb", accent: "#9cbbef" },
+  plum: { bg: "#603b68", ink: "#fff7ef", accent: "#cda7d4" },
+  ivory: { bg: "#f5eddf", ink: "#322b29", accent: "#b99573" },
 };
 export async function pdfHtml(
   book: Book,
