@@ -258,7 +258,7 @@ export async function createCover(jobId: string) {
   });
   const file = result.image;
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
-      file.uint8Array.length > 3_000_000) throw new Error("invalid_generation");
+      file.uint8Array.length > 8_000_000) throw new Error("invalid_generation");
   const ext = file.mediaType === "image/jpeg" ? "jpg" :
     file.mediaType === "image/webp" ? "webp" : "png";
   const path = `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
