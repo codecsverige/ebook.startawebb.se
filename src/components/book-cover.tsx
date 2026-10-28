@@ -26,9 +26,9 @@ export function BookCover({
       <div className="cover-grain" />
       <div className="cover-orbit orbit-one" />
       <div className="cover-orbit orbit-two" />
-      <div className="cover-top">
+      <div className="cover-top" aria-hidden="true">
         <BookOpen size={18} />
-        <span>EBOOK STUDIO</span>
+        <span>✦</span>
       </div>
       <div className="cover-copy">
         <h2>{title}</h2>
