@@ -644,6 +644,16 @@ export function errorMessage(code: string, l: Locale): string {
       "أعاد الذكاء الاصطناعي نصًا بصيغة غير صحيحة. أعد توليد الفصل.",
       "AI returnerade ett felaktigt formaterat kapitel. Försök igen.",
     ],
+    language_mismatch: [
+      "This idea is written in Arabic, but English or Swedish was selected. Choose Arabic for this book.",
+      "الطلب مكتوب بالعربية لكن لغة الكتاب ليست العربية. اختر العربية ثم أنشئ الكتاب.",
+      "Idén är på arabiska men ett annat språk har valts. Välj arabiska för boken.",
+    ],
+    ai_wrong_language: [
+      "The AI returned the wrong language, so the text was not saved. Please try again.",
+      "أعاد الذكاء الاصطناعي نصًا بلغة خاطئة، لذلك لم يُحفَظ. أعد المحاولة، أو أعد إنشاء الكتاب بالعربية من الفهرس.",
+      "AI svarade på fel språk, så texten sparades inte. Försök igen.",
+    ],
     ai_generation_incomplete: [
       "The AI did not finish the chapter. Please retry this chapter.",
       "لم يُكمل الذكاء الاصطناعي كتابة الفصل. حاول توليده من جديد.",
