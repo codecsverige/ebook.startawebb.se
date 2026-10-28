@@ -99,7 +99,10 @@ async function structured<T>(
     },
     });
   } catch (error) {
-    const code = classifyAiFailure(error);
+    const originalCode = error instanceof Error ? error.message : "";
+    const code = ["ai_generation_invalid", "ai_generation_incomplete", "content_not_allowed"].includes(originalCode)
+      ? originalCode
+      : classifyAiFailure(error);
     const failure = error as { statusCode?: number; status?: number; name?: string };
     console.warn("ai_request_failed", {
       jobId, operation, code,
@@ -109,6 +112,7 @@ async function structured<T>(
     // Persist a safe code BEFORE Workflow wraps the error; otherwise the
     // editor only ever sees "generation_failed" and the cause is lost.
     await persistFailure(jobId, code);
+    if (code === "ai_generation_invalid" || code === "ai_generation_incomplete") throw new Error(code);
     throw new FatalError(code);
   }
   await studioStore()
