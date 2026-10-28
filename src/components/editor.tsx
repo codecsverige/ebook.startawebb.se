@@ -958,7 +958,16 @@ export function Editor({
                       "إنشاء فهرس يدوي دون ذكاء اصطناعي (مجاني)",
                       "Skapa redigerbar disposition utan AI (gratis)")}
                   </button>
-                  {!config.ai && <p className="notice">{t.setupBody}</p>}
+                  {!config.ai && (
+                    <p className="notice" role="status">
+                      {tr(
+                        locale,
+                        "AI generation is unavailable because the OpenAI API connection is not configured. Your saved books are safe. You can create an editable outline without AI below.",
+                        "إنشاء الفهرس بالذكاء الاصطناعي غير متاح لأن اتصال OpenAI API غير مفعّل حاليًا. كتبك المحفوظة آمنة، ويمكنك إنشاء فهرس يدوي قابل للتعديل من الزر أعلاه.",
+                        "AI-generering är inte tillgänglig eftersom anslutningen till OpenAI API inte är konfigurerad. Dina sparade böcker finns kvar. Du kan skapa en redigerbar disposition utan AI ovan.",
+                      )}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
