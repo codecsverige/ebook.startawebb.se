@@ -4,6 +4,7 @@ import { z } from "zod";
 import { studioStore, studioBucket } from "@/lib/firebase-admin";
 import { coverPrefix } from "@/lib/books";
 import { AppError } from "@/lib/http";
+import { classifyAiFailure } from "@/lib/ai-errors";
 import {
   outlineSchema,
   chapterSchema,
@@ -48,24 +49,6 @@ const outlineDecisionSchema = z.object({
     summary: z.string().trim().max(600),
   })).max(10),
 });
-
-function classifyAiFailure(error: unknown): string {
-  const failure = error as { statusCode?: number; status?: number; name?: string; message?: string };
-  const status = failure?.statusCode ?? failure?.status;
-  const name = failure?.name || "";
-  const message = String(failure?.message || "").toLowerCase();
-  if (status === 402 || /insufficient.*(credit|fund)|credit.*exhaust|budget.*exceed|payment required/.test(message))
-    return "ai_credits_exhausted";
-  if (status === 401 || status === 403 || /invalid api key|invalid.*token|unauthorized.*gateway/.test(message))
-    return "ai_auth_failed";
-  if (status === 429 || /rate limit|too many requests/.test(message))
-    return "ai_provider_busy";
-  if (/noobjectgenerated|jsonparse|invalid.*(output|object|json)|schema validation/.test(name.toLowerCase() + " " + message))
-    return "ai_generation_invalid";
-  if (/abort|timeout|timed out|network|fetch failed|connection/.test(name.toLowerCase() + " " + message))
-    return "ai_provider_busy";
-  return "ai_provider_unavailable";
-}
 
 async function structured<T>(
   jobId: string,
