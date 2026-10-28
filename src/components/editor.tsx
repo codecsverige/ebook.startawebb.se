@@ -423,6 +423,36 @@ export function Editor({
       setPending("");
     }
   }
+  async function createManualOutline() {
+    if (!book || !draft || disabled || draft.outline.length) return;
+    if (!window.confirm(tr(
+      locale,
+      "Create an editable chapter outline without AI? Nothing will be charged. You will write the titles and summaries yourself.",
+      "هل تريد إنشاء فهرس يدوي قابل للتعديل دون ذكاء اصطناعي ودون أي تكلفة؟ ستكتب عناوين الفصول وملخصاتها بنفسك.",
+      "Skapa en redigerbar disposition utan AI och utan kostnad? Du skriver själv rubriker och sammanfattningar.",
+    ))) return;
+    setPending("manual-outline");
+    setError("");
+    try {
+      const { book: result } = await request<{ book: BookWithCover }>(
+        `/api/books/${id}`,
+        { method: "POST", body: JSON.stringify({
+          action: "manual_outline", revision: book.revision,
+        }) },
+      );
+      setBook(result);
+      setDraft(result);
+      setJob(null);
+      setChapterId(result.outline[0]?.id || "");
+      setDirty(false);
+      dirtyRef.current = false;
+      try { sessionStorage.removeItem(backupKey); } catch {}
+    } catch (error) {
+      setError(codeOf(error));
+    } finally {
+      setPending("");
+    }
+  }
   async function restartManuscript() {
     if (!book || !draft || disabled) return;
     const message = tr(
@@ -823,6 +853,9 @@ export function Editor({
           {job?.status === "failed" && !busy && (
             <div className="notice" role="alert">
               <p>{errorMessage(job.error_code || "generation_failed", locale)}</p>
+              <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
+                {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
+              </p>
               {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
                 <button
                   type="button"
@@ -906,6 +939,18 @@ export function Editor({
                       <Sparkles size={17} />
                     )}{" "}
                     {t.createOutline}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-outline"
+                    disabled={disabled}
+                    onClick={() => void createManualOutline()}
+                  >
+                    <BookOpen size={17} />
+                    {tr(locale,
+                      "Create editable outline without AI (free)",
+                      "إنشاء فهرس يدوي دون ذكاء اصطناعي (مجاني)",
+                      "Skapa redigerbar disposition utan AI (gratis)")}
                   </button>
                   {!config.ai && <p className="notice">{t.setupBody}</p>}
                 </div>
