@@ -852,7 +852,13 @@ export function Editor({
           )}
           {job?.status === "failed" && !busy && (
             <div className="notice" role="alert">
-              <p>{errorMessage(job.error_code || "generation_failed", locale)}</p>
+              <p>{config.ownerTrial &&
+                ["ai_daily_limit", "ai_image_daily_limit", "ai_book_limit", "rate_limit"].includes(job.error_code || "")
+                ? tr(locale,
+                  "This error came from an earlier test limit. Your private test account is now exempt. Retry generation.",
+                  "هذا خطأ قديم من حدود التجربة السابقة. رُفعت حدود التوليد عن حسابك الخاص؛ اضغط إعادة محاولة التوليد.",
+                  "Felet kommer från en tidigare testgräns. Ditt privata testkonto är nu undantaget. Försök generera igen.")
+                : errorMessage(job.error_code || "generation_failed", locale)}</p>
               <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
                 {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
               </p>
