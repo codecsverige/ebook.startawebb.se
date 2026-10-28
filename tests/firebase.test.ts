@@ -179,6 +179,25 @@ test(
       assert.equal(restored.outline.length, 3);
       assert.equal(restored.chapters[outline[0].id].content, chapter.content);
       await assert.rejects(store.restoreBookVersion(other, book, versionsAfterRestart[0].id, restored.revision), /not_found/);
+      // Even with the AI provider offline, users can prepare an editable
+      // structure without making any billable model request.
+      const manualBookId = await store.createBook(uid, brief);
+      const originalManual = await store.ownedBook(manualBookId, uid);
+      const manuallyPlanned = await store.createManualOutline(
+        uid, manualBookId, originalManual.revision,
+      );
+      assert.equal(manuallyPlanned.outline.length, 3);
+      assert.equal(Object.keys(manuallyPlanned.chapters).length, 0);
+      assert.equal(manuallyPlanned.title, "Your book title");
+      assert.equal((await store.ownedBook(manualBookId, uid)).outline.length, 3);
+      await assert.rejects(
+        store.createManualOutline(uid, manualBookId, originalManual.revision),
+        /conflict/,
+      );
+      await assert.rejects(
+        store.createManualOutline(other, manualBookId, manuallyPlanned.revision),
+        /not_found/,
+      );
       for (let n = 0; n < 22; n++) {
         const current = await store.ownedBook(book, uid);
         await store.saveBook(uid, book, { ...current, title: `Save ${n}` });
