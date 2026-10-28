@@ -17,6 +17,7 @@ import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
 import {
   briefSchema,
+  isArabicBrief,
   type BookshelfBook,
   type Locale,
   type Brief,
@@ -46,6 +47,7 @@ export function Dashboard({
     initialPack && config.billing ? "credits" : null,
   );
   const [pending, setPending] = useState(false);
+  const [languageTouched, setLanguageTouched] = useState(false);
   const [brief, setBrief] = useState<Brief>({
     idea: "",
     audience: "",
@@ -124,7 +126,14 @@ export function Dashboard({
     }
   }
   function field<K extends keyof Brief>(key: K, value: Brief[K]) {
-    setBrief((b) => ({ ...b, [key]: value }));
+    if (key === "language") setLanguageTouched(true);
+    setBrief((b) => ({
+      ...b,
+      [key]: value,
+      ...(key === "idea" && !languageTouched
+        ? { language: isArabicBrief(String(value)) ? "ar" : locale }
+        : {}),
+    }));
   }
   return (
     <div className="workspace container">
@@ -335,6 +344,11 @@ export function Dashboard({
                     <option value="ar">العربية</option>
                     <option value="sv">Svenska</option>
                   </select>
+                  {isArabicBrief(brief.idea) && brief.language !== "ar" && (
+                    <span className="notice" role="alert">
+                      {tr(locale, "Your brief is Arabic. Choose Arabic for the book or write the brief in the selected language.", "فكرتك بالعربية. اختر العربية كلغة للكتاب حتى لا يُنشأ بالإنجليزية.", "Din bokidé är på arabiska. Välj arabiska som bokens språk.")}
+                    </span>
+                  )}
                 </label>
                 <label>
                   {t.tone}
