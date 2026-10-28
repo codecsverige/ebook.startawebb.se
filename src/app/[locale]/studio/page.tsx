@@ -22,6 +22,8 @@ export default async function Studio({
   if (!config.accounts) redirect(`/${locale}/login`);
   const user = await sessionUser();
   if (!user) redirect(`/${locale}/login`);
+  const ownerTrial = !config.billing && !!process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
+    user.email.toLowerCase() === process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase();
   const q = await searchParams;
   return (
     <>
@@ -30,7 +32,7 @@ export default async function Studio({
         <Dashboard
           locale={locale}
           email={user.email || ""}
-          config={config}
+          config={{ ...config, ownerTrial }}
           initialPack={q.pack === "one" || q.pack === "three"}
           checkoutReturned={q.checkout === "returned"}
         />
