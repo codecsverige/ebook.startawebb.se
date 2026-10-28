@@ -79,6 +79,18 @@ export function makeEpub(
     midnight: ["#17243f", "#fff8eb"],
     plum: ["#603b68", "#fff7ef"],
     ivory: ["#f5eddf", "#322b29"],
+    forest: ["#173f36", "#f8f3db"],
+    ember: ["#8a342e", "#fff3db"],
+    lagoon: ["#124b64", "#f5fcfb"],
+    rose: ["#f1d4d9", "#542d3d"],
+    noir: ["#161821", "#f4e8d7"],
+    sky: ["#b9d9f1", "#1f4678"],
+    gold: ["#d5ac53", "#332512"],
+    teal: ["#176c6b", "#fff9e7"],
+    berry: ["#803655", "#fff4ec"],
+    sand: ["#e4d2b8", "#4f3f32"],
+    ink: ["#29374a", "#f5f4ed"],
+    sunrise: ["#f4b48a", "#56304b"],
   };
   const [bg, ink] = theme[book.cover_style] || theme.cobalt;
   const css =
