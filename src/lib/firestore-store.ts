@@ -167,7 +167,8 @@ export class FirestoreStudio {
         chapters: {},
         cover_style: recommendedCoverStyles(brief.kind)[0],
         cover_path: null,
-        use_artwork: true,
+        cover_candidate_path: null,
+        use_artwork: false,
         unlocked: false,
         revision: 0,
         created_at: now,
@@ -258,6 +259,7 @@ export class FirestoreStudio {
         outline: [],
         chapters: {},
         cover_path: null,
+        cover_candidate_path: null,
         use_artwork: false,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
@@ -284,6 +286,32 @@ export class FirestoreStudio {
       const next: StoredBook = {
         ...book, cover_path: null, use_artwork: false,
         revision: book.revision + 1, updated_at: new Date().toISOString(),
+      };
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
+
+  /** Approve or discard an AI cover suggestion without touching saved chapters. */
+  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean): Promise<Book> {
+    if (!uuid(id)) fail("not_found");
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.books().doc(id);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      if (!book.cover_candidate_path) fail("not_found");
+      const versions = await this.versionPlan(tx, ref);
+      const next: StoredBook = {
+        ...book,
+        cover_path: accept ? book.cover_candidate_path : book.cover_path,
+        cover_candidate_path: null,
+        use_artwork: accept ? true : book.use_artwork,
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
       };
       this.writeVersion(tx, ref, book, versions);
       tx.set(ref, next);
@@ -578,8 +606,8 @@ export class FirestoreStudio {
           fail("invalid_input");
         next.chapters[patch.chapter_id] = patch.chapter;
       } else if (patch.cover_path) {
-        next.cover_path = patch.cover_path;
-        next.use_artwork = true;
+        // Keep the active cover until the author explicitly approves the AI draft.
+        next.cover_candidate_path = patch.cover_path;
       } else fail("invalid_input");
       next.revision++;
       next.updated_at = new Date().toISOString();
