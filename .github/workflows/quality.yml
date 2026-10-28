@@ -19,6 +19,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - name: Set up Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Firestore integration tests (local emulator only)
         run: npm run test:firebase
       - run: npm run build
