@@ -93,6 +93,7 @@ export function Editor({
   const [chapterId, setChapterId] = useState("");
   const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
   const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
+  const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
@@ -1164,7 +1165,7 @@ export function Editor({
                     <legend>{tr(locale, "Choose a professionally designed cover", "اختر تصميم الغلاف المناسب لكتابك", "Välj ett professionellt bokomslag")}</legend>
                     <p className="muted">{tr(locale, "18 templates. Suggested designs for your book type come first. No AI credits needed.", "18 تصميمًا. تظهر التصاميم المناسبة لنوع كتابك أولًا، وتغييرها لا يستهلك الذكاء الاصطناعي.", "18 omslagsmallar. Rekommendationerna för din boktyp visas först. Ingen AI-kostnad.")}</p>
                     <div className="cover-template-grid">
-                      {[...recommendedCoverStyles(draft.kind), ...coverStyles.filter((style) => !recommendedCoverStyles(draft.kind).includes(style))].map((style, index) => (
+                      {(showAllCoverTemplates ? [...recommendedCoverStyles(draft.kind), ...coverStyles.filter((style) => !recommendedCoverStyles(draft.kind).includes(style))] : recommendedCoverStyles(draft.kind)).map((style, index) => (
                         <button
                           type="button"
                           className={`cover-template-card ${draft.cover_style === style ? "is-selected" : ""}`}
@@ -1190,6 +1191,16 @@ export function Editor({
                         </button>
                       ))}
                     </div>
+                    <button
+                      type="button"
+                      className="text-link"
+                      disabled={disabled}
+                      onClick={() => setShowAllCoverTemplates((value) => !value)}
+                    >
+                      {showAllCoverTemplates
+                        ? tr(locale, "Show the five recommendations", "عرض المقترحات الخمسة فقط", "Visa bara fem förslag")
+                        : tr(locale, "Explore all 18 cover designs", "استكشف جميع تصاميم الأغلفة الـ18", "Utforska alla 18 omslagsmallar")}
+                    </button>
                   </fieldset>
                   <label>
                     {t.author}
