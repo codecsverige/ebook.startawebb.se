@@ -29,7 +29,8 @@
     "react-dom": "19.3.1",
     "server-only": "0.0.1",
     "workflow": "5.2.3",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "jose": "5.10.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "6.0.0",
