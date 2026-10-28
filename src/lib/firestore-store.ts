@@ -40,6 +40,7 @@ type BookState = {
 };
 type StoredBook = Book & { state: BookState };
 export type WorkerJob = Job & {
+  owner_trial?: boolean;
   request_id: string;
   result_units: Record<string, boolean>;
   updated_at: string;
