@@ -38,18 +38,6 @@ const palettes: Record<
   sand: { bg: "#e3d0b2", ink: "#3f3026", accent: "#b18c65" },
   ink: { bg: "#272a49", ink: "#f7f1de", accent: "#aba8d2" },
   sunrise: { bg: "#e88967", ink: "#442b43", accent: "#fcd8a3" },
-  forest: { bg: "#173f36", ink: "#f8f3db", accent: "#9cca86" },
-  ember: { bg: "#8a342e", ink: "#fff3db", accent: "#ffc384" },
-  lagoon: { bg: "#124b64", ink: "#f5fcfb", accent: "#7bd0c7" },
-  rose: { bg: "#f1d4d9", ink: "#542d3d", accent: "#c67a9a" },
-  noir: { bg: "#161821", ink: "#f4e8d7", accent: "#c7a16b" },
-  sky: { bg: "#b9d9f1", ink: "#1f4678", accent: "#80b6e6" },
-  gold: { bg: "#d5ac53", ink: "#332512", accent: "#fcf0b9" },
-  teal: { bg: "#176c6b", ink: "#fff9e7", accent: "#94d4b7" },
-  berry: { bg: "#803655", ink: "#fff4ec", accent: "#ed9eaa" },
-  sand: { bg: "#e4d2b8", ink: "#4f3f32", accent: "#b9a076" },
-  ink: { bg: "#29374a", ink: "#f5f4ed", accent: "#95a8c0" },
-  sunrise: { bg: "#f4b48a", ink: "#56304b", accent: "#f9d6a7" },
 };
 export async function pdfHtml(
   book: Book,
