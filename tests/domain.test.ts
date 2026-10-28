@@ -11,6 +11,10 @@ import {
   recommendedCoverStyles,
   isArabicBrief,
   matchesBookLanguage,
+  coverStyles,
+  recommendedCoverStyles,
+  isArabicBrief,
+  matchesBookLanguage,
 } from "../src/lib/domain";
 import { escapeHtml, markdownHtml } from "../src/lib/export-text";
 import { validSignature } from "../src/lib/webhook";
@@ -157,4 +161,23 @@ test("Arabic text detection and generated language safeguards", () => {
   assert.equal(matchesBookLanguage(english, "ar"), false);
   assert.equal(matchesBookLanguage(arabic, "en"), false);
   assert.equal(matchesBookLanguage(english, "en"), true);
+});
+
+test("every genre has valid suggested cover templates without duplicate palette names", () => {
+  assert.equal(coverStyles.length, 18);
+  assert.equal(new Set(coverStyles).size, coverStyles.length);
+  for (const kind of ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const) {
+    const suggested = recommendedCoverStyles(kind);
+    assert.ok(suggested.length >= 4);
+    assert.equal(new Set(suggested).size, suggested.length);
+    assert.ok(suggested.every((name) => coverStyles.includes(name)));
+  }
+});
+
+test("Arabic content detection prevents English books from Arabic briefs", () => {
+  assert.equal(isArabicBrief("أريد كتابا عربيا عن الحياة والأمل ومغامرات الطفل في الغابة"), true);
+  assert.equal(isArabicBrief("A professional guide for creating websites and building an audience"), false);
+  assert.equal(matchesBookLanguage("هذا نص عربي واضح ومتصل يكتب باللغة العربية دون ترجمة إلى لغة مختلفة", "ar"), true);
+  assert.equal(matchesBookLanguage("This text is written in English and should not be saved as Arabic content.", "ar"), false);
+  assert.equal(matchesBookLanguage("This is a clear English-language manuscript with useful examples.", "en"), true);
 });
