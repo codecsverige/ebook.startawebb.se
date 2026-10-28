@@ -176,7 +176,7 @@ export async function createCover(jobId: string) {
   const result = await generateImage({
     model,
     maxRetries: 0,
-    timeout: 120_000,
+    abortSignal: AbortSignal.timeout(120_000),
     aspectRatio: "2:3",
     prompt: `Create exactly one polished editorial cover illustration, vertical book composition. Subject: ${JSON.stringify({ idea: book.idea, audience: book.audience, kind: book.kind })}. Palette: ${book.cover_style}. Give the image artistic depth and a strong focal point while leaving the upper quarter calm for a title overlaid later. Original image only. Absolutely no text, letters, typography, watermarks or logos.`,
   });
