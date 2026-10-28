@@ -5,13 +5,13 @@ import { studioStore } from "@/lib/firebase-admin";
 import { apiError, AppError, assertOrigin, readJson, json } from "@/lib/http";
 export const runtime = "nodejs";
 export async function GET(
-  _: Request,
+  request: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
     const { user } = await requireUser(),
       { id } = await ctx.params;
-    const artwork = await coverArtwork(await ownedBook(id, user.id));
+    const artwork = await coverArtwork(await ownedBook(id, user.id), new URL(request.url).searchParams.get("candidate") === "1");
     if (!artwork) throw new AppError("not_found", 404);
     return new Response(artwork.data, {
       headers: {
@@ -19,6 +19,35 @@ export async function GET(
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
+    });
+  } catch (e) {
+    return apiError(e);
+  }
+}
+
+/** Author confirmation is required before new AI cover artwork replaces the existing design. */
+export async function POST(
+  request: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  try {
+    assertOrigin(request);
+    const { user } = await requireUser();
+    const { id } = await ctx.params;
+    const input = await readJson(
+      request,
+      z.object({
+        action: z.enum(["accept", "reject"]),
+        revision: z.number().int().nonnegative(),
+      }),
+      500,
+    );
+    return json({
+      book: await withCover(
+        await studioStore().decideCoverCandidate(
+          user.id, id, input.revision, input.action === "accept"
+        )
+      ),
     });
   } catch (e) {
     return apiError(e);
