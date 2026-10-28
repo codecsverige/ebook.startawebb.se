@@ -25,7 +25,8 @@ export function configuration() {
         process.env.VERCEL === "1")
     ),
     artwork: !!process.env.AI_GATEWAY_IMAGE_MODEL,
-    billing: !!(
+    // Payments stay disabled until the owner explicitly enables them.
+    billing: process.env.EBOOK_PAYMENTS_ENABLED === "true" && !!(
       process.env.LEMON_SQUEEZY_API_KEY &&
       process.env.LEMON_SQUEEZY_STORE_ID &&
       process.env.LEMON_SQUEEZY_VARIANT_ONE &&
