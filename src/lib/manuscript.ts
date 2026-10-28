@@ -5,7 +5,8 @@
 export type ManuscriptBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
-  | { type: "ul" | "ol"; items: string[] };
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] };
 
 const heading = /^\s{0,3}(#{1,4})[ \t]+(.+)$/;
 const bullet = /^\s*[-*+][ \t]+(.+)$/;
@@ -32,7 +33,8 @@ export function parseManuscript(input: string): ManuscriptBlock[] {
         items.push(next[1].trim());
         i++;
       }
-      result.push({ type, items });
+      if (type === "ul") result.push({ type: "ul", items });
+      else result.push({ type: "ol", items });
       continue;
     }
     const paragraph: string[] = [];
