@@ -268,7 +268,8 @@ export async function finishJob(jobId: string) {
 }
 export async function failJob(jobId: string, reason: string) {
   "use step";
-  const code = [
+  // Workflow step failures can wrap the original message; keep only recognized safe codes.
+  const recognized = [
     "content_not_allowed",
     "rate_limit",
     "not_configured",
@@ -280,9 +281,10 @@ export async function failJob(jobId: string, reason: string) {
     "ai_provider_unavailable",
     "ai_generation_invalid",
     "ai_generation_incomplete",
-  ].includes(reason)
-    ? reason
-    : "generation_failed";
+  ];
+  const code = recognized.find((candidate) =>
+    new RegExp(`\\b${candidate}\\b`).test(reason),
+  ) || "generation_failed";
   await studioStore().finishJob(jobId, code);
   console.warn("generation_failed", { jobId, code });
 }
