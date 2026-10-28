@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { classifyAiFailure } from "../src/lib/ai-errors";
 import {
   briefSchema,
   editBookSchema,
@@ -176,4 +177,22 @@ test("Arabic content detection prevents English books from Arabic briefs", () =>
   assert.equal(matchesBookLanguage("هذا نص عربي واضح ومتصل يكتب باللغة العربية دون ترجمة إلى لغة مختلفة", "ar"), true);
   assert.equal(matchesBookLanguage("This text is written in English and should not be saved as Arabic content.", "ar"), false);
   assert.equal(matchesBookLanguage("This is a clear English-language manuscript with useful examples.", "en"), true);
+});
+
+test("AI Gateway failures retain specific safe causes through nested SDK errors", () => {
+  assert.equal(classifyAiFailure({
+    name: "AI_APICallError", cause: { statusCode: 402,
+      message: "quota_for_entity_exceeded" },
+  }), "ai_credits_exhausted");
+  assert.equal(classifyAiFailure({
+    status: 401, message: "Unauthorized" ,
+  }), "ai_auth_failed");
+  assert.equal(classifyAiFailure({
+    cause: { response: { status: 503 } },
+  }), "ai_provider_busy");
+  assert.equal(classifyAiFailure({
+    name: "AI_NoObjectGeneratedError", message: "Invalid JSON response",
+  }), "ai_generation_invalid");
+  assert.equal(classifyAiFailure(new Error("unknown service failure")),
+    "ai_provider_unavailable");
 });
