@@ -78,7 +78,9 @@ async function structured<T>(
       errorType: failure?.name || "unknown",
       status: failure?.statusCode ?? failure?.status ?? null,
     });
-    throw new Error(code);
+    // AI SDK already made its one bounded transport retry. A Workflow step
+    // retry could call the provider multiple MORE times and raise the bill.
+    throw new FatalError(code);
   }
   await studioStore()
     .recordUsage(
@@ -259,13 +261,20 @@ export async function createCover(jobId: string) {
     guide: "A restrained, authoritative nonfiction editorial illustration that expresses the actual topic through a clear visual metaphor.",
     ebook: "An elegant contemporary publishing design with a memorable visual concept and simple hierarchy.",
   };
-  const result = await generateImage({
+  let result: Awaited<ReturnType<typeof generateImage>>;
+  try {
+    result = await generateImage({
     model,
     maxRetries: 1,
     abortSignal: AbortSignal.timeout(120_000),
     aspectRatio: "2:3",
     prompt: `Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`,
-  });
+    });
+  } catch (error) {
+    const code = classifyAiFailure(error);
+    console.warn("cover_request_failed", { jobId, code });
+    throw new FatalError(code);
+  }
   const file = result.image;
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
       file.uint8Array.length > 8_000_000) throw new Error("invalid_generation");
@@ -317,3 +326,11 @@ export async function failJob(jobId: string, reason: string) {
   await studioStore().finishJob(jobId, code);
   console.warn("generation_failed", { jobId, code });
 }
+
+// Vercel Workflow retries failed steps by default. AI SDK already retries a
+// transient provider request once, and chapter formatting has one local
+// recovery attempt. Do not replay costly AI calls implicitly at the step layer.
+// Unfinished book jobs remain resumable from the last committed chapter.
+createOutline.maxRetries = 0;
+createChapter.maxRetries = 0;
+createCover.maxRetries = 0;
