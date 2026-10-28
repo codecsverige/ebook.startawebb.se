@@ -158,6 +158,27 @@ test(
       );
       assert.equal("state" in (await store.ownedBook(book, uid)), false);
       await store.finishJob(resumed.id);
+      // A generated cover is a suggestion, not automatically published artwork.
+      const coverJob = await store.prepareJob(uid, book, "cover", null, randomUUID());
+      const candidatePath = "test/covers/" + randomUUID() + ".png";
+      await store.commitGenerated(coverJob.id, { cover_path: candidatePath }, 95);
+      await store.finishJob(coverJob.id);
+      let currentBook = await store.ownedBook(book, uid);
+      assert.equal(currentBook.cover_path, null);
+      assert.equal(currentBook.cover_candidate_path, candidatePath);
+      currentBook = await store.decideCoverCandidate(uid, book, currentBook.revision, true);
+      assert.equal(currentBook.cover_path, candidatePath);
+      assert.equal(currentBook.cover_candidate_path, null);
+      const restarted = await store.restartBook(uid, book, "ar", currentBook.revision);
+      assert.equal(restarted.language, "ar");
+      assert.equal(restarted.outline.length, 0);
+      assert.equal(Object.keys(restarted.chapters).length, 0);
+      const versionsAfterRestart = await store.versions(uid, book);
+      const restored = await store.restoreBookVersion(uid, book, versionsAfterRestart[0].id, restarted.revision);
+      assert.equal(restored.language, "en");
+      assert.equal(restored.outline.length, 3);
+      assert.equal(restored.chapters[outline[0].id].content, chapter.content);
+      await assert.rejects(store.restoreBookVersion(other, book, versionsAfterRestart[0].id, restored.revision), /not_found/);
       for (let n = 0; n < 22; n++) {
         const current = await store.ownedBook(book, uid);
         await store.saveBook(uid, book, { ...current, title: `Save ${n}` });
