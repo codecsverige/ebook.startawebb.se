@@ -309,6 +309,9 @@ export async function failJob(jobId: string, reason: string) {
   const recognized = [
     "content_not_allowed",
     "rate_limit",
+    "ai_book_limit",
+    "ai_daily_limit",
+    "ai_image_daily_limit",
     "not_configured",
     "invalid_input",
     "insufficient_credits",
