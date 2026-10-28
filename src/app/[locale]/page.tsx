@@ -225,6 +225,7 @@ export default async function Home({ params }: Props) {
             </div>
           </div>
         </section>
+        {billing ? (
         <section className="section container" id="pricing">
           <div className="section-heading centered">
             <div className="eyebrow">03 / {t.navPricing}</div>
@@ -294,6 +295,20 @@ export default async function Home({ params }: Props) {
             )}
           </p>
         </section>
+        ) : (
+          <section className="section container" id="pricing">
+            <div className="section-heading centered">
+              <div className="eyebrow">{tr(locale, "Testing phase", "مرحلة التجربة", "Testfas")}</div>
+              <h2>{tr(locale, "Create and preview your first chapter", "أنشئ مخطط كتابك وعاين الفصل الأول", "Skapa och förhandsgranska ditt första kapitel")}</h2>
+              <p>{tr(locale,
+                "Checkout is not available during testing. Full-book generation is being tested privately before launch.",
+                "الدفع غير متاح خلال التجربة. يجري اختبار توليد الكتب الكاملة بشكل خاص قبل الإطلاق.",
+                "Betalning är inte tillgänglig under testningen. Generering av hela böcker testas privat före lansering."
+              )}</p>
+              <Link className="button button-primary" href={`/${locale}/studio`}>{t.start}<ArrowUpRight size={18} /></Link>
+            </div>
+          </section>
+        )}
         <section className="faq-section container">
           <div className="faq-intro">
             <Quote size={34} strokeWidth={1} />
