@@ -286,6 +286,7 @@ export class FirestoreStudio {
       const next: StoredBook = {
         ...book,
         outline,
+        state: { ...book.state, latest_job: null },
         title: book.title || (book.language === "ar"
           ? "عنوان كتابك" : book.language === "sv" ? "Din boktitel" : "Your book title"),
         revision: book.revision + 1,
