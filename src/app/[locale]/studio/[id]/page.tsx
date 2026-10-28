@@ -20,11 +20,13 @@ export default async function BookEditor({
   if (!config.accounts) redirect(`/${locale}/login`);
   const user = await sessionUser();
   if (!user) redirect(`/${locale}/login`);
+  const ownerTrial = !config.billing && !!process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
+    user.email.toLowerCase() === process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase();
   return (
     <>
       <Header locale={locale} compact />
       <main id="main">
-        <Editor id={id} locale={locale} config={config} />
+        <Editor id={id} locale={locale} config={{ ...config, ownerTrial }} />
       </main>
     </>
   );
