@@ -3052,3 +3052,10 @@ html[dir="rtl"] .muted {
   font-size: 14px;
   max-width: 100%;
 }
+
+/* Mobile manuscript editor legibility and natural-language outline editing */
+.outline-item textarea { font-size: 16px; line-height: 1.65; min-height: 108px; resize: vertical; color: #34445b; background: #fbfcfe; border: 1px solid #e2e7ef; padding: 12px 14px; }
+.outline-item input { font-size: 16px; min-height: 46px; }
+.chapter-editor { font-size: 17px; line-height: 1.85; padding: 20px; }
+.chapter-read { font-size: 17px; line-height: 1.9; }
+@media (max-width: 600px) { .outline-item { padding: 14px; gap: 9px; } .outline-number { font-size: 14px; } .editor-main { padding: 22px 14px 50px; } .chapter-editor { min-height: 72dvh; padding: 15px; font-size: 17px; } .chapter-read { padding: 18px; } }
