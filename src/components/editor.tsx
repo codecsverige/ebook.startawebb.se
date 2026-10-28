@@ -503,14 +503,18 @@ export function Editor({
       "هل تريد استعادة هذا الإصدار بلغته وفصوله؟ ستُحفظ نسختك الحالية أيضًا في السجل ويمكن استعادتها لاحقًا.",
       "Återställa den sparade boken och dess språk? Den aktuella versionen arkiveras och kan återställas senare.",
     ))) return;
-    // Ensure unsaved edits are not silently replaced during a history restore.
-    if (dirtyRef.current && !(await save())) return;
+    // Save the draft first, then restore from the new server revision.
+    let revision = book.revision;
+    if (dirtyRef.current) {
+      if (!(await save())) return;
+      revision++;
+    }
     setPending("restore");
     setError("");
     try {
       const { book: restored } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/versions`,
-        { method: "POST", body: JSON.stringify({ version_id: version.id, revision: book.revision }) },
+        { method: "POST", body: JSON.stringify({ version_id: version.id, revision }) },
       );
       setBook(restored);
       setDraft(restored);
