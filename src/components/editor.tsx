@@ -18,6 +18,11 @@ import {
   Coins,
   BookOpen,
   ChevronRight,
+  Bold as BoldIcon,
+  Heading2,
+  List as ListIcon,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { BookCover } from "./book-cover";
 import { Markdown } from "./markdown";
@@ -61,6 +66,8 @@ export function Editor({
   const [tab, setTab] = useState<Tab>("outline");
   const [chapterId, setChapterId] = useState("");
   const [read, setRead] = useState(false);
+  const [fullscreenEditor, setFullscreenEditor] = useState(false);
+  const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -181,6 +188,39 @@ export function Editor({
     setDraft((b) => (b ? fn(b) : b));
     dirtyRef.current = true;
     setDirty(true);
+  }
+  function formatSelection(kind: "bold" | "heading" | "list") {
+    const editor = chapterEditorRef.current;
+    const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
+      || draft?.outline[0];
+    if (!editor || !selectedChapter || !draft?.chapters[selectedChapter.id]) return;
+    const value = draft.chapters[selectedChapter.id].content;
+    const from = editor.selectionStart;
+    const to = editor.selectionEnd;
+    const selected = value.slice(from, to);
+    let prefix = "";
+    let suffix = "";
+    if (kind === "bold") {
+      prefix = "**";
+      suffix = "**";
+    } else if (kind === "heading") {
+      prefix = (from > 0 && value[from - 1] !== "\n" ? "\n" : "") + "## ";
+    } else {
+      prefix = (from > 0 && value[from - 1] !== "\n" ? "\n" : "") + "- ";
+    }
+    const updated = value.slice(0, from) + prefix + (selected || " ") + suffix + value.slice(to);
+    if (updated.length > 30000) return;
+    change((b) => ({
+      ...b,
+      chapters: {
+        ...b.chapters,
+        [selectedChapter.id]: { ...b.chapters[selectedChapter.id], content: updated },
+      },
+    }));
+    requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(from + prefix.length, from + prefix.length + (selected || " ").length);
+    });
   }
   async function save(): Promise<boolean> {
     if (!draft || !dirtyRef.current) return true;
@@ -607,7 +647,7 @@ export function Editor({
                             <textarea
                               value={c.summary}
                               maxLength={600}
-                              rows={2}
+                              rows={4}
                               disabled={disabled}
                               onChange={(e) =>
                                 change((b) => ({
@@ -737,9 +777,18 @@ export function Editor({
                     <Markdown text={current.content} />
                   </div>
                 ) : (
-                  <label>
+                  <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
                     <span className="sr-only">{t.content}</span>
+                    <span className="chapter-format-toolbar" role="toolbar" aria-label={tr(locale, "Text formatting", "تنسيق النص", "Textformatering")}>
+                      <button type="button" disabled={disabled} aria-label={tr(locale, "Bold", "غامق", "Fetstil")} title={tr(locale, "Bold", "غامق", "Fetstil")} onClick={() => formatSelection("bold")}><BoldIcon size={18}/></button>
+                      <button type="button" disabled={disabled} aria-label={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} title={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} onClick={() => formatSelection("heading")}><Heading2 size={18}/></button>
+                      <button type="button" disabled={disabled} aria-label={tr(locale, "List", "قائمة", "Lista")} title={tr(locale, "List", "قائمة", "Lista")} onClick={() => formatSelection("list")}><ListIcon size={18}/></button>
+                      <span className="chapter-format-spacer"/>
+                      <span className="chapter-word-count">{current.content.trim().split(/\s+/u).filter(Boolean).length.toLocaleString(locale)} {t.words}</span>
+                      <button type="button" aria-label={fullscreenEditor ? tr(locale, "Close full-screen editor", "إغلاق وضع الشاشة الكاملة", "Stäng helskärm") : tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} title={tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} onClick={() => setFullscreenEditor(v => !v)}>{fullscreenEditor ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}</button>
+                    </span>
                     <textarea
+                      ref={chapterEditorRef}
                       className="chapter-editor"
                       dir={draft.language === "ar" ? "rtl" : "ltr"}
                       lang={draft.language}
