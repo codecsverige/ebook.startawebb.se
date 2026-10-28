@@ -281,10 +281,10 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== revision) fail("conflict");
-      if (!book.cover_path) return bookOnly(book);
+      if (!book.cover_path && !book.cover_candidate_path) return bookOnly(book);
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
-        ...book, cover_path: null, use_artwork: false,
+        ...book, cover_path: null, cover_candidate_path: null, use_artwork: false,
         revision: book.revision + 1, updated_at: new Date().toISOString(),
       };
       this.writeVersion(tx, ref, book, versions);
@@ -330,7 +330,7 @@ export class FirestoreStudio {
       if (book.state.active_job) fail("busy");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
-        ...book, cover_path: coverPath, use_artwork: true,
+        ...book, cover_path: coverPath, cover_candidate_path: null, use_artwork: true,
         revision: book.revision + 1, updated_at: new Date().toISOString(),
       };
       this.writeVersion(tx, ref, book, versions);
