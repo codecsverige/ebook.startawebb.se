@@ -5,10 +5,10 @@ import { studioStore, studioBucket } from "@/lib/firebase-admin";
 import { coverPrefix } from "@/lib/books";
 import { AppError } from "@/lib/http";
 import { classifyAiFailure } from "@/lib/ai-errors";
+import { generateCompleteChapter } from "@/lib/chapter-generation";
 import {
   outlineSchema,
   chapterSchema,
-  usableGeneratedChapter,
   matchesBookLanguage,
   languageNames,
 } from "@/lib/domain";
@@ -73,10 +73,11 @@ async function structured<T>(
     prompt,
     providerOptions: {
       gateway: { safetyIdentifier: jobId },
-      // On GPT-5.4, reasoning tokens count against the output ceiling.
-      // Keep planning concise but retain more reasoning for prose quality.
-      ...(model === "openai/gpt-5.4" ? {
-        openai: { reasoningEffort: operation.startsWith("chapter") ? "medium" : "low" },
+      // Reasoning shares the output ceiling. Keep Terra drafts concise in
+      // planning so the chapter itself has enough room; do not send reasoning
+      // options to non-reasoning models such as GPT-4.1 mini.
+      ...(model === "openai/gpt-5.4" || model === "openai/gpt-6.1-terra" ? {
+        openai: { reasoningEffort: model === "openai/gpt-6.1-terra" ? "low" : operation.startsWith("chapter") ? "medium" : "low" },
       } : {}),
     },
     });
@@ -218,58 +219,21 @@ export async function createChapter(
   if (!book.unlocked && chapter.id !== book.outline[0].id)
     throw new FatalError("insufficient_credits");
   console.info("chapter_started", { jobId, chapterId });
-  const fiction = ["novel", "short_story", "children_story"].includes(book.kind);
-  const writing = fiction
-    ? `Write a vivid, original 650–1000 word narrative chapter for a ${book.kind}. Use scenes, natural dialogue, character actions and sensory details, not essays. Follow the planned story arc and earlier events. Preserve character names, viewpoint, chronology and unresolved threads. No markdown headings or bullet points within the story. For children use age-appropriate language. Give a concise factual continuity summary of events and character changes.`
-    : `Write a substantial 700–1100 word chapter for a ${book.kind}. Use Markdown ## subheadings, short paragraphs, bullet points and concrete examples as appropriate. Do not repeat the chapter title. Include exercises for workbooks. Avoid repetition. Return a factual summary for continuity.`;
-  const contextData = JSON.stringify({
-    title: book.title,
-    idea: book.idea,
-    audience: book.audience,
-    kind: book.kind,
-    tone: book.tone,
-    outline: book.outline,
-    currentChapter: chapter,
-    // Never leak future chapter spoilers into the narrative continuity context.
-    previousSummaries: book.outline
-      .slice(0, book.outline.findIndex((c) => c.id === chapterId))
-      .filter((c) => Boolean(book.chapters[c.id]))
-      .map((c) => ({ title: c.title, summary: book.chapters[c.id].summary })),
-  });
   let result;
   try {
-    result = await structured(
-      jobId,
-      "chapter",
-      chapterSchema,
-      `${writing} IMPORTANT: The selected book language is ${languageNames[book.language]}. Write the entire chapter and continuity summary strictly in ${languageNames[book.language]}, never in English unless the selected language is English. Data: ${contextData}`,
-      6500,
+    result = await generateCompleteChapter(
+      book,
+      chapterId,
+      (operation, prompt, tokens) => structured(jobId, operation, chapterSchema, prompt, tokens),
+      (reason) => console.info("chapter_recovery_attempt", { jobId, chapterId, reason }),
     );
-    if (!usableGeneratedChapter(result.content))
-      throw new Error("ai_generation_incomplete");
-    if (!matchesBookLanguage(result.content + " " + result.summary, book.language))
-      throw new Error("ai_wrong_language");
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "";
-    if (!["ai_generation_invalid", "ai_generation_incomplete", "ai_wrong_language"].includes(reason))
-      throw error;
-    // Recover once from malformed or truncated structured responses. Preserve prior chapters.
-    console.info("chapter_recovery_attempt", { jobId, chapterId, reason });
-    result = await structured(
-      jobId,
-      "chapter_recovery",
-      chapterSchema,
-      `Write an original 450–650 word ${fiction ? "narrative story" : "informative"} chapter entirely in ${languageNames[book.language]} (including summary), with no untranslated English. Return a JSON object with two fields: content (full chapter, at least 400 words) and summary (a 30–90 word continuity summary). Keep names and events consistent. ${fiction ? "Use vivid prose and dialogue without Markdown headings." : "Use paragraphs and simple well-formed Markdown headings."} Data: ${contextData}`,
-      5500,
-    );
-    if (!usableGeneratedChapter(result.content)) {
-      await persistFailure(jobId, "ai_generation_incomplete");
-      throw new FatalError("ai_generation_incomplete");
+    const code = error instanceof Error ? error.message : "";
+    if (["ai_generation_invalid", "ai_generation_incomplete", "ai_wrong_language"].includes(code)) {
+      await persistFailure(jobId, code);
+      throw new FatalError(code);
     }
-    if (!matchesBookLanguage(result.content + " " + result.summary, book.language)) {
-      await persistFailure(jobId, "ai_wrong_language");
-      throw new FatalError("ai_wrong_language");
-    }
+    throw error;
   }
   await commit(jobId, { chapter_id: chapterId, chapter: result }, progress);
 }
