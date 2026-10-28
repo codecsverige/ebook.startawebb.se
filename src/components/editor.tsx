@@ -100,6 +100,9 @@ export function Editor({
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [online, setOnline] = useState(true);
+  const saveFailuresRef = useRef(0);
+  const savingRef = useRef(false);
   const dirtyRef = useRef(false);
   const mounted = useRef(true);
   const [modal, setModal] = useState<"credits" | "history" | null>(null);
@@ -213,6 +216,24 @@ export function Editor({
       document.removeEventListener("click", guardLink, true);
     };
   }, [locale]);
+  useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+  useEffect(() => {
+    if (!dirty || !online || disabled || !draft?.outline.length) return;
+    // Debounce saves and back off if the network is unavailable.
+    const delay = Math.min(30_000, 2_200 * (2 ** Math.min(4, saveFailuresRef.current)));
+    const timer = window.setTimeout(() => void save(), delay);
+    return () => window.clearTimeout(timer);
+  }, [draft, dirty, online, disabled, pending]);
+
   function change(fn: (b: BookWithCover) => BookWithCover) {
     setDraft((b) => (b ? fn(b) : b));
     dirtyRef.current = true;
@@ -253,6 +274,12 @@ export function Editor({
   }
   async function save(): Promise<boolean> {
     if (!draft || !dirtyRef.current) return true;
+    if (savingRef.current) return false;
+    if (!online) {
+      setError("offline");
+      return false;
+    }
+    savingRef.current = true;
     setPending("save");
     setError("");
     try {
@@ -273,11 +300,14 @@ export function Editor({
       setDraft(d.book);
       dirtyRef.current = false;
       setDirty(false);
+      saveFailuresRef.current = 0;
       return true;
     } catch (e) {
-      setError(codeOf(e));
+      saveFailuresRef.current++;
+      setError(online ? codeOf(e) : "offline");
       return false;
     } finally {
+      savingRef.current = false;
       setPending("");
     }
   }
@@ -623,6 +653,14 @@ export function Editor({
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
+          {!online && (
+            <div className="notice offline-warning" role="status">
+              {tr(locale,
+                "You are offline. Your changes are not saved to the cloud yet. Keep this page open; automatic saving resumes when the connection returns.",
+                "الاتصال مقطوع. تعديلاتك لم تُحفظ على السحابة بعد. اترك الصفحة مفتوحة، وسيُستأنف الحفظ تلقائيًا عند عودة الإنترنت.",
+                "Du är offline. Ändringarna har inte sparats i molnet ännu. Låt sidan vara öppen. Automatisk sparning återupptas när anslutningen återkommer.")}
+            </div>
+          )}
           {(error || loadError) && (
             <div className="error-message" role="alert">
               {errorMessage(error || loadError, locale)}
