@@ -223,7 +223,7 @@ export async function createCover(jobId: string) {
     await persistFailure(jobId, "not_configured");
     throw new FatalError("not_configured");
   }
-  const model = process.env.OPENAI_EBOOK_COVER_MODEL?.trim() || "gpt-image-1-mini";
+  const model = "gpt-image-1-mini";
   const usageId = await reserve(jobId, "cover", "openai/" + model);
   console.info("cover_started", { jobId });
   const genreDirection: Record<string, string> = {

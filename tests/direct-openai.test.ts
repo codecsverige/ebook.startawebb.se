@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import {
   DirectOpenAiError, directFormat, directModelFor,
-  generateDirectStructured, generateDirectCover,
+  economicalBackupModel, generateDirectStructured, generateDirectCover,
 } from "../src/lib/direct-openai";
 
-test("selects inexpensive outlines and stronger book chapters", () => {
-  assert.equal(directModelFor("outline"), process.env.OPENAI_EBOOK_OUTLINE_MODEL?.trim() || "gpt-6-luna");
-  assert.equal(directModelFor("outline_recovery"), process.env.OPENAI_EBOOK_OUTLINE_MODEL?.trim() || "gpt-6-luna");
-  assert.equal(directModelFor("chapter"), process.env.OPENAI_EBOOK_CHAPTER_MODEL?.trim() || "gpt-6.1-terra");
-  assert.equal(directModelFor("chapter_recovery"), process.env.OPENAI_EBOOK_CHAPTER_MODEL?.trim() || "gpt-6.1-terra");
+test("selects the appropriate model automatically, without Vercel model variables", () => {
+  assert.equal(directModelFor("outline"), "gpt-6-luna");
+  assert.equal(directModelFor("outline_recovery"), "gpt-6-luna");
+  assert.equal(directModelFor("chapter"), "gpt-6.1-terra");
+  assert.equal(directModelFor("chapter_recovery"), "gpt-6.1-terra");
 });
 
 test("strict JSON formats match outline and chapter contracts", () => {
@@ -77,5 +77,44 @@ test("cover uses the OpenAI Images API directly, not Gateway", async () => {
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+
+test("falls back automatically only when a stronger model is unavailable", async () => {
+  const original = globalThis.fetch;
+  const keyBefore = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "unit-test-key";
+  let calls = 0;
+  try {
+    globalThis.fetch = async (_url, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      if (calls === 1) {
+        assert.equal(body.model, "gpt-6.1-terra");
+        return new Response(JSON.stringify({
+          error: { code: "model_not_found", message: "The model does not exist or is not available" },
+        }), { status: 404 });
+      }
+      assert.equal(body.model, economicalBackupModel());
+      return new Response(JSON.stringify({
+        status: "completed",
+        output: [{ type: "message", content: [{
+          type: "output_text", text: JSON.stringify({
+            content: "A complete story chapter.", summary: "Summary of the chapter.",
+          }),
+        }] }],
+        usage: { input_tokens: 90, output_tokens: 55 },
+      }), { status: 200 });
+    };
+    const result = await generateDirectStructured("chapter",
+      z.object({ content: z.string(), summary: z.string() }),
+      "You are an editor.", "Write a chapter", 6500);
+    assert.equal(calls, 2);
+    assert.equal(result.output.summary, "Summary of the chapter.");
+  } finally {
+    globalThis.fetch = original;
+    if (keyBefore === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = keyBefore;
   }
 });
