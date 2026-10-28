@@ -9,6 +9,21 @@ export const languageNames: Record<Locale, string> = {
   ar: "العربية",
   sv: "Svenska",
 };
+/** Detect Arabic-language briefs to avoid accidentally creating English books. */
+export function isArabicBrief(value: string): boolean {
+  const arabic = (value.match(/[\u0621-\u064a\u0671-\u06d3]/g) || []).length;
+  const latin = (value.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+  return arabic >= 18 && arabic >= latin * 0.6;
+}
+
+/** Guard saved AI output; never persist a largely non-Arabic Arabic manuscript. */
+export function matchesBookLanguage(value: string, language: Locale): boolean {
+  const letters = (value.match(/\p{L}/gu) || []).length;
+  if (letters < 18) return true;
+  const arabic = (value.match(/[\u0621-\u064a\u0671-\u06d3]/g) || []).length;
+  return language === "ar" ? arabic / letters >= 0.52 : arabic / letters < 0.45;
+}
+
 export const kinds = ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const;
 export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
 export const coverStyles = ["cobalt", "sage", "clay", "midnight", "plum", "ivory"] as const;
