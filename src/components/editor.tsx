@@ -33,6 +33,9 @@ import { request, codeOf } from "@/lib/client";
 import { allowStudioNavigation } from "@/lib/navigation";
 import {
   bookWords,
+  coverStyles,
+  recommendedCoverStyles,
+  type CoverStyle,
   isArabicBrief,
   languageNames,
   isComplete,
@@ -43,6 +46,27 @@ import {
   type Job,
   type JobKind,
 } from "@/lib/domain";
+
+const coverNames: Record<CoverStyle, [string, string, string]> = {
+  cobalt: ["Cobalt", "أزرق كلاسيكي", "Kobolt"],
+  sage: ["Sage", "أخضر هادئ", "Salvia"],
+  clay: ["Clay", "طيني", "Lera"],
+  midnight: ["Midnight", "منتصف الليل", "Midnatt"],
+  plum: ["Plum", "برقوقي", "Plommon"],
+  ivory: ["Ivory", "عاجي", "Elfenben"],
+  forest: ["Forest", "غابة", "Skog"],
+  ember: ["Ember", "جمر", "Glöd"],
+  lagoon: ["Lagoon", "بحيرة", "Lagun"],
+  rose: ["Rose", "وردي", "Ros"],
+  noir: ["Noir", "أسود فاخر", "Noir"],
+  sky: ["Sky", "سماء", "Himmel"],
+  gold: ["Gold", "ذهبي", "Guld"],
+  teal: ["Teal", "تركوازي", "Petrol"],
+  berry: ["Berry", "توتي", "Bär"],
+  sand: ["Sand", "رملي", "Sand"],
+  ink: ["Ink", "حبر", "Bläck"],
+  sunrise: ["Sunrise", "شروق", "Soluppgång"],
+};
 
 type Version = {
   id: string;
@@ -1009,33 +1033,36 @@ export function Editor({
                   />
                 </div>
                 <div className="stack">
-                  <fieldset className="color-picker" disabled={disabled}>
-                    <legend>
-                      {tr(locale, "Color direction", "ألوان الغلاف", "Färgval")}
-                    </legend>
-                    {(["cobalt", "sage", "clay", "midnight", "plum", "ivory"] as const).map((s, i) => (
-                      <button
-                        key={s}
-                        type="button"
-                        aria-pressed={draft.cover_style === s}
-                        aria-label={
-                          [
-                            tr(locale, "Cobalt", "أزرق", "Kobolt"),
-                            tr(locale, "Sage", "أخضر", "Salvia"),
-                            tr(locale, "Clay", "طيني", "Lera"),
-                            tr(locale, "Midnight", "ليلي", "Midnatt"),
-                            tr(locale, "Plum", "بنفسجي", "Plommon"),
-                            tr(locale, "Ivory", "عاجي", "Elfenben"),
-                          ][i]
-                        }
-                        className={`color-swatch swatch-${s}`}
-                        onClick={() =>
-                          change((b) => ({ ...b, cover_style: s }))
-                        }
-                      >
-                        {draft.cover_style === s && <Check size={19} />}
-                      </button>
-                    ))}
+                  <fieldset className="cover-gallery" disabled={disabled}>
+                    <legend>{tr(locale, "Choose a professionally designed cover", "اختر تصميم الغلاف المناسب لكتابك", "Välj ett professionellt bokomslag")}</legend>
+                    <p className="muted">{tr(locale, "18 templates. Suggested designs for your book type come first. No AI credits needed.", "18 تصميمًا. تظهر التصاميم المناسبة لنوع كتابك أولًا، وتغييرها لا يستهلك الذكاء الاصطناعي.", "18 omslagsmallar. Rekommendationerna för din boktyp visas först. Ingen AI-kostnad.")}</p>
+                    <div className="cover-template-grid">
+                      {[...recommendedCoverStyles(draft.kind), ...coverStyles.filter((style) => !recommendedCoverStyles(draft.kind).includes(style))].map((style, index) => (
+                        <button
+                          type="button"
+                          className={`cover-template-card ${draft.cover_style === style ? "is-selected" : ""}`}
+                          key={style}
+                          aria-pressed={draft.cover_style === style}
+                          aria-label={tr(locale, ...coverNames[style])}
+                          disabled={disabled}
+                          onClick={() => change((b) => ({ ...b, cover_style: style }))}
+                        >
+                          <BookCover
+                            title={draft.title || tr(locale, "Your book", "كتابك", "Din bok")}
+                            subtitle=""
+                            author=""
+                            style={style}
+                            language={draft.language}
+                            small
+                          />
+                          <span className="cover-template-name">{tr(locale, ...coverNames[style])}</span>
+                          {index < 5 && (
+                            <span className="cover-template-hint">{tr(locale, "Suggested", "مقترح", "Förslag")}</span>
+                          )}
+                          {draft.cover_style === style && <Check className="cover-template-selected" size={18} />}
+                        </button>
+                      ))}
+                    </div>
                   </fieldset>
                   <label>
                     {t.author}
