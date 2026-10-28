@@ -108,6 +108,7 @@ export function Editor({
   const [online, setOnline] = useState(true);
   const saveFailuresRef = useRef(0);
   const savingRef = useRef(false);
+  const generatingRef = useRef(false);
   const editSequenceRef = useRef(0);
   const dirtyRef = useRef(false);
   const mounted = useRef(true);
@@ -372,7 +373,11 @@ export function Editor({
     }
   }
   async function generate(kind: JobKind, chapter?: string) {
-    if (!draft) return;
+    if (!draft || generatingRef.current || disabled) return;
+    if (!online) {
+      setError("offline");
+      return;
+    }
     if (
       kind === "chapter" &&
       draft.chapters[chapter || ""] &&
@@ -380,6 +385,14 @@ export function Editor({
     )
       return;
     if (dirtyRef.current && !(await save())) return;
+    // A lost HTTP response must not trigger a second (billable) AI job.
+    // Reuse the same request ID on uncertain network errors, even after reload.
+    const requestKey = `ebook-studio:generate:${id}:${kind}:${chapter || "all"}`;
+    let requestId = "";
+    try { requestId = sessionStorage.getItem(requestKey) || ""; } catch {}
+    if (!/^[0-9a-f-]{36}$/i.test(requestId)) requestId = crypto.randomUUID();
+    try { sessionStorage.setItem(requestKey, requestId); } catch {}
+    generatingRef.current = true;
     setPending("generate");
     setError("");
     try {
@@ -388,18 +401,25 @@ export function Editor({
         body: JSON.stringify({
           kind,
           chapter_id: chapter,
-          request_id: crypto.randomUUID(),
+          request_id: requestId,
         }),
       });
+      try { sessionStorage.removeItem(requestKey); } catch {}
       setJob(d.job);
       await load();
     } catch (e) {
       const code = codeOf(e);
+      // On an unknown failure the request might have started server-side.
+      // Retain its idempotency key for a safe retry rather than double billing.
+      if (code !== "service_error" && code !== "offline") {
+        try { sessionStorage.removeItem(requestKey); } catch {}
+      }
       setError(code);
       if (config.billing && (code === "insufficient_credits" || code === "free_preview_used"))
         setModal("credits");
       if (code === "busy") await load();
     } finally {
+      generatingRef.current = false;
       setPending("");
     }
   }
