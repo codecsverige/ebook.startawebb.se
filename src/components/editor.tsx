@@ -33,6 +33,8 @@ import { request, codeOf } from "@/lib/client";
 import { allowStudioNavigation } from "@/lib/navigation";
 import {
   bookWords,
+  isArabicBrief,
+  languageNames,
   isComplete,
   filename,
   type BookWithCover,
@@ -65,6 +67,8 @@ export function Editor({
   const [credits, setCredits] = useState(0);
   const [tab, setTab] = useState<Tab>("outline");
   const [chapterId, setChapterId] = useState("");
+  const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
+  const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
   const [read, setRead] = useState(false);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -88,6 +92,7 @@ export function Editor({
       if (!mounted.current) return;
       setBook(d.book);
       if (!dirtyRef.current) setDraft(d.book);
+      setRestartLanguage(isArabicBrief(d.book.idea) ? "ar" : d.book.language);
       setJob(d.job);
       setCredits(d.credits);
       setChapterId((old) => old || d.book.outline[0]?.id || "");
@@ -284,6 +289,61 @@ export function Editor({
       setPending("");
     }
   }
+  async function restartManuscript() {
+    if (!book || !draft || disabled) return;
+    const message = tr(
+      locale,
+      "Start this book again in the selected language? Existing chapters, title and cover will be replaced. Your current manuscript is kept in version history.",
+      "هل تريد البدء من جديد باللغة المختارة؟ سيُمسح العنوان والفصول والغلاف من النسخة الحالية، وتبقى نسختك السابقة محفوظة في سجل الإصدارات.",
+      "Starta om boken på valt språk? Befintlig titel, kapitel och omslag ersätts. Den gamla versionen finns kvar i versionshistoriken.",
+    );
+    if (!window.confirm(message)) return;
+    setPending("restart");
+    setError("");
+    try {
+      const { book: fresh } = await request<{ book: BookWithCover }>(`/api/books/${id}`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "restart",
+          revision: book.revision,
+          language: restartLanguage,
+        }),
+      });
+      setBook(fresh);
+      setDraft(fresh);
+      setJob(null);
+      setChapterId("");
+      setTab("outline");
+      setCoverCandidate(null);
+      dirtyRef.current = false;
+      setDirty(false);
+    } catch (e) {
+      setError(codeOf(e));
+    } finally {
+      setPending("");
+    }
+  }
+  async function clearCoverArtwork() {
+    if (!book || disabled || !book.cover_path) return;
+    if (dirtyRef.current && !(await save())) return;
+    setPending("clear-cover");
+    setError("");
+    try {
+      const { book: updated } = await request<{ book: BookWithCover }>(
+        `/api/books/${id}/cover`,
+        { method: "DELETE", body: JSON.stringify({ revision: book.revision }) },
+      );
+      setBook(updated);
+      setDraft(updated);
+      setCoverCandidate(null);
+      dirtyRef.current = false;
+      setDirty(false);
+    } catch (e) {
+      setError(codeOf(e));
+    } finally {
+      setPending("");
+    }
+  }
   async function remove() {
     if (!window.confirm(t.deleteBook)) return;
     setPending("delete");
@@ -367,6 +427,7 @@ export function Editor({
       }
       setBook(payload.book as BookWithCover);
       setDraft(payload.book as BookWithCover);
+      setCoverCandidate(null);
     } catch {
       setError("service_error");
     } finally {
