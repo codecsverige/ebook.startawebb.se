@@ -93,6 +93,7 @@ export function Editor({
   const [chapterId, setChapterId] = useState("");
   const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
   const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -244,6 +245,15 @@ export function Editor({
     }
   }, [backupKey, draft, dirty]);
 
+  useEffect(() => {
+    if (!coverCandidate) {
+      setCoverPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(coverCandidate);
+    setCoverPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverCandidate]);
   useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
     sync();
@@ -1245,6 +1255,9 @@ export function Editor({
                     <div className="cover-confirm">
                       <strong>{tr(locale, "Review your selected image", "راجع الصورة قبل اعتمادها", "Granska vald bild")}</strong>
                       <p>{coverCandidate.name}</p>
+                      {coverPreviewUrl && (
+                        <img className="cover-candidate-thumb" src={coverPreviewUrl} alt={tr(locale, "Preview of your chosen image", "معاينة الصورة التي اخترتها", "Förhandsvisning av vald bild")} />
+                      )}
                       <p className="muted">{tr(locale, "Choose an illustration or photo for your own book, not a screenshot of a webpage or social media.", "استخدم رسمة أو صورة مناسبة للكتاب، لا لقطة شاشة من موقع أو تطبيق.", "Välj en illustration eller bild som passar boken, inte en skärmbild från en webbplats.")}</p>
                       <div className="cover-confirm-buttons">
                         <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void uploadCover(coverCandidate)}>
