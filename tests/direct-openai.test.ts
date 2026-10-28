@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
 import {
-  DirectOpenAiError, canUseGatewayFallback, directFormat, directModelFor,
-  generateDirectStructured,
+  DirectOpenAiError, directFormat, directModelFor,
+  generateDirectStructured, generateDirectCover,
 } from "../src/lib/direct-openai";
 
 test("selects inexpensive outlines and stronger book chapters", () => {
@@ -20,13 +20,6 @@ test("strict JSON formats match outline and chapter contracts", () => {
   assert.deepEqual(chapter.schema.required, ["content", "summary"]);
   assert.equal(outline.schema.additionalProperties, false);
   assert.equal(chapter.schema.additionalProperties, false);
-});
-
-test("only definitive upstream failures trigger backup provider", () => {
-  assert.equal(canUseGatewayFallback(new DirectOpenAiError(429, "ai_provider_busy")), true);
-  assert.equal(canUseGatewayFallback(new DirectOpenAiError(401, "ai_auth_failed")), true);
-  assert.equal(canUseGatewayFallback(new DirectOpenAiError(422, "ai_generation_invalid")), false);
-  assert.equal(canUseGatewayFallback(new Error("fetch failed")), false);
 });
 
 test("direct API parses and validates generated text without touching real API", async () => {
@@ -55,6 +48,31 @@ test("direct API parses and validates generated text without touching real API",
     assert.equal(checkedRequest, true);
     assert.equal(result.output.content, "A full scene.");
     assert.deepEqual(result.usage, { inputTokens: 102, outputTokens: 58 });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+
+test("cover uses the OpenAI Images API directly, not Gateway", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  try {
+    process.env.OPENAI_API_KEY = "unit-test-key";
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, "https://api.openai.com/v1/images/generations");
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, "gpt-image-1-mini");
+      assert.equal(body.size, "1024x1536");
+      return new Response(JSON.stringify({
+        data: [{ b64_json: Buffer.from("test image bytes").toString("base64") }],
+      }), { status: 200 });
+    };
+    const result = await generateDirectCover("Original book cover prompt");
+    assert.equal(result.image.mediaType, "image/png");
+    assert.equal(Buffer.from(result.image.uint8Array).toString(), "test image bytes");
   } finally {
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;

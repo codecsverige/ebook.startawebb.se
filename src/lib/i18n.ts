@@ -590,9 +590,9 @@ export function errorMessage(code: string, l: Locale): string {
     ],
 
     not_configured: [
-      "The service is still being connected. Please try again later.",
-      "الخدمة ما زالت قيد التوصيل. حاول لاحقًا.",
-      "Tjänsten ansluts fortfarande. Försök senare.",
+      "OpenAI API is not connected yet. Existing saved content is safe.",
+      "OpenAI API غير متصل حاليًا. كتبك وفصولك المحفوظة لم تتأثر.",
+      "OpenAI API är inte anslutet ännu. Sparade böcker är kvar.",
     ],
     unauthorized: [
       "Please sign in again.",
@@ -620,14 +620,14 @@ export function errorMessage(code: string, l: Locale): string {
       "Boken ändrades i en annan flik. Ladda om innan du redigerar.",
     ],
     ai_credits_exhausted: [
-      "AI Gateway credits or budget have run out. Check AI Gateway usage and billing in Vercel.",
-      "نفد رصيد الذكاء الاصطناعي أو بلغت حد الميزانية في Vercel. راجع AI Gateway والرصيد.",
-      "AI Gateway-krediterna eller budgeten är slut. Kontrollera användning och fakturering i Vercel.",
+      "OpenAI API credits or budget have run out. Review your OpenAI API billing.",
+      "نفد رصيد OpenAI API أو بلغت حد الميزانية. راجع رصيد حساب OpenAI.",
+      "OpenAI API-krediterna eller budgeten är slut. Kontrollera ditt OpenAI-konto.",
     ],
     ai_auth_failed: [
-      "AI Gateway authentication failed. Check the Vercel project connection.",
-      "فشل اتصال الموقع بخدمة الذكاء الاصطناعي. يجب مراجعة إعدادات Vercel.",
-      "Autentisering till AI Gateway misslyckades. Kontrollera Vercel-anslutningen.",
+      "OpenAI API authentication failed. Check the server API connection.",
+      "فشل اتصال OpenAI API. تحقق من صلاحية المفتاح والرصيد.",
+      "OpenAI API-autentisering misslyckades. Kontrollera serveranslutningen.",
     ],
     ai_provider_busy: [
       "The AI provider is temporarily busy or timed out. Retry this chapter.",

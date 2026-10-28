@@ -16,15 +16,9 @@ export function configuration() {
       (process.env.EBOOK_FIREBASE_CLIENT_EMAIL &&
         process.env.EBOOK_FIREBASE_PRIVATE_KEY)
     ),
-    // Vercel AI SDK resolves project OIDC authentication at request time.
-    // Runtime OIDC is not guaranteed to appear in process.env.
-    ai: !!process.env.OPENAI_API_KEY || !!(
-      process.env.AI_GATEWAY_MODEL &&
-      (process.env.AI_GATEWAY_API_KEY ||
-        process.env.VERCEL_OIDC_TOKEN ||
-        process.env.VERCEL === "1")
-    ),
-    artwork: !!process.env.AI_GATEWAY_IMAGE_MODEL,
+    // Only OpenAI API can generate text or images. Gateway is intentionally disconnected.
+    ai: !!process.env.OPENAI_API_KEY?.trim(),
+    artwork: !!process.env.OPENAI_API_KEY?.trim(),
     chatgpt: /^oaiapp_[A-Za-z0-9_-]{8,}$/.test(process.env.OPENAI_SIWC_CLIENT_ID || ""),
     // Payments stay disabled until the owner explicitly enables them.
     billing: process.env.EBOOK_PAYMENTS_ENABLED === "true" && !!(
