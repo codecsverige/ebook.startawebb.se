@@ -11,10 +11,6 @@ import {
   recommendedCoverStyles,
   isArabicBrief,
   matchesBookLanguage,
-  coverStyles,
-  recommendedCoverStyles,
-  isArabicBrief,
-  matchesBookLanguage,
 } from "../src/lib/domain";
 import { escapeHtml, markdownHtml } from "../src/lib/export-text";
 import { validSignature } from "../src/lib/webhook";
