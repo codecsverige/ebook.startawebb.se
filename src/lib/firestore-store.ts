@@ -514,22 +514,22 @@ export class FirestoreStudio {
       // Surface known budget exhaustion BEFORE queueing a workflow or taking
       // credits. The per-call reserveAi transaction remains the final guard.
       const limits = aiDailyLimits();
-      if (recent(profile.ai_times || [], now).length >= limits.user ||
-          (global.get("hits") || 0) >= limits.global)
+      if (!ownerTrial && (recent(profile.ai_times || [], now).length >= limits.user ||
+          (global.get("hits") || 0) >= limits.global))
         fail("ai_daily_limit");
-      if (kind === "cover" &&
+      if (!ownerTrial && kind === "cover" &&
           (recent(profile.image_times || [], now).length >= limits.imagesUser ||
           (images.get("hits") || 0) >= limits.imagesGlobal))
         fail("ai_image_daily_limit");
-      if (times.length >= 30 || book.state.jobs >= 50) fail("rate_limit");
+      if (!ownerTrial && (times.length >= 30 || book.state.jobs >= 50)) fail("rate_limit");
       if (kind === "outline" && book.outline.length) fail("invalid_input");
       if (kind !== "outline" && !book.outline.length) fail("no_outline");
       if (kind === "sample" && book.chapters[book.outline[0].id])
         fail("invalid_input");
       if (kind === "chapter" && !book.outline.some((c) => c.id === chapter))
         fail("invalid_input");
-      if (kind === "cover" && book.state.covers >= 5) fail("rate_limit");
-      if (kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
+      if (!ownerTrial && kind === "cover" && book.state.covers >= 5) fail("rate_limit");
+      if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
         fail("rate_limit");
       let credits = profile.credits,
         free = profile.free_book_id;
@@ -551,6 +551,7 @@ export class FirestoreStudio {
       }
       const job: WorkerJob = {
         id: jobId,
+        owner_trial: ownerTrial,
         request_id: requestId,
         book_id: id,
         user_id: uid,
@@ -574,7 +575,7 @@ export class FirestoreStudio {
       tx.update(pRef, {
         credits,
         free_book_id: free,
-        job_times: [...times, now],
+        job_times: ownerTrial ? times : [...times, now],
         active_jobs: profile.active_jobs + 1,
       });
       tx.create(jRef, job);
