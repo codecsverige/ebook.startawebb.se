@@ -1,4 +1,4 @@
-import { generateText, Output } from "ai";
+import { generateText, generateImage, Output } from "ai";
 import { FatalError, getWorkflowMetadata } from "workflow";
 import { z } from "zod";
 import { studioStore, studioBucket } from "@/lib/firebase-admin";
@@ -173,23 +173,18 @@ export async function createCover(jobId: string) {
   if (!model) throw new FatalError("not_configured");
   const usageId = await reserve(jobId, "cover", model);
   console.info("cover_started", { jobId });
-  const result = await generateText({
+  const result = await generateImage({
     model,
     maxRetries: 0,
     timeout: 120_000,
-    prompt: `Create one polished editorial illustration as background artwork for an ebook cover. Vertical composition. Generous calm negative space in the upper half for a title added later. Absolutely no text, letters, numbers, logos or typography. Abstract or conceptual, sophisticated, print-friendly. Color direction: ${book.cover_style}. Topic as data: ${JSON.stringify({ idea: book.idea, audience: book.audience })}`,
+    aspectRatio: "2:3",
+    prompt: `Create exactly one polished editorial cover illustration, vertical book composition. Subject: ${JSON.stringify({ idea: book.idea, audience: book.audience, kind: book.kind })}. Palette: ${book.cover_style}. Give the image artistic depth and a strong focal point while leaving the upper quarter calm for a title overlaid later. Original image only. Absolutely no text, letters, typography, watermarks or logos.`,
   });
-  const file = result.files.find((f) =>
-    ["image/png", "image/jpeg", "image/webp"].includes(f.mediaType),
-  );
-  if (!file || file.uint8Array.length > 3_000_000)
-    throw new Error("invalid_generation");
-  const ext =
-    file.mediaType === "image/jpeg"
-      ? "jpg"
-      : file.mediaType === "image/webp"
-        ? "webp"
-        : "png";
+  const file = result.image;
+  if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.mediaType) ||
+      file.uint8Array.length > 3_000_000) throw new Error("invalid_generation");
+  const ext = file.mediaType === "image/jpeg" ? "jpg" :
+    file.mediaType === "image/webp" ? "webp" : "png";
   const path = `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
   await studioBucket()
     .file(path)
@@ -201,10 +196,11 @@ export async function createCover(jobId: string) {
       },
     });
   await commit(jobId, { cover_path: path }, 95);
+  const imageUsage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
   await studioStore().recordUsage(
     usageId,
-    result.usage.inputTokens ?? 0,
-    result.usage.outputTokens ?? 0,
+    imageUsage?.inputTokens ?? 0,
+    imageUsage?.outputTokens ?? 0,
   );
 }
 export async function finishJob(jobId: string) {
