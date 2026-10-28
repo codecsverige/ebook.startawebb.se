@@ -264,7 +264,7 @@ test(
         await store.reserveAi(protectedCover.id, "cover", "test/model");
       await assert.rejects(
         store.reserveAi(protectedCover.id, "cover", "test/model"),
-        /rate_limit/,
+        /ai_image_daily_limit/,
       );
       assert.equal((await store.profile(artist))?.image_times?.length, 3);
       await store.finishJob(protectedCover.id, "generation_failed");
