@@ -19,4 +19,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - name: Firestore integration tests (local emulator only)
+        run: npm run test:firebase
       - run: npm run build
