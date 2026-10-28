@@ -362,6 +362,46 @@ export class FirestoreStudio {
     if (!result.exists) fail("not_found");
     return result.get("snapshot") as Book;
   }
+  /** Restore a previous manuscript atomically, including after a language restart. */
+  async restoreBookVersion(uid: string, id: string, versionId: string, revision: number): Promise<Book> {
+    if (!uuid(id) || !uuid(versionId)) fail("not_found");
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.books().doc(id);
+      const oldRef = ref.collection("versions").doc(versionId);
+      const [p, b, saved] = await tx.getAll(this.userRef(uid), ref, oldRef);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      if (!saved.exists) fail("not_found");
+      const snapshot = saved.get("snapshot") as Book | undefined;
+      if (!snapshot || snapshot.id !== id || snapshot.user_id !== uid ||
+          snapshot.chapter_count !== book.chapter_count)
+        fail("invalid_input");
+      const versions = await this.versionPlan(tx, ref);
+      const next: StoredBook = {
+        ...book,
+        title: snapshot.title,
+        subtitle: snapshot.subtitle,
+        author: snapshot.author,
+        language: snapshot.language,
+        outline: structuredClone(snapshot.outline),
+        chapters: structuredClone(snapshot.chapters),
+        cover_style: snapshot.cover_style,
+        cover_path: snapshot.cover_path,
+        cover_candidate_path: null,
+        use_artwork: snapshot.use_artwork,
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
+        state: { ...book.state, latest_job: null, rewrites: {} },
+      };
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
+
   async takeRate(key: string, limit: number, seconds = 3600) {
     const now = Date.now();
     const ref = this.root
