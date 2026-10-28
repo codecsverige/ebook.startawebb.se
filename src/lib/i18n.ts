@@ -644,6 +644,11 @@ export function errorMessage(code: string, l: Locale): string {
       "أعاد الذكاء الاصطناعي نصًا بصيغة غير صحيحة. أعد توليد الفصل.",
       "AI returnerade ett felaktigt formaterat kapitel. Försök igen.",
     ],
+    offline: [
+      "You are offline. Keep this page open. Your unsaved changes will be retried automatically when the network returns.",
+      "أنت غير متصل بالإنترنت. اترك الصفحة مفتوحة. سيُعاد حفظ التعديلات تلقائيًا عند عودة الاتصال.",
+      "Du är offline. Låt sidan vara öppen. Osparade ändringar synkas när nätverket är tillbaka.",
+    ],
     language_mismatch: [
       "This idea is written in Arabic, but English or Swedish was selected. Choose Arabic for this book.",
       "الطلب مكتوب بالعربية لكن لغة الكتاب ليست العربية. اختر العربية ثم أنشئ الكتاب.",
