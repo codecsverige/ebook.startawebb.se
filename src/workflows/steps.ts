@@ -182,15 +182,45 @@ export async function createChapter(
   const writing = fiction
     ? `Write a vivid, original 650–1000 word narrative chapter for a ${book.kind}. Use scenes, natural dialogue, character actions and sensory details, not essays. Follow the planned story arc and earlier events. Preserve character names, viewpoint, chronology and unresolved threads. No markdown headings or bullet points within the story. For children use age-appropriate language. Give a concise factual continuity summary of events and character changes.`
     : `Write a substantial 700–1100 word chapter for a ${book.kind}. Use Markdown ## subheadings, short paragraphs, bullet points and concrete examples as appropriate. Do not repeat the chapter title. Include exercises for workbooks. Avoid repetition. Return a factual summary for continuity.`;
-  const result = await structured(
-    jobId,
-    "chapter",
-    chapterSchema,
-    `${writing} Entire output in language code ${book.language}. Data: ${JSON.stringify({ title: book.title, idea: book.idea, audience: book.audience, kind: book.kind, tone: book.tone, outline: book.outline, currentChapter: chapter, previousSummaries: book.outline.filter((c) => c.id !== chapterId && book.chapters[c.id]).map((c) => ({ title: c.title, summary: book.chapters[c.id].summary })) })}`,
-    6500,
-  );
-  if (!usableGeneratedChapter(result.content))
-    throw new Error("ai_generation_incomplete");
+  const contextData = JSON.stringify({
+    title: book.title,
+    idea: book.idea,
+    audience: book.audience,
+    kind: book.kind,
+    tone: book.tone,
+    outline: book.outline,
+    currentChapter: chapter,
+    previousSummaries: book.outline
+      .filter((c) => c.id !== chapterId && book.chapters[c.id])
+      .map((c) => ({ title: c.title, summary: book.chapters[c.id].summary })),
+  });
+  let result;
+  try {
+    result = await structured(
+      jobId,
+      "chapter",
+      chapterSchema,
+      `${writing} Entire output in language code ${book.language}. Data: ${contextData}`,
+      6500,
+    );
+    if (!usableGeneratedChapter(result.content))
+      throw new Error("ai_generation_incomplete");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "";
+    if (reason !== "ai_generation_invalid" && reason !== "ai_generation_incomplete")
+      throw error;
+    // Recover once from malformed or truncated structured responses. Preserve prior chapters.
+    console.info("chapter_recovery_attempt", { jobId, chapterId, reason });
+    result = await structured(
+      jobId,
+      "chapter_recovery",
+      chapterSchema,
+      `Write an original 450–650 word ${fiction ? "narrative story" : "informative"} chapter in language ${book.language}. Return a JSON object with two fields: content (full chapter, at least 400 words) and summary (a 30–90 word continuity summary). Keep names and events consistent. ${fiction ? "Use vivid prose and dialogue without Markdown headings." : "Use paragraphs and simple well-formed Markdown headings."} Data: ${contextData}`,
+      5500,
+    );
+    if (!usableGeneratedChapter(result.content))
+      throw new Error("ai_generation_incomplete");
+  }
   await commit(jobId, { chapter_id: chapterId, chapter: result }, progress);
 }
 export async function createCover(jobId: string) {
