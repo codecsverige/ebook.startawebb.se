@@ -26,7 +26,24 @@ export function matchesBookLanguage(value: string, language: Locale): boolean {
 
 export const kinds = ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const;
 export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
-export const coverStyles = ["cobalt", "sage", "clay", "midnight", "plum", "ivory"] as const;
+export const coverStyles = [
+  "cobalt", "sage", "clay", "midnight", "plum", "ivory",
+  "forest", "ember", "lagoon", "rose", "noir", "sky",
+  "gold", "teal", "berry", "sand", "ink", "sunrise",
+] as const;
+export type CoverStyle = (typeof coverStyles)[number];
+
+/** Genre-aware suggestions use real templates, without spending AI credits. */
+export function recommendedCoverStyles(kind: (typeof kinds)[number]): CoverStyle[] {
+  switch (kind) {
+    case "novel": return ["noir", "midnight", "berry", "forest", "plum"];
+    case "short_story": return ["ember", "rose", "ink", "forest", "sky"];
+    case "children_story": return ["sky", "sunrise", "berry", "rose", "lagoon"];
+    case "workbook": return ["sage", "sand", "teal", "ivory", "cobalt"];
+    case "guide": return ["cobalt", "teal", "ivory", "ink", "lagoon"];
+    default: return ["ivory", "lagoon", "gold", "plum", "sand"];
+  }
+}
 
 const cleanText = (min: number, max: number) =>
   z.string().trim().min(min).max(max);
