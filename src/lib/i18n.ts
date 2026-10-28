@@ -619,6 +619,36 @@ export function errorMessage(code: string, l: Locale): string {
       "تغيّر الكتاب في نافذة أخرى. أعد تحميله قبل التعديل.",
       "Boken ändrades i en annan flik. Ladda om innan du redigerar.",
     ],
+    ai_credits_exhausted: [
+      "AI Gateway credits or budget have run out. Check AI Gateway usage and billing in Vercel.",
+      "نفد رصيد الذكاء الاصطناعي أو بلغت حد الميزانية في Vercel. راجع AI Gateway والرصيد.",
+      "AI Gateway-krediterna eller budgeten är slut. Kontrollera användning och fakturering i Vercel.",
+    ],
+    ai_auth_failed: [
+      "AI Gateway authentication failed. Check the Vercel project connection.",
+      "فشل اتصال الموقع بخدمة الذكاء الاصطناعي. يجب مراجعة إعدادات Vercel.",
+      "Autentisering till AI Gateway misslyckades. Kontrollera Vercel-anslutningen.",
+    ],
+    ai_provider_busy: [
+      "The AI provider is temporarily busy or timed out. Retry this chapter.",
+      "خدمة الذكاء الاصطناعي مشغولة أو تأخرت في الاستجابة. أعد توليد هذا الفصل.",
+      "AI-tjänsten är tillfälligt upptagen eller svarade inte i tid. Försök igen.",
+    ],
+    ai_provider_unavailable: [
+      "The AI provider could not complete the request. No saved chapter was deleted.",
+      "لم تستطع خدمة الذكاء الاصطناعي إكمال الطلب. لم يُحذف أي فصل محفوظ.",
+      "AI-tjänsten kunde inte slutföra förfrågan. Inga sparade kapitel togs bort.",
+    ],
+    ai_generation_invalid: [
+      "The AI returned an incorrectly formatted chapter. Try generating it again.",
+      "أعاد الذكاء الاصطناعي نصًا بصيغة غير صحيحة. أعد توليد الفصل.",
+      "AI returnerade ett felaktigt formaterat kapitel. Försök igen.",
+    ],
+    ai_generation_incomplete: [
+      "The AI did not finish the chapter. Please retry this chapter.",
+      "لم يُكمل الذكاء الاصطناعي كتابة الفصل. حاول توليده من جديد.",
+      "AI slutförde inte kapitlet. Försök generera det igen.",
+    ],
     rate_limit: [
       "You have reached the usage limit. Please try again later.",
       "وصلت إلى حد الاستخدام. حاول لاحقًا.",
