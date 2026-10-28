@@ -645,22 +645,26 @@ export class FirestoreStudio {
       const global = g.get("hits") || 0;
       const globalImages = imageCount.get("hits") || 0;
       if (book.state.active_job !== id) fail("conflict");
-      if (book.state.ai_calls >= (book.unlocked ? limits.book : 8))
-        fail("ai_book_limit");
-      if (times.length >= limits.user || global >= limits.global)
-        fail("ai_daily_limit");
-      if (imageRequest && (imageTimes.length >= limits.imagesUser ||
-          globalImages >= limits.imagesGlobal))
-        fail("ai_image_daily_limit");
-      tx.update(pRef, {
-        ai_times: [...times, now],
-        ...(imageRequest ? { image_times: [...imageTimes, now] } : {}),
-      });
+      const isOwnerTest = job.owner_trial === true;
+      if (!isOwnerTest) {
+        if (book.state.ai_calls >= (book.unlocked ? limits.book : 8))
+          fail("ai_book_limit");
+        if (times.length >= limits.user || global >= limits.global)
+          fail("ai_daily_limit");
+        if (imageRequest && (imageTimes.length >= limits.imagesUser ||
+            globalImages >= limits.imagesGlobal))
+          fail("ai_image_daily_limit");
+        tx.update(pRef, {
+          ai_times: [...times, now],
+          ...(imageRequest ? { image_times: [...imageTimes, now] } : {}),
+        });
+        tx.set(gRef, { hits: global + 1, expires_at: new Date(now + day) });
+        if (imageRequest) tx.set(imageRef, {
+          hits: globalImages + 1, expires_at: new Date(now + day),
+        });
+      }
+      // Keep usage accounting during tests without consuming public quota.
       tx.update(bRef, { "state.ai_calls": book.state.ai_calls + 1 });
-      tx.set(gRef, { hits: global + 1, expires_at: new Date(now + day) });
-      if (imageRequest) tx.set(imageRef, {
-        hits: globalImages + 1, expires_at: new Date(now + day),
-      });
       tx.create(this.root.collection("aiUsage").doc(usageId), {
         id: usageId,
         user_id: job.user_id,
