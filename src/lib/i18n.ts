@@ -664,6 +664,21 @@ export function errorMessage(code: string, l: Locale): string {
       "لم يُكمل الذكاء الاصطناعي كتابة الفصل. حاول توليده من جديد.",
       "AI slutförde inte kapitlet. Försök generera det igen.",
     ],
+    ai_daily_limit: [
+      "Today's AI generation limit has been reached to protect the operating budget. Your saved chapters are safe; try again later.",
+      "وصلت إلى الحد اليومي للتوليد لحماية ميزانية الموقع. الفصول المحفوظة آمنة؛ يمكنك المحاولة لاحقًا.",
+      "Dagens AI-gräns har nåtts för att skydda budgeten. Sparade kapitel finns kvar; försök senare.",
+    ],
+    ai_image_daily_limit: [
+      "Today's AI cover image limit has been reached. Choose a ready-made cover template or try again later.",
+      "وصلت إلى الحد اليومي لصور الغلاف. اختر قالب غلاف جاهزًا مجانًا أو أعد المحاولة لاحقًا.",
+      "Dagens gräns för AI-omslag har nåtts. Välj en färdig mall eller försök senare.",
+    ],
+    ai_book_limit: [
+      "This book has reached its AI-generation safety limit. Your existing chapters and exports remain available.",
+      "وصل هذا الكتاب إلى حد التوليد الآمن. تبقى فصولك المحفوظة وخيارات التصدير متاحة.",
+      "Bokens säkerhetsgräns för AI-generering har nåtts. Sparade kapitel och export finns kvar.",
+    ],
     rate_limit: [
       "You have reached the usage limit. Please try again later.",
       "وصلت إلى حد الاستخدام. حاول لاحقًا.",
