@@ -108,6 +108,7 @@ export function Editor({
   const [online, setOnline] = useState(true);
   const saveFailuresRef = useRef(0);
   const savingRef = useRef(false);
+  const editSequenceRef = useRef(0);
   const dirtyRef = useRef(false);
   const mounted = useRef(true);
   const [modal, setModal] = useState<"credits" | "history" | null>(null);
@@ -256,7 +257,10 @@ export function Editor({
     return () => URL.revokeObjectURL(url);
   }, [coverCandidate]);
   useEffect(() => {
-    const sync = () => setOnline(navigator.onLine);
+    const sync = () => {
+      if (navigator.onLine) saveFailuresRef.current = 0;
+      setOnline(navigator.onLine);
+    };
     sync();
     window.addEventListener("online", sync);
     window.addEventListener("offline", sync);
@@ -266,14 +270,17 @@ export function Editor({
     };
   }, []);
   useEffect(() => {
-    if (!dirty || !online || disabled || !draft?.outline.length) return;
+    if (!dirty || !online || disabled || !draft?.outline.length ||
+        error === "conflict" || error === "rate_limit" ||
+        saveFailuresRef.current >= 4) return;
     // Debounce saves and back off if the network is unavailable.
     const delay = Math.min(30_000, 2_200 * (2 ** Math.min(4, saveFailuresRef.current)));
     const timer = window.setTimeout(() => void save(), delay);
     return () => window.clearTimeout(timer);
-  }, [draft, dirty, online, disabled, pending]);
+  }, [draft, dirty, online, disabled, pending, error]);
 
   function change(fn: (b: BookWithCover) => BookWithCover) {
+    editSequenceRef.current += 1;
     setDraft((b) => (b ? fn(b) : b));
     dirtyRef.current = true;
     setDirty(true);
@@ -319,6 +326,7 @@ export function Editor({
       return false;
     }
     savingRef.current = true;
+    const savingSequence = editSequenceRef.current;
     setPending("save");
     setError("");
     try {
@@ -336,13 +344,24 @@ export function Editor({
         }),
       });
       setBook(d.book);
-      setDraft(d.book);
-      dirtyRef.current = false;
-      setDirty(false);
+      const editedWhileSaving = editSequenceRef.current !== savingSequence;
+      if (editedWhileSaving) {
+        // Never replace a newer on-screen draft with the older request body.
+        // Advance only the optimistic revision so autosave can persist it next.
+        setDraft((current) => current
+          ? { ...current, revision: d.book.revision }
+          : d.book);
+        dirtyRef.current = true;
+        setDirty(true);
+      } else {
+        setDraft(d.book);
+        dirtyRef.current = false;
+        setDirty(false);
+        try { sessionStorage.removeItem(backupKey); } catch {}
+        setRecoveryDraft(null);
+      }
       saveFailuresRef.current = 0;
-      try { sessionStorage.removeItem(backupKey); } catch {}
-      setRecoveryDraft(null);
-      return true;
+      return !editedWhileSaving;
     } catch (e) {
       saveFailuresRef.current++;
       setError(online ? codeOf(e) : "offline");
@@ -739,6 +758,7 @@ export function Editor({
                 "Ett utkast från den här webbläsarfliken hittades. Återställ det eller behåll den senast molnsparade versionen.")}</p>
               <div className="cover-confirm-buttons">
                 <button type="button" className="button button-primary button-small" onClick={() => {
+                  editSequenceRef.current += 1;
                   setDraft(recoveryDraft);
                   dirtyRef.current = true;
                   setDirty(true);
