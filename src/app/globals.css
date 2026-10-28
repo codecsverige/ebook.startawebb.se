@@ -3154,3 +3154,17 @@ html[dir="rtl"] .muted {
 .draft-recovery { border-color:#a2bbdf; background:#f3f7ff; }
 .draft-recovery strong { display:block; font-size:15px; margin-bottom:7px; }
 .draft-recovery p { font-size:14px; line-height:1.7; }
+
+/* Expanded genre-friendly editorial cover palettes */
+.cover-forest{--cover-bg:#123d35;--cover-ink:#f5ecda;--cover-accent:#b8d2ac;background:var(--cover-bg);}
+.cover-ember{--cover-bg:#613123;--cover-ink:#fff0db;--cover-accent:#eaa36c;background:var(--cover-bg);}
+.cover-lagoon{--cover-bg:#076c75;--cover-ink:#eaf8f4;--cover-accent:#8bd4c6;background:var(--cover-bg);}
+.cover-rose{--cover-bg:#f4dce3;--cover-ink:#552b40;--cover-accent:#c57c95;background:var(--cover-bg);}
+.cover-noir{--cover-bg:#10141e;--cover-ink:#f9f1e6;--cover-accent:#c5a78a;background:var(--cover-bg);}
+.cover-sky{--cover-bg:#8dc9e7;--cover-ink:#16354f;--cover-accent:#f9e1a0;background:var(--cover-bg);}
+.cover-gold{--cover-bg:#d5b76c;--cover-ink:#302619;--cover-accent:#f9eed1;background:var(--cover-bg);}
+.cover-teal{--cover-bg:#134e57;--cover-ink:#eaf8f2;--cover-accent:#72c4b8;background:var(--cover-bg);}
+.cover-berry{--cover-bg:#592548;--cover-ink:#fff1e9;--cover-accent:#e6a1b1;background:var(--cover-bg);}
+.cover-sand{--cover-bg:#e3d0b2;--cover-ink:#3f3026;--cover-accent:#b18c65;background:var(--cover-bg);}
+.cover-ink{--cover-bg:#272a49;--cover-ink:#f7f1de;--cover-accent:#aba8d2;background:var(--cover-bg);}
+.cover-sunrise{--cover-bg:#e88967;--cover-ink:#442b43;--cover-accent:#fcd8a3;background:var(--cover-bg);}
