@@ -325,13 +325,17 @@ export function Editor({
   }
   async function clearCoverArtwork() {
     if (!book || disabled || !book.cover_path) return;
-    if (dirtyRef.current && !(await save())) return;
+    let revision = book.revision;
+    if (dirtyRef.current) {
+      if (!(await save())) return;
+      revision++;
+    }
     setPending("clear-cover");
     setError("");
     try {
       const { book: updated } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/cover`,
-        { method: "DELETE", body: JSON.stringify({ revision: book.revision }) },
+        { method: "DELETE", body: JSON.stringify({ revision }) },
       );
       setBook(updated);
       setDraft(updated);
@@ -655,6 +659,35 @@ export function Editor({
                       )}
                 </h2>
                 <p>{draft.outline.length ? t.outlineHint : t.briefBody}</p>
+              </div>
+
+              <div className="restart-tools" dir={locale === "ar" ? "rtl" : "ltr"}>
+                <div>
+                  <strong>{tr(locale, "Book language", "لغة الكتاب", "Bokens språk")}</strong>
+                  <p>{tr(locale, "Current language", "اللغة الحالية", "Nuvarande språk")}: {languageNames[book.language]}</p>
+                  {isArabicBrief(book.idea) && book.language !== "ar" && (
+                    <p className="language-warning" role="alert">
+                      {tr(locale, "Your idea is Arabic but this book is set to another language. Restart it in Arabic to correct its contents.", "طلبك مكتوب بالعربية لكن لغة هذا الكتاب ليست العربية. اختر العربية وأعد إنشاء الفهرس والفصول.", "Bokidén är på arabiska men bokens språk är ett annat. Starta om den på arabiska.")}
+                    </p>
+                  )}
+                </div>
+                <label>
+                  <span className="sr-only">{t.bookLanguage}</span>
+                  <select value={restartLanguage} disabled={disabled} onChange={(e) => setRestartLanguage(e.target.value as Locale)}>
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                    <option value="sv">Svenska</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="button button-outline button-small"
+                  disabled={disabled}
+                  onClick={() => void restartManuscript()}
+                >
+                  <RotateCcw size={17} />
+                  {tr(locale, "Restart this book", "إعادة إنشاء الكتاب من البداية", "Starta om boken")}
+                </button>
               </div>
               {draft.outline.length === 0 ? (
                 <div className="brief-summary">
@@ -1038,10 +1071,43 @@ export function Editor({
                       onChange={(e) => {
                         const file = e.currentTarget.files?.[0];
                         e.currentTarget.value = "";
-                        if (file) void uploadCover(file);
+                        if (file) {
+                          if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+                              file.size > 3_000_000) {
+                            setError("invalid_input");
+                          } else {
+                            setCoverCandidate(file);
+                          }
+                        }
                       }}
                     />
                   </label>
+                  {coverCandidate && (
+                    <div className="cover-confirm">
+                      <strong>{tr(locale, "Review your selected image", "راجع الصورة قبل اعتمادها", "Granska vald bild")}</strong>
+                      <p>{coverCandidate.name}</p>
+                      <p className="muted">{tr(locale, "Choose an illustration or photo for your own book, not a screenshot of a webpage or social media.", "استخدم رسمة أو صورة مناسبة للكتاب، لا لقطة شاشة من موقع أو تطبيق.", "Välj en illustration eller bild som passar boken, inte en skärmbild från en webbplats.")}</p>
+                      <div className="cover-confirm-buttons">
+                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void uploadCover(coverCandidate)}>
+                          <Check size={15} /> {tr(locale, "Apply this image", "اعتماد هذه الصورة", "Använd bilden")}
+                        </button>
+                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => setCoverCandidate(null)}>
+                          {t.cancel}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {draft.cover_path && (
+                    <button
+                      type="button"
+                      className="button button-outline button-small"
+                      disabled={disabled}
+                      onClick={() => void clearCoverArtwork()}
+                    >
+                      <Trash2 size={16} />
+                      {tr(locale, "Remove cover image and use a clean design", "حذف صورة الغلاف واستعمال تصميم نظيف", "Ta bort omslagsbilden och använd ett rent omslag")}
+                    </button>
+                  )}
                   {draft.cover_path && (
                     <label className="checkbox-label">
                       <input
