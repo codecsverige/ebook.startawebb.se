@@ -18,7 +18,7 @@ export function configuration() {
     ),
     // Vercel AI SDK resolves project OIDC authentication at request time.
     // Runtime OIDC is not guaranteed to appear in process.env.
-    ai: !!(
+    ai: !!process.env.OPENAI_API_KEY || !!(
       process.env.AI_GATEWAY_MODEL &&
       (process.env.AI_GATEWAY_API_KEY ||
         process.env.VERCEL_OIDC_TOKEN ||
