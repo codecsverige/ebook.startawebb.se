@@ -215,7 +215,9 @@ test(
         store.reserveAi(free.id, "outline", "test/model"),
         /ai_book_limit/,
       );
+      await store.noteJobFailure(free.id, "ai_book_limit");
       await store.finishJob(free.id, "generation_failed");
+      assert.equal((await store.job(free.id))?.error_code, "ai_book_limit");
       await assert.rejects(
         store.prepareJob(other, trial, "outline", null, randomUUID()),
         /insufficient_credits/,
@@ -269,6 +271,12 @@ test(
       assert.equal((await store.profile(artist))?.image_times?.length, 3);
       await store.finishJob(protectedCover.id, "generation_failed");
       assert.equal((await store.ownedBook(artworkBook, artist)).cover_path, null);
+      // Fail before starting a new workflow, instead of silently burning
+      // another job request and presenting a generic failure to the author.
+      await assert.rejects(
+        store.prepareJob(artist, artworkBook, "cover", null, randomUUID(), true),
+        /ai_image_daily_limit/,
+      );
 
       // Load the actual HyrNära rules when available; do not modify/deploy them.
       const rules = await readFile(
