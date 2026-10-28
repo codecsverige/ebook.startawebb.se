@@ -14,6 +14,7 @@ import {
 } from "docx";
 import type { Book } from "./domain";
 import { escapeHtml as esc, markdownHtml } from "./export-text";
+import { parseManuscript, stripInlineMarkdown } from "./manuscript";
 
 const palettes: Record<
   Book["cover_style"],
@@ -51,7 +52,7 @@ export async function pdfHtml(
   return `<!doctype html><html lang="${book.language}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>
   @font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}
   @font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}
-  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:175mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.25}.cover h1{font-size:${rtl ? "32" : "29"}pt;margin:7mm 0;position:relative}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:page}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}
+  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:175mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.25}.cover h1{font-size:${rtl ? "32" : "29"}pt;margin:7mm 0;position:relative}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}
   </style></head><body><section class="cover">${image}<small>EBOOK STUDIO</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section><section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}</body></html>`;
 }
 export async function makePdf(
@@ -167,17 +168,29 @@ export async function makeDocx(
         children: [text(c.title, true)],
       }),
     );
-    for (const line of (book.chapters[c.id]?.content || "").split("\n")) {
-      const heading = /^#{1,4} /.test(line);
-      const value = line.replace(/^#{1,4} /, "").replace(/\*\*/g, "");
-      children.push(
-        new Paragraph({
+    for (const block of parseManuscript(book.chapters[c.id]?.content || "")) {
+      if (block.type === "heading") {
+        children.push(new Paragraph({
           ...base,
-          ...(heading ? { heading: HeadingLevel.HEADING_2 } : {}),
-          spacing: { after: 120 },
-          children: [text(value, heading)],
-        }),
-      );
+          heading: block.level >= 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_2,
+          spacing: { before: 260, after: 100 },
+          children: [text(stripInlineMarkdown(block.text), true)],
+        }));
+      } else if (block.type === "ul" || block.type === "ol") {
+        block.items.forEach((item, index) =>
+          children.push(new Paragraph({
+            ...base,
+            spacing: { after: 90 },
+            children: [text(`${block.type === "ul" ? "•" : `${index + 1}.`}  ${stripInlineMarkdown(item)}`)],
+          })),
+        );
+      } else {
+        children.push(new Paragraph({
+          ...base,
+          spacing: { after: 170 },
+          children: [text(stripInlineMarkdown(block.text))],
+        }));
+      }
     }
   }
   return Packer.toBuffer(

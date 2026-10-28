@@ -1662,7 +1662,7 @@ select:disabled {
 }
 .outline-item input {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   background: #fbfcfe;
   border-color: #ecedf1;
   min-height: 39px;
@@ -1672,10 +1672,13 @@ select:disabled {
   background: transparent;
   border-color: transparent;
   padding: 4px 10px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: #758094;
-  min-height: 50px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #34435c;
+  min-height: 112px;
+  border: 1px solid var(--line);
+  background: #fbfcfe;
+  padding: 12px;
 }
 .outline-item textarea:hover {
   border-color: var(--line);
@@ -1794,9 +1797,9 @@ select:disabled {
 }
 .chapter-editor {
   width: 100%;
-  min-height: 65dvh;
-  padding: 25px 28px;
-  font-size: 14px;
+  min-height: 75dvh;
+  padding: 22px 24px;
+  font-size: 17px;
   line-height: 2;
   resize: vertical;
   font-weight: 400;
