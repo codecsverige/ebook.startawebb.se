@@ -123,6 +123,7 @@ export type Book = Brief & {
   chapters: Record<string, Chapter>;
   cover_style: (typeof coverStyles)[number];
   cover_path: string | null;
+  cover_candidate_path?: string | null;
   use_artwork: boolean;
   unlocked: boolean;
   revision: number;
@@ -141,7 +142,7 @@ export type Job = {
   run_id: string | null;
   created_at: string;
 };
-export type BookWithCover = Book & { cover_url?: string | null };
+export type BookWithCover = Book & { cover_url?: string | null; cover_candidate_url?: string | null };
 export type BookshelfBook = Omit<BookWithCover, "chapters"> & {
   word_count: number;
   completed_chapters: number;
