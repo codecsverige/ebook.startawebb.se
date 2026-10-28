@@ -298,6 +298,59 @@ test(
         /ai_image_daily_limit/,
       );
 
+      // Verified-owner mode is deliberately independent of public rate caps.
+      // Every test request is still recorded in aiUsage, and duplicate
+      // requests remain protected by the single active-job lock.
+      const ownerId = `privateOwner-${randomUUID()}`;
+      await store.ensureProfile(ownerId);
+      const ownerBookId = await store.createBook(ownerId, brief);
+      const quotaKeys = [
+        "EBOOK_AI_GLOBAL_DAILY_LIMIT",
+        "EBOOK_AI_USER_DAILY_LIMIT",
+        "EBOOK_AI_BOOK_LIFETIME_LIMIT",
+        "EBOOK_AI_IMAGE_GLOBAL_DAILY_LIMIT",
+        "EBOOK_AI_IMAGE_USER_DAILY_LIMIT",
+      ] as const;
+      const previousQuotas = quotaKeys.map((key) => process.env[key]);
+      try {
+        for (const key of quotaKeys) process.env[key] = "1";
+        const ownerJob = await store.prepareJob(
+          ownerId, ownerBookId, "outline", null, randomUUID(), true,
+        );
+        assert.equal(ownerJob.owner_trial, true);
+        await assert.rejects(
+          store.prepareJob(ownerId, ownerBookId, "outline", null, randomUUID(), true),
+          /busy/,
+        );
+        for (let i = 0; i < 9; i++)
+          await store.reserveAi(ownerJob.id, "outline", "test/model");
+        assert.equal((await store.profile(ownerId))?.ai_times.length, 0);
+        await store.finishJob(ownerJob.id, "generation_failed");
+        const manual = await store.createManualOutline(
+          ownerId, ownerBookId, (await store.ownedBook(ownerBookId, ownerId)).revision,
+        );
+        assert.equal(manual.outline.length, 3);
+        const ownerCover = await store.prepareJob(
+          ownerId, ownerBookId, "cover", null, randomUUID(), true,
+        );
+        for (let i = 0; i < 5; i++)
+          await store.reserveAi(ownerCover.id, "cover", "test/model");
+        assert.equal((await store.profile(ownerId))?.image_times?.length, 0);
+        await store.finishJob(ownerCover.id);
+        const currentOwnerBook = await store.ownedBook(ownerBookId, ownerId);
+        assert.equal(currentOwnerBook.outline.length, 3);
+        await assert.rejects(
+          store.prepareJob(artist, artworkBook, "cover", null, randomUUID()),
+          /ai_daily_limit/,
+        );
+      } finally {
+        for (let i = 0; i < quotaKeys.length; i++) {
+          const old = previousQuotas[i];
+          if (old === undefined) delete process.env[quotaKeys[i]];
+          else process.env[quotaKeys[i]] = old;
+        }
+      }
+
       // Load the actual HyrNära rules when available; do not modify/deploy them.
       const rules = await readFile(
         process.env.EBOOK_SHARED_RULES_PATH ||
