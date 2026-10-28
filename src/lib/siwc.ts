@@ -46,7 +46,7 @@ export function chatgptClientId(): string | null {
   return /^oaiapp_[A-Za-z0-9_\-]{8,}$/.test(id) ? id : null;
 }
 export const chatgptCallbackUrl = () =>
-  new URL("/api/auth/chatgpt/callback", appUrl()).toString();
+  new URL("/api/auth/chatgpt/callback", process.env.APP_URL || appUrl()).toString();
 
 function transactions() {
   return studioDb().collection(STUDIO_PATH + "/siwcTransactions");
@@ -95,14 +95,10 @@ export async function startChatgpt(
     response_type: "code",
     scope: "openid profile email",
     state,
-    code_challenge: digest(codeVerifier), // replaced with base64url below
+    code_challenge: createHash("sha256").update(codeVerifier).digest("base64url"),
     code_challenge_method: "S256",
     nonce,
   }).toString();
-  url.searchParams.set(
-    "code_challenge",
-    createHash("sha256").update(codeVerifier).digest("base64url"),
-  );
   return url.toString();
 }
 export async function consumeChatgptTransaction(
