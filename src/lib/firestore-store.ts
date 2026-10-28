@@ -78,7 +78,7 @@ function fail(code: string): never {
     code,
     ["busy", "conflict"].includes(code)
       ? 409
-      : code === "rate_limit"
+      : ["rate_limit", "ai_book_limit", "ai_daily_limit", "ai_image_daily_limit"].includes(code)
         ? 429
         : code === "not_found"
           ? 404
