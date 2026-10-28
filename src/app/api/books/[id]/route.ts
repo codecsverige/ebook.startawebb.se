@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { requireUser } from "@/lib/firebase-session";
 import { studioStore } from "@/lib/firebase-admin";
 import { assertOrigin, readJson, apiError, json } from "@/lib/http";
@@ -35,6 +36,31 @@ export async function PATCH(request: Request, ctx: Context) {
       chapter.summary = chapter.content.replace(/[#*]/g, "").slice(0, 1000);
     return json({
       book: await withCover(await studioStore().saveBook(user.id, id, input)),
+    });
+  } catch (e) {
+    return apiError(e);
+  }
+}
+/** The restart action archives the current manuscript and keeps the book and its credits. */
+export async function POST(request: Request, ctx: Context) {
+  try {
+    assertOrigin(request);
+    const { id } = await ctx.params,
+      { user } = await requireUser();
+    const input = await readJson(
+      request,
+      z.object({
+        action: z.literal("restart"),
+        revision: z.number().int().nonnegative(),
+        language: z.enum(["en", "ar", "sv"]),
+      }),
+      1200,
+    );
+    await takeRate(`restart:${user.id}`, 15);
+    return json({
+      book: await withCover(
+        await studioStore().restartBook(user.id, id, input.language, input.revision)
+      ),
     });
   } catch (e) {
     return apiError(e);
