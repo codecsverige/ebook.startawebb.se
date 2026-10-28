@@ -27,11 +27,10 @@ export async function POST(
       input.kind,
       input.chapter_id || null,
       input.request_id,
-      Boolean(
-        process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
-          user.email.toLowerCase() ===
-            process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase()
-      ),
+      !config.billing &&
+        !!process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
+        user.email.toLowerCase() ===
+          process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase(),
     );
     if (job.run_id || job.status !== "queued") return json({ job });
     try {
