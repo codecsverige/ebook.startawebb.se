@@ -156,7 +156,7 @@ const en = {
     "Choose a color direction. Your title stays editable and is typeset clearly in every language.",
   aiCover: "Create AI cover artwork",
   artworkNote:
-    "Optional artwork is generated without text. Titles are added separately. Includes up to two artworks per unlocked book.",
+    "Optional artwork is generated without text. Titles are added separately. Includes up to five artwork attempts per book.",
   removeArtwork: "Use typographic cover",
   previewTitle: "Read it like your reader will.",
   exportPdf: "Download PDF",
@@ -343,7 +343,7 @@ const ar: Copy = {
   designBody: "اختر ألوانك. يبقى العنوان قابلًا للتعديل ويُنسّق بوضوح بكل لغة.",
   aiCover: "توليد صورة غلاف بالذكاء الاصطناعي",
   artworkNote:
-    "صورة اختيارية دون نص؛ يُضاف العنوان منفصلًا. حتى صورتين لكل كتاب مفتوح بالرصيد.",
+    "صورة اختيارية دون نص؛ يُضاف العنوان منفصلًا. حتى خمس محاولات لصنع الغلاف لكل كتاب.",
   removeArtwork: "استخدم غلافًا كتابيًا",
   previewTitle: "اقرأه بعين القارئ.",
   exportPdf: "تنزيل PDF",
