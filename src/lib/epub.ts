@@ -64,7 +64,7 @@ export function makeEpub(
   const dir = rtl ? "rtl" : "ltr";
   const title = escapeHtml(book.title);
   const subtitle = escapeHtml(book.subtitle);
-  const author = escapeHtml(book.author || "Ebook Studio");
+  const author = escapeHtml(book.author || "");
   const content: Asset[] = [
     { name: "mimetype", body: "application/epub+zip" },
     { name: "META-INF/container.xml", body:
@@ -154,7 +154,7 @@ export function makeEpub(
     '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
     '<dc:identifier id="pub-id">urn:uuid:' + book.id + '</dc:identifier>' +
     '<dc:title>' + title + '</dc:title><dc:language>' + lang +
-    '</dc:language><dc:creator>' + author + '</dc:creator>' +
+    '</dc:language>' + (book.author ? '<dc:creator>' + author + '</dc:creator>' : '') +
     '<meta property="dcterms:modified">' +
     new Date().toISOString().replace(/\.\d{3}Z$/, "Z") +
     '</meta></metadata><manifest>' + manifest +
