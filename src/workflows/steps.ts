@@ -204,8 +204,10 @@ export async function createChapter(
     tone: book.tone,
     outline: book.outline,
     currentChapter: chapter,
+    // Never leak future chapter spoilers into the narrative continuity context.
     previousSummaries: book.outline
-      .filter((c) => c.id !== chapterId && book.chapters[c.id])
+      .slice(0, book.outline.findIndex((c) => c.id === chapterId))
+      .filter((c) => Boolean(book.chapters[c.id]))
       .map((c) => ({ title: c.title, summary: book.chapters[c.id].summary })),
   });
   let result;
