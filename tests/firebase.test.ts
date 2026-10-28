@@ -213,7 +213,7 @@ test(
       );
       await assert.rejects(
         store.reserveAi(free.id, "outline", "test/model"),
-        /rate_limit/,
+        /ai_book_limit/,
       );
       await store.finishJob(free.id, "generation_failed");
       await assert.rejects(
