@@ -447,7 +447,12 @@ export class FirestoreStudio {
       const pRef = this.userRef(uid),
         bRef = this.books().doc(id),
         jRef = this.jobs().doc(jobId);
-      const [p, b, j] = await tx.getAll(pRef, bRef, jRef);
+      const currentDay = Math.floor(Date.now() / day);
+      const gRef = this.root.collection("rates").doc(`ai-${currentDay}`);
+      const imageRef = this.root.collection("rates").doc(`ai-image-${currentDay}`);
+      const [p, b, j, global, images] = await tx.getAll(
+        pRef, bRef, jRef, gRef, imageRef,
+      );
       // Private owner trial is authorized by the verified session in the API.
       // No credit is charged while payments are explicitly disabled.
       const profile = this.checkedProfile(p.data() as Profile | undefined);
@@ -465,6 +470,16 @@ export class FirestoreStudio {
       if (book.state.active_job) fail("busy");
       const now = Date.now(),
         times = recent(profile.job_times, now);
+      // Surface known budget exhaustion BEFORE queueing a workflow or taking
+      // credits. The per-call reserveAi transaction remains the final guard.
+      const limits = aiDailyLimits();
+      if (recent(profile.ai_times || [], now).length >= limits.user ||
+          (global.get("hits") || 0) >= limits.global)
+        fail("ai_daily_limit");
+      if (kind === "cover" &&
+          (recent(profile.image_times || [], now).length >= limits.imagesUser ||
+          (images.get("hits") || 0) >= limits.imagesGlobal))
+        fail("ai_image_daily_limit");
       if (times.length >= 30 || book.state.jobs >= 50) fail("rate_limit");
       if (kind === "outline" && book.outline.length) fail("invalid_input");
       if (kind !== "outline" && !book.outline.length) fail("no_outline");
@@ -618,6 +633,24 @@ export class FirestoreStudio {
       return usageId;
     });
   }
+  /**
+   * Persist only a safe, application-defined failure code while a workflow is
+   * running. Workflow runtimes can wrap or lose the original error message;
+   * this is the authoritative fallback when finalizing a failed job.
+   */
+  async noteJobFailure(id: string, code: string): Promise<void> {
+    const ref = this.jobs().doc(id);
+    await this.db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(ref);
+      const job = snapshot.data() as WorkerJob | undefined;
+      if (!job || !active(job)) return;
+      tx.update(ref, {
+        error_code: code,
+        updated_at: new Date().toISOString(),
+      });
+    });
+  }
+
   async recordUsage(id: string, input: number, output: number) {
     await this.root
       .collection("aiUsage")
@@ -721,10 +754,13 @@ export class FirestoreStudio {
             active_jobs: Math.max(0, profile.active_jobs - 1),
           });
       }
+      const finalError = error === "generation_failed" && job.error_code
+        ? job.error_code
+        : error;
       const next = {
         ...job,
-        status: error ? ("failed" as const) : ("completed" as const),
-        error_code: error,
+        status: finalError ? ("failed" as const) : ("completed" as const),
+        error_code: finalError,
         progress: error ? job.progress : 100,
         updated_at: new Date().toISOString(),
       };
