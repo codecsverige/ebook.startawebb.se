@@ -3102,3 +3102,49 @@ html[dir="rtl"] .muted {
   .restart-tools button { width: 100%; }
   .cover-confirm-buttons .button { flex: 1; }
 }
+
+/* Eighteen genre-aware editorial cover treatments. All are text-first and usable offline. */
+.cover-forest { --cover-bg:#173f36; --cover-ink:#f8f3db; --cover-accent:#9cca86; background:linear-gradient(155deg,#2e6956,#173f36 52%,#102d28); }
+.cover-ember { --cover-bg:#8a342e; --cover-ink:#fff3db; --cover-accent:#ffc384; background:linear-gradient(140deg,#b74a33,#7e252e 70%,#3a2438); }
+.cover-lagoon { --cover-bg:#124b64; --cover-ink:#f5fcfb; --cover-accent:#7bd0c7; background:linear-gradient(135deg,#147e87,#124b64 65%,#11283f); }
+.cover-rose { --cover-bg:#f1d4d9; --cover-ink:#542d3d; --cover-accent:#c67a9a; background:linear-gradient(120deg,#f6e9e4,#edc7d1 70%,#d9aac5); }
+.cover-noir { --cover-bg:#161821; --cover-ink:#f4e8d7; --cover-accent:#c7a16b; background:linear-gradient(145deg,#28242a,#10131c); }
+.cover-sky { --cover-bg:#b9d9f1; --cover-ink:#1f4678; --cover-accent:#80b6e6; background:linear-gradient(155deg,#eef7fc,#b9d9f1 68%,#85b8ea); }
+.cover-gold { --cover-bg:#d5ac53; --cover-ink:#332512; --cover-accent:#fcf0b9; background:linear-gradient(130deg,#f2d88c,#d5ac53 55%,#b98a38); }
+.cover-teal { --cover-bg:#176c6b; --cover-ink:#fff9e7; --cover-accent:#94d4b7; background:linear-gradient(140deg,#238c81,#176c6b 66%,#0a393f); }
+.cover-berry { --cover-bg:#803655; --cover-ink:#fff4ec; --cover-accent:#ed9eaa; background:linear-gradient(140deg,#b95d75,#803655 69%,#532c58); }
+.cover-sand { --cover-bg:#e4d2b8; --cover-ink:#4f3f32; --cover-accent:#b9a076; background:linear-gradient(160deg,#f5ebda,#e4d2b8 75%,#c8b397); }
+.cover-ink { --cover-bg:#29374a; --cover-ink:#f5f4ed; --cover-accent:#95a8c0; background:linear-gradient(155deg,#435777,#263345 70%,#182331); }
+.cover-sunrise { --cover-bg:#f4b48a; --cover-ink:#56304b; --cover-accent:#f9d6a7; background:linear-gradient(160deg,#fce5b2,#f4b48a 60%,#e7898a); }
+.book-cover.cover-noir .cover-orbit, .book-cover.cover-ink .cover-orbit { border-radius:4%; transform:rotate(32deg); }
+.book-cover.cover-forest .cover-orbit, .book-cover.cover-teal .cover-orbit { border-radius:0 80% 0 80%; transform:rotate(-20deg); }
+.book-cover.cover-rose .cover-orbit, .book-cover.cover-berry .cover-orbit { border-style:dashed; }
+.book-cover.cover-gold .cover-copy, .book-cover.cover-noir .cover-copy { border-inline-start:2px solid var(--cover-accent); padding-inline-start:13px; }
+.book-cover.cover-sky .cover-copy, .book-cover.cover-sunrise .cover-copy { text-align:center; }
+.book-cover.cover-sky .cover-copy p, .book-cover.cover-sunrise .cover-copy p { margin-inline:auto; }
+.book-cover.cover-ember .cover-orbit, .book-cover.cover-lagoon .cover-orbit { width:320px; height:320px; }
+.book-cover.cover-ivory .cover-copy h2, .book-cover.cover-gold .cover-copy h2 { font-weight:550; }
+.cover-gallery { border:0; padding:0; min-width:0; }
+.cover-gallery legend { font-size:16px; font-weight:700; line-height:1.6; margin-bottom:6px; }
+.cover-gallery > .muted { margin:0 0 14px; font-size:13px; }
+.cover-template-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; }
+.cover-template-card { position:relative; border:2px solid #e0e5ec; border-radius:11px; padding:7px; background:#fff; display:flex; flex-direction:column; gap:6px; min-width:0; cursor:pointer; text-align:start; transition:border-color .14s,transform .14s; }
+.cover-template-card:hover { transform:translateY(-2px); border-color:#8da8e9; }
+.cover-template-card.is-selected { border-color:#3159df; box-shadow:0 0 0 2px #dce6ff; }
+.cover-template-card:focus-visible { outline:3px solid #3159df; outline-offset:2px; }
+.cover-template-card:disabled { cursor:default; opacity:.6; }
+.cover-template-card .book-cover { width:100%; min-height:0; padding:8px; border-radius:4px; pointer-events:none; }
+.cover-template-card .cover-top { font-size:4px; }
+.cover-template-card .cover-top svg { width:10px; height:10px; }
+.cover-template-card .cover-copy { padding-block:5px; }
+.cover-template-card .cover-copy h2 { font-size:clamp(9px,13cqi,19px); line-height:1.18; margin:0; }
+.cover-template-card .cover-bottom { padding-top:5px; }
+.cover-template-card .cover-star { font-size:12px; }
+.cover-template-card .book-cover[lang="ar"] .cover-copy h2 { font-size:clamp(10px,14cqi,20px); line-height:1.4; }
+.cover-template-name { font-size:12px; font-weight:700; color:#26354b; line-height:1.45; }
+.cover-template-hint { font-size:10px; color:#5a6c89; }
+.cover-template-selected { position:absolute; inset-block-start:3px; inset-inline-end:3px; border-radius:50%; padding:3px; width:24px; height:24px; color:#fff; background:#3159df; z-index:4; }
+@media(max-width:1180px) { .cover-template-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:800px) { .cover-template-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:420px) { .cover-template-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(prefers-reduced-motion:reduce) { .cover-template-card { transition:none; } .cover-template-card:hover { transform:none; } }
