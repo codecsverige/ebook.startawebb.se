@@ -533,7 +533,7 @@ const sv: Copy = {
     "Välj färger. Titeln förblir redigerbar och sätts tydligt på alla språk.",
   aiCover: "Skapa AI-bild till omslaget",
   artworkNote:
-    "En valfri bild skapas utan text. Titeln läggs till separat. Upp till två bilder per upplåst bok ingår.",
+    "En valfri bild skapas utan text. Titeln läggs till separat. Upp till fem omslagsförsök per bok.",
   removeArtwork: "Använd typografiskt omslag",
   previewTitle: "Läs med läsarens ögon.",
   exportPdf: "Ladda ner PDF",
