@@ -496,33 +496,31 @@ export function Editor({
     }
   }
   async function restore(version: Version) {
-    if (
-      !window.confirm(
-        tr(
-          locale,
-          "Restore this saved text and outline? Save to apply it. Current artwork stays in place.",
-          "استعادة النص والفهرس المحفوظين؟ اضغط حفظ لتطبيقهما. تبقى صورة الغلاف الحالية.",
-          "Återställa sparad text och disposition? Spara för att tillämpa. Nuvarande omslagsbild behålls.",
-        ),
-      )
-    )
-      return;
+    if (!book || disabled) return;
+    if (!window.confirm(tr(
+      locale,
+      "Restore this saved book and its language? Your current version will be archived and can be restored later.",
+      "هل تريد استعادة هذا الإصدار بلغته وفصوله؟ ستُحفظ نسختك الحالية أيضًا في السجل ويمكن استعادتها لاحقًا.",
+      "Återställa den sparade boken och dess språk? Den aktuella versionen arkiveras och kan återställas senare.",
+    ))) return;
+    // Ensure unsaved edits are not silently replaced during a history restore.
+    if (dirtyRef.current && !(await save())) return;
     setPending("restore");
     setError("");
     try {
-      const { snapshot } = await request<{ snapshot: Book }>(
-        `/api/books/${id}/versions?version=${version.id}`,
+      const { book: restored } = await request<{ book: BookWithCover }>(
+        `/api/books/${id}/versions`,
+        { method: "POST", body: JSON.stringify({ version_id: version.id, revision: book.revision }) },
       );
-      change((b) => ({
-        ...b,
-        title: snapshot.title,
-        subtitle: snapshot.subtitle,
-        author: snapshot.author,
-        cover_style: snapshot.cover_style,
-        outline: snapshot.outline,
-        chapters: snapshot.chapters,
-      }));
+      setBook(restored);
+      setDraft(restored);
+      setJob(null);
+      setRestartLanguage(isArabicBrief(restored.idea) ? "ar" : restored.language);
+      setChapterId(restored.outline[0]?.id || "");
+      dirtyRef.current = false;
+      setDirty(false);
       setModal(null);
+      try { sessionStorage.removeItem(backupKey); } catch {}
     } catch (e) {
       setError(codeOf(e));
     } finally {
