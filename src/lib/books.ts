@@ -28,7 +28,7 @@ export async function coverArtwork(book: Book) {
   const file = studioBucket().file(book.cover_path);
   const [metadata] = await file.getMetadata();
   if (
-    Number(metadata.size) > 3_000_000 ||
+    Number(metadata.size) > 8_000_000 ||
     !["image/png", "image/jpeg", "image/webp"].includes(
       metadata.contentType || "",
     )
