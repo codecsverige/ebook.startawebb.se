@@ -100,6 +100,9 @@ export function Editor({
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [recoveryDraft, setRecoveryDraft] = useState<BookWithCover | null>(null);
+  const recoveryCheckedRef = useRef(false);
+  const backupKey = `ebook-studio:draft:${id}`;
   const [online, setOnline] = useState(true);
   const saveFailuresRef = useRef(0);
   const savingRef = useRef(false);
@@ -117,6 +120,22 @@ export function Editor({
         credits: number;
       }>(`/api/books/${id}`);
       if (!mounted.current) return;
+      if (!recoveryCheckedRef.current && !dirtyRef.current) {
+        recoveryCheckedRef.current = true;
+        try {
+          const data = sessionStorage.getItem(backupKey);
+          if (data) {
+            const saved = JSON.parse(data) as BookWithCover;
+            if (saved.id === id && saved.revision === d.book.revision &&
+                Array.isArray(saved.outline) && typeof saved.chapters === "object" &&
+                saved.title !== undefined) {
+              setRecoveryDraft(saved);
+            }
+          }
+        } catch {
+          // Private mode or malformed browser storage: cloud save continues normally.
+        }
+      }
       setBook(d.book);
       if (!dirtyRef.current) setDraft(d.book);
       setRestartLanguage(isArabicBrief(d.book.idea) ? "ar" : d.book.language);
@@ -127,7 +146,7 @@ export function Editor({
     } catch (e) {
       if (mounted.current) setLoadError(codeOf(e));
     }
-  }, [id]);
+  }, [id, backupKey]);
   useEffect(() => {
     mounted.current = true;
     void load();
@@ -217,6 +236,15 @@ export function Editor({
     };
   }, [locale]);
   useEffect(() => {
+    if (!dirty || !draft) return;
+    try {
+      sessionStorage.setItem(backupKey, JSON.stringify(draft));
+    } catch {
+      // Browser storage is best effort. The unsaved changes warning remains visible.
+    }
+  }, [backupKey, draft, dirty]);
+
+  useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
     sync();
     window.addEventListener("online", sync);
@@ -301,6 +329,8 @@ export function Editor({
       dirtyRef.current = false;
       setDirty(false);
       saveFailuresRef.current = 0;
+      try { sessionStorage.removeItem(backupKey); } catch {}
+      setRecoveryDraft(null);
       return true;
     } catch (e) {
       saveFailuresRef.current++;
@@ -365,6 +395,8 @@ export function Editor({
       });
       setBook(fresh);
       setDraft(fresh);
+      try { sessionStorage.removeItem(backupKey); } catch {}
+      setRecoveryDraft(null);
       setJob(null);
       setChapterId("");
       setTab("outline");
@@ -683,6 +715,27 @@ export function Editor({
                 "You are offline. Your changes are not saved to the cloud yet. Keep this page open; automatic saving resumes when the connection returns.",
                 "الاتصال مقطوع. تعديلاتك لم تُحفظ على السحابة بعد. اترك الصفحة مفتوحة، وسيُستأنف الحفظ تلقائيًا عند عودة الإنترنت.",
                 "Du är offline. Ändringarna har inte sparats i molnet ännu. Låt sidan vara öppen. Automatisk sparning återupptas när anslutningen återkommer.")}
+            </div>
+          )}
+          {recoveryDraft && !dirty && (
+            <div className="notice draft-recovery" role="status">
+              <strong>{tr(locale, "Recover unsaved changes?", "هل تريد استعادة التعديلات غير المحفوظة؟", "Återställa osparade ändringar?")}</strong>
+              <p>{tr(locale,
+                "A draft from this browser tab was found. You can restore it or keep the last cloud-saved version.",
+                "وُجدت مسودة من هذا المتصفح. يمكنك استعادتها أو الإبقاء على آخر نسخة محفوظة على السحابة.",
+                "Ett utkast från den här webbläsarfliken hittades. Återställ det eller behåll den senast molnsparade versionen.")}</p>
+              <div className="cover-confirm-buttons">
+                <button type="button" className="button button-primary button-small" onClick={() => {
+                  setDraft(recoveryDraft);
+                  dirtyRef.current = true;
+                  setDirty(true);
+                  setRecoveryDraft(null);
+                }}>{tr(locale, "Restore draft", "استعادة المسودة", "Återställ utkast")}</button>
+                <button type="button" className="button button-outline button-small" onClick={() => {
+                  try { sessionStorage.removeItem(backupKey); } catch {}
+                  setRecoveryDraft(null);
+                }}>{tr(locale, "Keep saved version", "الإبقاء على النسخة المحفوظة", "Behåll sparad version")}</button>
+              </div>
             </div>
           )}
           {(error || loadError) && (
