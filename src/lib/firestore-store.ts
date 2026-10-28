@@ -259,6 +259,45 @@ export class FirestoreStudio {
       return bookOnly(next);
     });
   }
+  /** A zero-AI fallback when the external model is offline.
+   * The author receives editable placeholder chapters, never fake generated text.
+   */
+  async createManualOutline(uid: string, id: string, revision: number): Promise<Book> {
+    if (!uuid(id)) fail("not_found");
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.books().doc(id);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      if (book.outline.length) fail("invalid_input");
+      const labels = {
+        ar: ["الفصل", "اكتب ملخص هذا الفصل، ثم عدّله بحسب قصتك"],
+        en: ["Chapter", "Write and edit the plan for this chapter"],
+        sv: ["Kapitel", "Skriv och redigera planen för detta kapitel"],
+      }[book.language];
+      const outline = Array.from({ length: book.chapter_count }, (_, i) => ({
+        id: randomUUID(),
+        title: `${labels[0]} ${i + 1}`,
+        summary: labels[1],
+      }));
+      const versions = await this.versionPlan(tx, ref);
+      const next: StoredBook = {
+        ...book,
+        outline,
+        title: book.title || (book.language === "ar"
+          ? "عنوان كتابك" : book.language === "sv" ? "Din boktitel" : "Your book title"),
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
+      };
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
+
   /** Restart a manuscript in the selected language without deleting the original snapshot. */
   async restartBook(uid: string, id: string, language: Book["language"], revision: number): Promise<Book> {
     if (!uuid(id)) fail("not_found");
