@@ -3,6 +3,7 @@ import { generateBook } from "@/workflows/generate-book";
 import { requireUser } from "@/lib/firebase-session";
 import { studioStore } from "@/lib/firebase-admin";
 import { ownedBook } from "@/lib/books";
+import { reconcileJob } from "@/lib/jobs";
 import { jobRequestSchema } from "@/lib/domain";
 import { assertOrigin, readJson, apiError, json, AppError } from "@/lib/http";
 import { configuration } from "@/lib/config";
@@ -21,6 +22,8 @@ export async function POST(
     if (!config.ai || (input.kind === "cover" && !config.artwork))
       throw new AppError("not_configured", 503);
     const store = studioStore();
+    // Release stale locks left by crashes, cancelled workflows or disconnected runs.
+    await reconcileJob(await store.latestJob(id));
     const job = await store.prepareJob(
       user.id,
       id,
