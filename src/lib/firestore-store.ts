@@ -26,6 +26,7 @@ export type Profile = {
   active_jobs: number;
   job_times: number[];
   ai_times: number[];
+  image_times?: number[];
   deleting: boolean;
 };
 type BookState = {
@@ -55,6 +56,23 @@ const digest = (key: string) => createHash("sha256").update(key).digest("hex");
 const day = 86_400_000;
 const recent = (values: number[], now: number) =>
   values.filter((n) => n > now - day);
+// Each AI request is reserved before calling the existing provider. Keep these
+// application limits conservative even when a client retries aggressively.
+// Environment values may LOWER a limit, never raise it above its safe ceiling.
+function aiLimit(key: string, fallback: number): number {
+  const raw = process.env[key];
+  const parsed = raw === undefined ? NaN : Number(raw);
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(fallback, parsed)
+    : fallback;
+}
+const aiDailyLimits = () => ({
+  global: aiLimit("EBOOK_AI_GLOBAL_DAILY_LIMIT", 80),
+  user: aiLimit("EBOOK_AI_USER_DAILY_LIMIT", 32),
+  book: aiLimit("EBOOK_AI_BOOK_LIFETIME_LIMIT", 40),
+  imagesGlobal: aiLimit("EBOOK_AI_IMAGE_GLOBAL_DAILY_LIMIT", 8),
+  imagesUser: aiLimit("EBOOK_AI_IMAGE_USER_DAILY_LIMIT", 3),
+});
 function fail(code: string): never {
   throw new AppError(
     code,
@@ -110,6 +128,7 @@ export class FirestoreStudio {
         active_jobs: 0,
         job_times: [],
         ai_times: [],
+        image_times: [],
         deleting: false,
       } satisfies Profile);
     });
@@ -553,27 +572,39 @@ export class FirestoreStudio {
       if (!job || !active(job)) fail("not_found");
       const pRef = this.userRef(job.user_id),
         bRef = this.books().doc(job.book_id);
-      const gRef = this.root
-        .collection("rates")
-        .doc(`ai-${Math.floor(now / day)}`);
-      const [p, b, g] = await tx.getAll(pRef, bRef, gRef);
+      const dayId = Math.floor(now / day);
+      const gRef = this.root.collection("rates").doc(`ai-${dayId}`);
+      const imageRef = this.root.collection("rates").doc(`ai-image-${dayId}`);
+      const imageRequest = operation === "cover";
+      const [p, b, g, imageCount] = await tx.getAll(pRef, bRef, gRef, imageRef);
+      const limits = aiDailyLimits();
       const profile = this.checkedProfile(p.data() as Profile | undefined);
       const book = this.checkedBook(
         b.data() as StoredBook | undefined,
         job.user_id,
       );
-      const times = recent(profile.ai_times, now),
-        global = g.get("hits") || 0;
+      const times = recent(profile.ai_times || [], now);
+      const imageTimes = recent(profile.image_times || [], now);
+      const global = g.get("hits") || 0;
+      const globalImages = imageCount.get("hits") || 0;
       if (
         book.state.active_job !== id ||
-        times.length >= 100 ||
-        book.state.ai_calls >= (book.unlocked ? 80 : 8) ||
-        global >= 500
+        times.length >= limits.user ||
+        book.state.ai_calls >= (book.unlocked ? limits.book : 8) ||
+        global >= limits.global ||
+        (imageRequest && (imageTimes.length >= limits.imagesUser ||
+          globalImages >= limits.imagesGlobal))
       )
         fail("rate_limit");
-      tx.update(pRef, { ai_times: [...times, now] });
+      tx.update(pRef, {
+        ai_times: [...times, now],
+        ...(imageRequest ? { image_times: [...imageTimes, now] } : {}),
+      });
       tx.update(bRef, { "state.ai_calls": book.state.ai_calls + 1 });
       tx.set(gRef, { hits: global + 1, expires_at: new Date(now + day) });
+      if (imageRequest) tx.set(imageRef, {
+        hits: globalImages + 1, expires_at: new Date(now + day),
+      });
       tx.create(this.root.collection("aiUsage").doc(usageId), {
         id: usageId,
         user_id: job.user_id,
