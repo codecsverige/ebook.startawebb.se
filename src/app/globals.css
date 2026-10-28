@@ -3148,3 +3148,9 @@ html[dir="rtl"] .muted {
 @media(max-width:800px) { .cover-template-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:420px) { .cover-template-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(prefers-reduced-motion:reduce) { .cover-template-card { transition:none; } .cover-template-card:hover { transform:none; } }
+
+.cover-candidate-thumb { display:block; width:100%; max-width:180px; aspect-ratio:2/3; object-fit:cover; border-radius:7px; border:1px solid #cad5e5; margin:10px auto; }
+.offline-warning { border-color:#e9cc8a; background:#fff7e6; color:#684819; }
+.draft-recovery { border-color:#a2bbdf; background:#f3f7ff; }
+.draft-recovery strong { display:block; font-size:15px; margin-bottom:7px; }
+.draft-recovery p { font-size:14px; line-height:1.7; }
