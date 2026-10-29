@@ -32,6 +32,7 @@ import {
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
 import { VisualChapterEditor } from "./visual-chapter-editor";
+import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
@@ -105,6 +106,7 @@ export function Editor({
   const [read, setRead] = useState(false);
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
+  const [readerMode, setReaderMode] = useState(true);
   const visualSelectedRef = useRef("");
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
@@ -2043,7 +2045,16 @@ export function Editor({
                   <Eye size={16} /> {tr(locale, "View the real exported PDF", "معاينة ملف PDF النهائي الحقيقي", "Förhandsgranska den riktiga PDF-filen")}
                 </a>
               )}
-              <div
+              <div className="preview-mode-toggle" role="group" aria-label={tr(locale,"Reader mode","وضع القراءة","Läsläge")}>
+                <button type="button" className={readerMode ? "active" : ""} onClick={()=>setReaderMode(true)}>
+                  {tr(locale,"Section reader","قارئ تفاعلي","Avsnittsläsare")}
+                </button>
+                <button type="button" className={!readerMode ? "active" : ""} onClick={()=>setReaderMode(false)}>
+                  {tr(locale,"Full book","الكتاب كاملًا","Hela boken")}
+                </button>
+              </div>
+              {readerMode && <BookSectionReader book={draft} bookId={id}/>}
+              {!readerMode && <div
                 className={`book-preview theme-${draft.layout_theme || "classic"}`}
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
@@ -2090,7 +2101,7 @@ export function Editor({
                     authorBio={draft.author_bio || ""}
                     image={draft.back_cover_url} />
                 </div>
-              </div>
+              </div>}
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
