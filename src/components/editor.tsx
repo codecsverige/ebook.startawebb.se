@@ -1555,23 +1555,12 @@ export function Editor({
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
               >
-                <div className="preview-cover-pair">
-                  <div className="preview-cover">
-                    <BookCover
-                      title={draft.title}
-                      subtitle={draft.subtitle}
-                      author={draft.author}
-                      style={draft.cover_style}
-                      language={draft.language}
-                      image={draft.use_artwork ? draft.cover_url : null}
-                    />
-                  </div>
-                  <div className="preview-cover">
-                    <BookBackCover title={draft.title} author={draft.author}
-                      style={draft.cover_style} language={draft.language}
-                      blurb={draft.back_blurb || draft.idea}
-                      authorBio={draft.author_bio || ""} />
-                  </div>
+                <div className="preview-cover">
+                  <BookCover
+                    title={draft.title} subtitle={draft.subtitle} author={draft.author}
+                    style={draft.cover_style} language={draft.language}
+                    image={draft.use_artwork ? draft.cover_url : null}
+                  />
                 </div>
                 {draft.dedication && <section className="preview-toc"><h2>{tr(draft.language, "Dedication", "الإهداء", "Dedikation")}</h2><p>{draft.dedication}</p></section>}
                 {draft.preface && <section className="preview-toc"><h2>{tr(draft.language, "Preface", "المقدمة", "Förord")}</h2><Markdown text={draft.preface} /></section>}
@@ -1599,6 +1588,12 @@ export function Editor({
                     )}
                   </article>
                 ))}
+                <div className="preview-cover">
+                  <BookBackCover title={draft.title} author={draft.author}
+                    style={draft.cover_style} language={draft.language}
+                    blurb={draft.back_blurb || draft.idea}
+                    authorBio={draft.author_bio || ""} />
+                </div>
               </div>
               <p className="review-note">{t.reviewNote}</p>
             </section>
