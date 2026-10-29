@@ -18,14 +18,20 @@ export async function withCover(book: Book): Promise<BookWithCover> {
     cover_candidate_url: book.cover_candidate_path
       ? `/api/books/${book.id}/cover?candidate=1&r=${book.revision}`
       : null,
+    back_cover_url: book.back_cover_path
+      ? `/api/books/${book.id}/cover?side=back&r=${book.revision}` : null,
+    back_cover_candidate_url: book.back_cover_candidate_path
+      ? `/api/books/${book.id}/cover?side=back&candidate=1&r=${book.revision}` : null,
   };
 }
 export const takeRate = (key: string, limit: number, seconds = 3600) =>
   studioStore().takeRate(key, limit, seconds);
 export const coverPrefix = (uid: string, bookId: string) =>
   `${STUDIO_PATH}/covers/${createHash("sha256").update(uid).digest("hex")}/${bookId}/`;
-export async function coverArtwork(book: Book, candidate = false) {
-  const imagePath = candidate ? book.cover_candidate_path : book.cover_path;
+export async function coverArtwork(book: Book, candidate = false, side: "front" | "back" = "front") {
+  const imagePath = side === "back"
+    ? (candidate ? book.back_cover_candidate_path : book.back_cover_path)
+    : (candidate ? book.cover_candidate_path : book.cover_path);
   if (!imagePath) return undefined;
   if (!imagePath.startsWith(coverPrefix(book.user_id, book.id)))
     throw new AppError("forbidden", 403);
