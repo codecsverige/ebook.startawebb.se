@@ -443,27 +443,61 @@ export function Editor({
       return {...b,chapters,outline,chapter_count:outline.length};
     });
   }
-  async function importManuscript(file: File) {
-    if (!draft || !active || disabled) return;
-    if (!/\.(txt|md)$/i.test(file.name) || file.size > 450000) {
-      setImportError(tr(locale,"Choose a TXT or Markdown file (max 450 KB).",
-        "اختر ملف TXT أو Markdown حتى 450 كيلوبايت.",
-        "Välj TXT eller Markdown (högst 450 kB)."));return;
+  async function importManuscript(file: File, mode: "chapter" | "book" = "chapter") {
+    if (!draft || disabled || (mode === "chapter" && !active)) return;
+    const docx=/\.docx$/i.test(file.name);
+    const text=/\.(txt|md)$/i.test(file.name);
+    if ((!docx && !text) || file.size > (docx ? 4_000_000 : 450_000)) {
+      setImportError(tr(locale, "Choose a TXT, MD or Word DOCX file under the size limit.",
+        "اختر TXT أو MD أو Word DOCX ضمن الحجم المسموح.",
+        "Välj TXT, MD eller DOCX inom storleksgränsen."));return;
     }
-    const text=(await file.text()).replace(/\r\n?/g,"\n").replace(/\u0000/g,"").trim();
-    if (!text || text.length > 30000) {
-      setImportError(tr(locale,"File must contain 1–30,000 characters.",
-        "يجب أن يحتوي الملف على 1 إلى 30 ألف حرف.",
-        "Filen måste innehålla 1–30 000 tecken."));return;
-    }
-    setImportError("");
-    if (current?.content && !window.confirm(tr(locale,
-      "Replace this chapter with the imported text?","استبدال نص الفصل بالنص المستورد؟",
-      "Ersätt kapitlet med den importerade texten?"))) return;
-    change(b=>({...b,chapters:{...b.chapters,[active.id]:{
-      content:text,summary:b.chapters[active.id]?.summary ||
-      b.outline.find(c=>c.id===active.id)?.summary || text.slice(0,200),
-    }}}));
+    setImportError("");setPending("import");
+    try {
+      const contentType=docx
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "text/plain";
+      const res=await fetch(`/api/books/${id}/import`, {
+        method:"POST",headers:{"Content-Type":contentType},body:file,
+      });
+      const data=await res.json().catch(()=>({error:"invalid_input"}));
+      if(!res.ok)throw new Error(data.error || "invalid_input");
+      const sections=(data.sections||[]) as {title:string;content:string}[];
+      if(!sections.length || sections.length>30)throw new Error("invalid_input");
+      if(mode==="book") {
+        if(!window.confirm(tr(locale,
+          "Replace the book outline and chapters with this imported manuscript? A saved earlier version remains available.",
+          "استبدال فصول الكتاب الحالي بالمخطوط المستورد؟ يمكن استعادة النسخة القديمة.",
+          "Ersätta bokens kapitel med den importerade texten? En äldre version kan återställas.")))return;
+        const outline=sections.map(section=>({
+          id:crypto.randomUUID(),title:section.title.slice(0,160) || tr(locale,"Chapter","الفصل","Kapitel"),
+          summary:(section.content.trim().slice(0,550)||tr(locale,"Imported chapter.","فصل مستورد.","Importerat kapitel.")),
+        }));
+        const chapters=Object.fromEntries(outline.map((item,i)=>[item.id,{
+          content:sections[i].content,
+          summary:sections[i].content.trim().slice(0,750),
+        }]));
+        change(b=>({...b,outline,chapters,chapter_count:outline.length}));
+        setChapterId(outline[0].id);
+        setTab("write");
+      } else {
+        const whole=sections.map(x=>x.content).join("\n\n");
+        if(whole.length>30000)throw new Error("too_large");
+        const target=active!;
+        if(draft.chapters[target.id]?.content && !window.confirm(tr(locale,
+          "Replace the current chapter with imported content?",
+          "استبدال محتوى الفصل الحالي بالنص المستورد؟",
+          "Ersätta det här kapitlet med importerad text?")))return;
+        change(b=>({...b,chapters:{...b.chapters,[target.id]:{
+          content:whole,summary:whole.slice(0,750),
+        }}}));
+      }
+    } catch(e) {
+      setImportError(tr(locale,"Could not import this file. Check its contents and size.",
+        "تعذّر استيراد الملف، تحقق من المحتوى والحجم.",
+        "Kunde inte importera filen. Kontrollera innehåll och storlek."));
+      setError(codeOf(e));
+    } finally{setPending("");}
   }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
@@ -1319,6 +1353,11 @@ export function Editor({
                     ))}
                   </div>
                   <div className="editor-bottom-actions">
+                    <label className="button button-outline">
+                      {tr(locale,"Import entire manuscript (Word/TXT/MD)","استيراد كتاب كامل (Word/TXT/MD)","Importera helt manus (Word/TXT/MD)")}
+                      <input type="file" accept=".txt,.md,.docx" hidden disabled={disabled}
+                        onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file,"book");}}/>
+                    </label>
                     <button type="button" className="button button-outline" disabled={disabled || draft.outline.length >= 30}
                       onClick={() => addChapter()}>
                       <Plus size={17}/>{tr(locale,"Add chapter","إضافة فصل جديد","Lägg till kapitel")}
@@ -1387,9 +1426,9 @@ export function Editor({
                    disabled={disabled || !draft.chapters[draft.outline[draft.outline.findIndex(c => c.id === active?.id)+1]?.id]}
                    onClick={mergeNextChapter}>{tr(locale,"Merge next","دمج مع التالي","Slå ihop nästa")}</button>}
                  <label className="button button-outline button-small">
-                   {tr(locale,"Import TXT / MD","استيراد TXT / MD","Importera TXT / MD")}
-                   <input type="file" accept=".txt,.md,text/plain,text/markdown" hidden disabled={disabled || !active}
-                     onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file);}}/>
+                   {tr(locale,"Import Word / TXT / MD","استيراد Word / TXT / MD","Importera Word / TXT / MD")}
+                   <input type="file" accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden disabled={disabled || !active}
+                     onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file,"chapter");}}/>
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
