@@ -2,7 +2,7 @@ import { generateText, generateImage, Output } from "ai";
 import { FatalError, getWorkflowMetadata } from "workflow";
 import { z } from "zod";
 import { studioStore, studioBucket } from "@/lib/firebase-admin";
-import { coverPrefix } from "@/lib/books";
+import { coverPrefix, illustrationPrefix } from "@/lib/books";
 import { AppError } from "@/lib/http";
 import { availableAiBackends, aiErrorCode, callWithAiFallback } from "@/lib/ai-routing";
 import { resolveAiTextModels } from "@/lib/ai-models";
@@ -249,7 +249,9 @@ export async function createChapter(
 export async function createCover(jobId: string) {
   "use step";
   const { job, book } = await context(jobId);
-  if (job.result_units.cover) return;
+  const variant = job.kind;
+  if (!["cover", "back_cover", "illustration"].includes(variant)) throw new FatalError("invalid_input");
+  if (job.result_units[variant]) return;
   const backends = availableAiBackends("cover");
   if (!backends.length) {
     await persistFailure(jobId, "not_configured");
@@ -264,7 +266,14 @@ export async function createCover(jobId: string) {
     guide: "A restrained, authoritative nonfiction editorial illustration that expresses the actual topic through a clear visual metaphor.",
     ebook: "An elegant contemporary publishing design with a memorable visual concept and simple hierarchy.",
   };
-  const prompt = `Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Author's specific creative direction (prioritize when supplied): ${JSON.stringify(book.cover_direction?.slice(0, 800) || "Choose a surprising visual metaphor, specific to this book's plot or main idea; avoid generic library/book/pen imagery.")}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`;
+  const frontPrompt = `Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Author's specific creative direction (prioritize when supplied): ${JSON.stringify(book.cover_direction?.slice(0, 800) || "Choose a surprising visual metaphor, specific to this book's plot or main idea; avoid generic library/book/pen imagery.")}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`;
+  const chapterText = job.chapter_id ? book.chapters[job.chapter_id]?.content || "" : "";
+  const position = Math.min(job.image_position || 0, chapterText.length);
+  const prompt = variant === "back_cover"
+    ? `Create an original, elegant VERTICAL BOOK BACK COVER background illustration related to this book, coherent in aesthetic and palette with the front. Book: ${JSON.stringify({ title: book.title, kind: book.kind, idea: book.idea.slice(0, 500), blurb: book.back_blurb?.slice(0, 800), style: book.cover_style, frontCreativeDirection: book.cover_direction?.slice(0, 400) })}. Avoid any lettering, typography, symbols resembling letters, fake barcode, logos, watermarks. Keep center and bottom areas quiet and high-contrast so the real back-cover blurb can be overlaid by the app. Rich original visual art; no words.`
+    : variant === "illustration"
+      ? `Create ONE original high-quality landscape BOOK INTERIOR illustration, NOT a cover or screenshot. Context: ${JSON.stringify({ title: book.title, kind: book.kind, idea: book.idea.slice(0, 380), chapter: book.outline.find(c => c.id === job.chapter_id)?.title, nearbyText: chapterText.slice(Math.max(0, position - 700), position + 400), requestedScene: job.image_prompt?.slice(0, 700) })}. Be consistent with the manuscript, no random unrelated subject. No letters, no text, captions, watermarks or logos. Suitable for professional printed and digital books.`
+      : frontPrompt;
   let result: {
     image: { uint8Array: Uint8Array; mediaType: string };
     usage: { inputTokens: number; outputTokens: number };
@@ -275,7 +284,7 @@ export async function createCover(jobId: string) {
       const model = backend === "gateway"
         ? process.env.AI_GATEWAY_IMAGE_MODEL!.trim()
         : "gpt-image-1-mini";
-      const usageId = await reserve(jobId, "cover:" + backend,
+      const usageId = await reserve(jobId, variant + ":" + backend,
         backend === "gateway" ? model : "openai/" + model);
       if (backend === "direct") {
         const generated = await generateDirectCover(prompt, model);
@@ -305,7 +314,7 @@ export async function createCover(jobId: string) {
     });
   } catch (error) {
     const code = aiErrorCode(error);
-    console.warn("cover_request_failed", { jobId, code });
+    console.warn("image_request_failed", { jobId, variant, code });
     await persistFailure(jobId, code);
     throw new FatalError(code);
   }
@@ -317,7 +326,9 @@ export async function createCover(jobId: string) {
   }
   const ext = file.mediaType === "image/jpeg" ? "jpg" :
     file.mediaType === "image/webp" ? "webp" : "png";
-  const path = `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
+  const path = variant === "illustration"
+    ? `${illustrationPrefix(book.user_id, book.id)}${job.request_id}.${ext}`
+    : `${coverPrefix(book.user_id, book.id)}${jobId}.${ext}`;
   await studioBucket()
     .file(path)
     .save(Buffer.from(file.uint8Array), {
@@ -327,7 +338,9 @@ export async function createCover(jobId: string) {
         cacheControl: "private, no-store",
       },
     });
-  await commit(jobId, { cover_path: path }, 95);
+  await commit(jobId, variant === "back_cover" ? { back_cover_path: path } :
+    variant === "illustration" ? { illustration_path: path } :
+    { cover_path: path }, 95);
   // Accounting must never turn a successfully saved cover into a failure.
   await studioStore().recordUsage(
     result.usageId,
