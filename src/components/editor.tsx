@@ -1260,12 +1260,22 @@ export function Editor({
                               [outline[i], outline[i + 1]] = [outline[i + 1], outline[i]];
                               return { ...b, outline };
                             })}><ArrowDown size={16} /></button>
-                          {draft.chapters[c.id] && <Check className="chapter-check" size={17} />}
+                          <button type="button" disabled={disabled || draft.outline.length >= 30}
+  title={tr(locale,"Add chapter after","إضافة فصل بعده","Lägg till efter")}
+  onClick={() => addChapter(c.id)}><Plus size={16}/></button>
+<button type="button" disabled={disabled || draft.outline.length <= 1}
+  title={tr(locale,"Delete chapter","حذف الفصل","Ta bort kapitel")}
+  onClick={() => deleteChapter(c.id)}><Trash2 size={16}/></button>
+{draft.chapters[c.id] && <Check className="chapter-check" size={17} />}
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="editor-bottom-actions">
+                    <button type="button" className="button button-outline" disabled={disabled || draft.outline.length >= 30}
+                      onClick={() => addChapter()}>
+                      <Plus size={17}/>{tr(locale,"Add chapter","إضافة فصل جديد","Lägg till kapitel")}
+                    </button>
                     {!draft.chapters[draft.outline[0].id] && (
                       <button
                         className="button button-outline"
@@ -1318,7 +1328,25 @@ export function Editor({
                   ))}
                 </select>
               </label>
-              <div className="chapter-toolbar">
+              <div className="chapter-author-actions">
+                 <button type="button" className="button button-outline button-small"
+                   disabled={disabled || draft.outline.length >= 30} onClick={() => addChapter(active?.id)}>
+                   <Plus size={15}/>{tr(locale,"New chapter","فصل جديد","Nytt kapitel")}
+                 </button>
+                 {current && <button type="button" className="button button-outline button-small"
+                   disabled={disabled || draft.outline.length >= 30} onClick={splitChapter}>
+                   {tr(locale,"Split at cursor","تقسيم عند المؤشر","Dela vid markören")}</button>}
+                 {current && <button type="button" className="button button-outline button-small"
+                   disabled={disabled || !draft.chapters[draft.outline[draft.outline.findIndex(c => c.id === active?.id)+1]?.id]}
+                   onClick={mergeNextChapter}>{tr(locale,"Merge next","دمج مع التالي","Slå ihop nästa")}</button>}
+                 <label className="button button-outline button-small">
+                   {tr(locale,"Import TXT / MD","استيراد TXT / MD","Importera TXT / MD")}
+                   <input type="file" accept=".txt,.md,text/plain,text/markdown" hidden disabled={disabled || !active}
+                     onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file);}}/>
+                 </label>
+                 {importError && <p className="error-message" role="alert">{importError}</p>}
+               </div>
+               <div className="chapter-toolbar">
                 <div className="segmented">
                   <button
                     className={!read ? "selected" : ""}
@@ -1684,6 +1712,24 @@ export function Editor({
                       {tr(locale, "Preface (optional)", "المقدمة (اختيارية)", "Förord (valfritt)")}
                       <textarea rows={5} maxLength={5000} disabled={disabled} value={draft.preface || ""}
                         onChange={(e) => change((b) => ({ ...b, preface: e.target.value }))} />
+                    </label>
+                    <label>{tr(locale, "Copyright page", "صفحة حقوق النشر", "Upphovsrätt")}
+                      <textarea rows={3} maxLength={1000} disabled={disabled}
+                        value={draft.copyright_notice || ""}
+                        placeholder={tr(locale,"© Author. All rights reserved.","© المؤلف. جميع الحقوق محفوظة.","© Författaren. Alla rättigheter förbehållna.")}
+                        onChange={e=>change(b=>({...b,copyright_notice:e.target.value}))}/>
+                    </label>
+                    <label>{tr(locale, "Acknowledgments", "الشكر والتقدير", "Tack")}
+                      <textarea rows={3} maxLength={5000} disabled={disabled} value={draft.acknowledgments || ""}
+                        onChange={e=>change(b=>({...b,acknowledgments:e.target.value}))}/>
+                    </label>
+                    <label>{tr(locale, "Interior layout style", "نمط صفحات الكتاب", "Inlagans stil")}
+                      <select disabled={disabled} value={draft.layout_theme || "classic"}
+                        onChange={e=>change(b=>({...b,layout_theme:e.target.value as "classic"|"modern"|"literary"}))}>
+                        <option value="classic">{tr(locale,"Classic","كلاسيكي","Klassisk")}</option>
+                        <option value="modern">{tr(locale,"Modern","حديث","Modern")}</option>
+                        <option value="literary">{tr(locale,"Literary","أدبي","Litterär")}</option>
+                      </select>
                     </label>
                   </div>
                   <button
