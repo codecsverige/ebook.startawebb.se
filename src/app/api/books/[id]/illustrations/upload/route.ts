@@ -11,7 +11,7 @@ const MAX_IMAGE = 3_000_000;
 const extensions: Record<string, string> = {
   "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp",
 };
-export function validImageSignature(bytes: Buffer, mime: string): boolean {
+function validImageSignature(bytes: Buffer, mime: string): boolean {
   if (mime === "image/png") return bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
   if (mime === "image/jpeg") return bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex"));
   if (mime === "image/webp") return bytes.toString("ascii", 0, 4) === "RIFF" &&
