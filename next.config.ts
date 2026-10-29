@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/books/*/export": [
       "./node_modules/@sparticuz/chromium/bin/**",
+      "./public/illustrations/**",
       "./node_modules/@fontsource/noto-naskh-arabic/files/*arabic-400-normal.woff2",
       "./node_modules/@fontsource-variable/inter/files/*latin-wght-normal.woff2",
     ],
