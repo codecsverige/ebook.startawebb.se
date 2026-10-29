@@ -13,7 +13,7 @@ type Props = {
   bookId: string;
   disabled?: boolean;
   onChange: (value: string) => void;
-  onInsertImage: (position: number) => void;
+  onInsertImage: (position: number, canonicalContent: string) => void;
   onSelection?: (text: string) => void;
 };
 
@@ -105,7 +105,7 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
         ["ul",tr(locale,"List","قائمة","Lista")],
       ] as const).map(([type,label])=><button key={type} type="button" disabled={disabled}
         onClick={()=>add(index,type)}>{label}</button>)}
-      <button type="button" disabled={disabled} onClick={()=>{setMenuAt(null);setInsertDraft(null);onInsertImage(at(index));}}>
+      <button type="button" disabled={disabled} onClick={()=>{setMenuAt(null);setInsertDraft(null);onInsertImage(at(index),serializeVisualBlocks(blocks));}}>
         {tr(locale,"Image / logo","صورة أو شعار","Bild / logotyp")}
       </button>
       <button type="button" disabled={disabled} onClick={()=>add(index,"divider")}>
