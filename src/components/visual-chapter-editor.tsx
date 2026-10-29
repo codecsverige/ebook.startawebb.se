@@ -207,31 +207,31 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
           contentEditable={!disabled} suppressContentEditableWarning
           spellCheck
           dir="auto"
-          onFocus={()=>setActive(index)}
+          onFocus={()=>{setActive(index);setSelectedBlock(index);}}
           onBlur={e=>{setActive(null); const value=nodeMarkdown(e.currentTarget);
             if(value) save(value);
             else if(blocks.length>1) apply(index,[]);}}
           >{body}</Tag>;
       };
-      if (block.type === "heading") return <div key={index} className="visual-block">
+      if (block.type === "heading") return <div key={index} className={"visual-block visual-edit-block"+(selectedBlock===index?" is-selected":"")} onClick={()=>setSelectedBlock(index)}>
         {editable("h3",inlineNodes(block.text),text=>apply(index,[{...block,text}]))}
-        {menu(index+1)}
+        {controls(index,block)}{menu(index+1)}
       </div>;
-      if (block.type === "quote" || block.type === "note") return <div key={index} className={"visual-block visual-"+block.type}>
+      if (block.type === "quote" || block.type === "note") return <div key={index} className={"visual-block visual-"+block.type+" visual-edit-block"+(selectedBlock===index?" is-selected":"")} onClick={()=>setSelectedBlock(index)}>
         {editable("p",inlineNodes(block.text),text=>apply(index,[{...block,text}]))}
-        {menu(index+1)}
+        {controls(index,block)}{menu(index+1)}
       </div>;
-      if (block.type === "paragraph") return <div key={index} className="visual-block">
+      if (block.type === "paragraph") return <div key={index} className={"visual-block visual-edit-block"+(selectedBlock===index?" is-selected":"")} onClick={()=>setSelectedBlock(index)}>
         {editable("p",inlineNodes(block.text),text=>apply(index,[{...block,text}]))}
-        {menu(index+1)}
+        {controls(index,block)}{menu(index+1)}
       </div>;
-      return <div key={index} className="visual-block">
+      return <div key={index} className={"visual-block visual-edit-block"+(selectedBlock===index?" is-selected":"")} onClick={()=>setSelectedBlock(index)}>
         {(block.items).map((item,i)=> <div key={i} className="visual-list-row">
           <span aria-hidden="true">{block.type === "ol" ? i+1+"." : "•"}</span>
           {editable("div",inlineNodes(item),text=>{
             const items=[...block.items];items[i]=text;apply(index,[{...block,items}]);})}
         </div>)}
-        {menu(index+1)}
+        {controls(index,block)}{menu(index+1)}
       </div>;
     })}
     {active!==null && <div className="visual-selected-indicator">{tr(locale,"Editing paragraph","تحرير الفقرة","Redigerar stycke")} {active+1}</div>}
