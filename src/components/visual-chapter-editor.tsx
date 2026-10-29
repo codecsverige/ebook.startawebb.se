@@ -15,6 +15,8 @@ type Props = {
   onChange: (value: string) => void;
   onInsertImage: (position: number, canonicalContent: string) => void;
   onSelection?: (text: string) => void;
+  onRemoveImage?: (id: string) => void;
+  onSaveImage?: (id: string, size: "small" | "medium" | "full", caption: string) => void;
 };
 
 function encodeBlock(block: ManuscriptBlock): string {
@@ -52,10 +54,32 @@ function inlineNodes(value: string): ReactNode {
       : part.startsWith("*") && part.endsWith("*")
         ? <em key={i}>{part.slice(1,-1)}</em> : part);
 }
+function InlineImageSettings({id, asset, locale, disabled, onSave}: {
+  id: string; asset: Illustration; locale: Locale; disabled: boolean;
+  onSave: (id: string, size: "small" | "medium" | "full", caption: string) => void;
+}) {
+  const [size,setSize]=useState(asset.size);
+  const [caption,setCaption]=useState(asset.caption);
+  return <div className="visual-image-settings">
+    <label>{tr(locale,"Image size","حجم الصورة","Bildstorlek")}
+      <select disabled={disabled} value={size} onChange={e=>setSize(e.target.value as typeof size)}>
+        <option value="small">{tr(locale,"Small","صغير","Liten")}</option>
+        <option value="medium">{tr(locale,"Medium","متوسط","Mellan")}</option>
+        <option value="full">{tr(locale,"Full width","عرض كامل","Full bredd")}</option>
+      </select>
+    </label>
+    <label>{tr(locale,"Caption","وصف أسفل الصورة","Bildtext")}
+      <input disabled={disabled} maxLength={240} value={caption} onChange={e=>setCaption(e.target.value)}/>
+    </label>
+    <button type="button" disabled={disabled || (size===asset.size && caption===asset.caption)}
+      onClick={()=>onSave(id,size,caption)}>{tr(locale,"Save image settings","حفظ إعدادات الصورة","Spara bildinställningar")}</button>
+  </div>;
+}
 export function VisualChapterEditor({content, chapterId, illustrations, bookId, locale="en", disabled=false,
-  onChange, onInsertImage, onSelection}: Props) {
+  onChange, onInsertImage, onSelection, onRemoveImage, onSaveImage}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
+  const [selectedBlock,setSelectedBlock] = useState<number | null>(null);
   const [menuAt, setMenuAt] = useState<number | null>(null);
   const [insertDraft, setInsertDraft] = useState<{ index: number; type: "paragraph" | "heading" | "quote" | "note" | "ul" } | null>(null);
   const [insertText, setInsertText] = useState("");
