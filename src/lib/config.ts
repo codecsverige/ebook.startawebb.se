@@ -16,9 +16,12 @@ export function configuration() {
       (process.env.EBOOK_FIREBASE_CLIENT_EMAIL &&
         process.env.EBOOK_FIREBASE_PRIVATE_KEY)
     ),
-    // Only OpenAI API can generate text or images. Gateway is intentionally disconnected.
-    ai: !!process.env.OPENAI_API_KEY?.trim(),
-    artwork: !!process.env.OPENAI_API_KEY?.trim(),
+    // Use the existing Vercel AI Gateway first; the direct OpenAI project
+    // remains a completely separate fallback if the Gateway request fails.
+    ai: !!(process.env.AI_GATEWAY_MODEL?.trim() ||
+      process.env.OPENAI_API_KEY?.trim()),
+    artwork: !!(process.env.AI_GATEWAY_IMAGE_MODEL?.trim() ||
+      process.env.OPENAI_API_KEY?.trim()),
     chatgpt: /^oaiapp_[A-Za-z0-9_-]{8,}$/.test(process.env.OPENAI_SIWC_CLIENT_ID || ""),
     // Payments stay disabled until the owner explicitly enables them.
     billing: process.env.EBOOK_PAYMENTS_ENABLED === "true" && !!(
