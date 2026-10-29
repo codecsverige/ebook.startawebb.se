@@ -15,6 +15,7 @@ import {
 import type { Book } from "./domain";
 import { escapeHtml as esc, markdownHtml } from "./export-text";
 import { parseManuscript, stripInlineMarkdown } from "./manuscript";
+import type { ExportIllustration } from "./illustration-export";
 
 const palettes: Record<
   Book["cover_style"],
@@ -42,6 +43,8 @@ const palettes: Record<
 export async function pdfHtml(
   book: Book,
   artwork?: { data: Uint8Array; type: string },
+  images: Record<string, ExportIllustration> = {},
+  backArtwork?: { data: Uint8Array; type: string },
 ) {
   const [latin, arabic] = await Promise.all([
     readFile(
@@ -68,6 +71,11 @@ export async function pdfHtml(
     ? `<section class="front-matter"><h2>${dedicationLabel}</h2><p>${esc(book.dedication)}</p></section>` : "") +
     (book.preface?.trim()
     ? `<section class="front-matter"><h2>${prefaceLabel}</h2>${markdownHtml(book.preface)}</section>` : "");
+  const imageMarkup = Object.fromEntries(Object.entries(images).map(([id, image]) => {
+    const src = `data:${image.type};base64,${Buffer.from(image.data).toString("base64")}`;
+    return [id, `<figure class="interior-image figure-${image.meta.size}"><img src="${src}" alt="${esc(image.meta.alt)}">${image.meta.caption ? `<figcaption>${esc(image.meta.caption)}</figcaption>` : ""}</figure>`];
+  }));
+  const rearImage = backArtwork ? `<img class="back-image" src="data:${backArtwork.type};base64,${Buffer.from(backArtwork.data).toString("base64")}" alt="">` : "";
   const backBlurb = book.back_blurb?.trim() || book.idea;
   const authorBio = book.author_bio?.trim() || "";
   const image =
@@ -77,12 +85,14 @@ export async function pdfHtml(
   return `<!doctype html><html lang="${book.language}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>
   @font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}
   @font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}
-  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}.cover.has-artwork:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0b0f1e90 0%,#15182344 45%,#0b0f1ea8 100%);z-index:1}.cover.has-artwork h1,.cover.has-artwork p,.cover.has-artwork small{z-index:2;color:#fffdf6}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}.front-matter{break-before:page;white-space:pre-wrap}.back-cover{break-before:page;height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:14mm;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}.back-cover h2{font-size:19pt;margin:9mm 0 7mm;overflow-wrap:anywhere}.back-cover .blurb{font-size:${rtl ? 12 : 10}pt;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:94mm;overflow:hidden}.back-cover .author-bio{border-top:1px solid ${colors.accent};padding-top:4mm;font-size:9pt;white-space:pre-wrap;max-height:34mm;overflow:hidden}.back-cover small{display:block;letter-spacing:2px}
-  </style></head><body><section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}<section class="back-cover"><div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section></body></html>`;
+  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}.cover.has-artwork:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0b0f1e90 0%,#15182344 45%,#0b0f1ea8 100%);z-index:1}.cover.has-artwork h1,.cover.has-artwork p,.cover.has-artwork small{z-index:2;color:#fffdf6}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}.front-matter{break-before:page;white-space:pre-wrap}.back-cover{break-before:page;height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:14mm;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}.back-cover h2{font-size:19pt;margin:9mm 0 7mm;overflow-wrap:anywhere}.back-cover .blurb{font-size:${rtl ? 12 : 10}pt;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:94mm;overflow:hidden}.back-cover .author-bio{border-top:1px solid ${colors.accent};padding-top:4mm;font-size:9pt;white-space:pre-wrap;max-height:34mm;overflow:hidden}.back-cover small{display:block;letter-spacing:2px}.back-cover.with-artwork{color:#fffdf6}.back-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.6}.back-cover.with-artwork:before{content:"";position:absolute;inset:0;background:#10192665;z-index:1}.back-cover>div,.back-cover>small{position:relative;z-index:2}.interior-image{text-align:center;margin:7mm auto;break-inside:avoid}.interior-image img{max-width:100%;max-height:105mm;object-fit:contain}.interior-image.figure-medium{max-width:78%}.interior-image.figure-small{max-width:42%}.interior-image figcaption{font-size:8pt;color:#68728a;line-height:1.5}.scene-divider{text-align:center;margin:9mm 0;letter-spacing:4pt;break-inside:avoid}
+  </style></head><body><section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section></body></html>`;
 }
 export async function makePdf(
   book: Book,
   artwork?: { data: Uint8Array; type: string },
+  images: Record<string, ExportIllustration> = {},
+  backArtwork?: { data: Uint8Array; type: string },
 ) {
   const [{ default: chromium }, { default: puppeteer }] = await Promise.all([
     import("@sparticuz/chromium"),
@@ -103,7 +113,7 @@ export async function makePdf(
         void r.continue();
       else void r.abort();
     });
-    await page.setContent(await pdfHtml(book, artwork), {
+    await page.setContent(await pdfHtml(book, artwork, images, backArtwork), {
       waitUntil: "load",
       timeout: 30_000,
     });
@@ -125,6 +135,8 @@ export async function makePdf(
 export async function makeDocx(
   book: Book,
   artwork?: { data: Uint8Array; type: string },
+  images: Record<string, ExportIllustration> = {},
+  backArtwork?: { data: Uint8Array; type: string },
 ) {
   const rtl = book.language === "ar";
   const font = rtl ? "Arial" : "Calibri";
@@ -213,6 +225,26 @@ export async function makeDocx(
       }),
     );
     for (const block of parseManuscript(book.chapters[c.id]?.content || "")) {
+      if (block.type === "illustration") {
+        const image = images[block.id];
+        if (!image) continue;
+        if (["image/png", "image/jpeg"].includes(image.type)) {
+          const width = image.meta.size === "small" ? 145 : image.meta.size === "medium" ? 275 : 390;
+          children.push(new Paragraph({ alignment: AlignmentType.CENTER,
+            children: [new ImageRun({ data: image.data,
+              type: image.type === "image/png" ? "png" : "jpg",
+              transformation: { width, height: Math.round(width * 0.567) },
+            })] }));
+        }
+        if (image.meta.caption) children.push(new Paragraph({ ...base,
+          alignment: AlignmentType.CENTER, children: [text(image.meta.caption)] }));
+        continue;
+      }
+      if (block.type === "divider") {
+        children.push(new Paragraph({ alignment: AlignmentType.CENTER,
+          spacing: { before: 260, after: 260 }, children: [text("✦  ✦  ✦")] }));
+        continue;
+      }
       if (block.type === "heading") {
         children.push(new Paragraph({
           ...base,
@@ -236,6 +268,12 @@ export async function makeDocx(
         }));
       }
     }
+  }
+  if (backArtwork && ["image/png", "image/jpeg"].includes(backArtwork.type)) {
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ alignment: AlignmentType.CENTER,
+      children: [new ImageRun({ data: backArtwork.data, type: backArtwork.type === "image/png" ? "png" : "jpg",
+        transformation: { width: 340, height: 440 } })] }));
   }
   // The EPUB and PDF include a distinct back cover; Word includes the same editable text.
   children.push(new Paragraph({ children: [new PageBreak()] }),
