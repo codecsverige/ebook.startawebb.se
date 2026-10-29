@@ -340,7 +340,7 @@ export function Editor({
     } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
   }
-  async function uploadIllustration(file: File) {
+  async function uploadIllustration(file: File, asLogo = false) {
     if (!draft || !active || !current || disabled) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
         file.size > 3_000_000) { setError("invalid_input"); return; }
@@ -352,7 +352,8 @@ export function Editor({
       const params = new URLSearchParams({
         revision: String(draft.revision + (wasDirty ? 1 : 0)),
         chapter_id: active.id, position: String(position),
-        size: imageSize, caption: imageCaption,
+        size: asLogo ? "small" : imageSize,
+        caption: asLogo ? (imageCaption.trim() || tr(locale, "Logo", "الشعار", "Logotyp")) : imageCaption,
       });
       const response = await fetch(`/api/books/${id}/illustrations/upload?${params}`, {
         method: "POST", headers: { "Content-Type": file.type }, body: file,
@@ -1586,6 +1587,12 @@ export function Editor({
                     {tr(locale, "Upload an image (PNG, JPG, WebP · max 3 MB)", "ارفع صورة من جهازك (PNG أو JPG أو WebP · حتى 3 ميغابايت)", "Ladda upp bild (PNG, JPG, WebP · max 3 MB)")}
                     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
                       onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
+                  </label>
+                  <label className="cover-upload-label">
+                    {tr(locale,"Or upload a company logo (transparent PNG recommended)","أو ارفع شعار الشركة (يُفضّل PNG شفاف)","Eller ladda upp företagets logotyp (helst transparent PNG)")}
+                    <input type="file" accept="image/png,image/jpeg,image/webp"
+                      disabled={disabled || !book.unlocked}
+                      onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void uploadIllustration(file,true);}}/>
                   </label>
                   <button type="button" className="button button-outline button-small"
                     disabled={disabled || !current}
