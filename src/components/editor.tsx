@@ -572,7 +572,7 @@ export function Editor({
   }
   async function decideCoverSuggestion(accept: boolean, side: "front" | "back" = "front") {
     if (!(side === "back" ? book?.back_cover_candidate_path : book?.cover_candidate_path) || disabled) return;
-    let revision = book.revision;
+    let revision = book!.revision;
     if (dirtyRef.current) {
       if (!(await save())) return;
       revision++;
