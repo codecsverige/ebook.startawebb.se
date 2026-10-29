@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { parseManuscript } from "@/lib/manuscript";
+import type { Illustration } from "@/lib/domain";
 
 function inline(value: string) {
   return value.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, i) => {
@@ -10,10 +11,25 @@ function inline(value: string) {
     return <Fragment key={i}>{part}</Fragment>;
   });
 }
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, illustrations, bookId }: {
+  text: string; illustrations?: Record<string, Illustration>; bookId?: string;
+}) {
   return (
     <div className="manuscript">
       {parseManuscript(text).map((block, i) => {
+        if (block.type === "divider")
+          return <div key={i} className="scene-divider" aria-hidden="true">✦ &nbsp; ✦ &nbsp; ✦</div>;
+        if (block.type === "illustration") {
+          const asset = illustrations?.[block.id];
+          if (!asset || !bookId) return null;
+          const src = asset.source === "library" && asset.preset
+            ? `/illustrations/${asset.preset}.png`
+            : `/api/books/${bookId}/illustrations/${asset.id}`;
+          return <figure key={i} className={`manuscript-figure figure-${asset.size}`}>
+            <img src={src} alt={asset.alt || asset.caption} loading="lazy" />
+            {asset.caption && <figcaption>{asset.caption}</figcaption>}
+          </figure>;
+        }
         if (block.type === "heading")
           return block.level >= 3
             ? <h4 key={i}>{inline(block.text)}</h4>

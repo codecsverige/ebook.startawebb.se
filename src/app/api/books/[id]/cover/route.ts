@@ -11,7 +11,8 @@ export async function GET(
   try {
     const { user } = await requireUser(),
       { id } = await ctx.params;
-    const artwork = await coverArtwork(await ownedBook(id, user.id), new URL(request.url).searchParams.get("candidate") === "1");
+    const params = new URL(request.url).searchParams;
+    const artwork = await coverArtwork(await ownedBook(id, user.id), params.get("candidate") === "1", params.get("side") === "back" ? "back" : "front");
     if (!artwork) throw new AppError("not_found", 404);
     return new Response(artwork.data, {
       headers: {
@@ -38,6 +39,7 @@ export async function POST(
       request,
       z.object({
         action: z.enum(["accept", "reject"]),
+        side: z.enum(["front", "back"]).default("front"),
         revision: z.number().int().nonnegative(),
       }),
       500,
@@ -45,7 +47,7 @@ export async function POST(
     return json({
       book: await withCover(
         await studioStore().decideCoverCandidate(
-          user.id, id, input.revision, input.action === "accept"
+          user.id, id, input.revision, input.action === "accept", input.side
         )
       ),
     });

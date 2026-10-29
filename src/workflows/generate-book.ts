@@ -14,7 +14,7 @@ export async function generateBook(jobId: string) {
   try {
     const plan = await loadPlan(jobId);
     if (plan.kind === "outline") await createOutline(jobId);
-    else if (plan.kind === "cover") await createCover(jobId);
+    else if (["cover", "back_cover", "illustration"].includes(plan.kind)) await createCover(jobId);
     else {
       for (let i = 0; i < plan.chapters.length; i++) {
         await createChapter(

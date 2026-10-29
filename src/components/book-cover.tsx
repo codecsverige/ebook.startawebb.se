@@ -48,13 +48,14 @@ export function BookCover({
  * It is part of the book, not a claimed print-ready wrap/spine.
  */
 export function BookBackCover({
-  style = "cobalt", language = "en", title, author = "", blurb = "", authorBio = "",
+  style = "cobalt", language = "en", title, author = "", blurb = "", authorBio = "", image = null,
 }: {
   style?: string; language?: string; title: string; author?: string;
-  blurb?: string; authorBio?: string;
+  blurb?: string; authorBio?: string; image?: string | null;
 }) {
   return (
-    <div className={`book-cover cover-${style} cover-back`} dir={language === "ar" ? "rtl" : "ltr"} lang={language}>
+    <div className={`book-cover cover-${style} cover-back ${image ? "has-artwork" : ""}`} dir={language === "ar" ? "rtl" : "ltr"} lang={language}>
+      {image && <img className="cover-art" src={image} alt="" />}
       <div className="cover-grain" />
       <div className="cover-orbit orbit-one" />
       <div className="cover-back-content">

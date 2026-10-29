@@ -4,6 +4,7 @@ import { ownedBook, takeRate, coverArtwork } from "@/lib/books";
 import { isComplete, filename } from "@/lib/domain";
 import { makePdf, makeDocx } from "@/lib/export";
 import { makeEpub } from "@/lib/epub";
+import { exportIllustrations } from "@/lib/illustration-export";
 import { apiError, AppError } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -24,13 +25,17 @@ export async function GET(
     if (job && ["queued", "running"].includes(job.status))
       throw new AppError("busy", 409);
     const preview = format === "pdf" && new URL(request.url).searchParams.get("preview") === "1";
-    const artwork = book.use_artwork ? await coverArtwork(book) : undefined;
+    const [artwork, backArtwork, images] = await Promise.all([
+      book.use_artwork ? coverArtwork(book) : Promise.resolve(undefined),
+      book.back_cover_path ? coverArtwork(book, false, "back") : Promise.resolve(undefined),
+      exportIllustrations(book),
+    ]);
     const data =
       format === "pdf"
-        ? await makePdf(book, artwork)
+        ? await makePdf(book, artwork, images, backArtwork)
         : format === "docx"
-          ? await makeDocx(book, artwork)
-          : makeEpub(book, artwork);
+          ? await makeDocx(book, artwork, images, backArtwork)
+          : makeEpub(book, artwork, images, backArtwork);
     return new Response(new Uint8Array(data), {
       headers: {
         "Content-Type":

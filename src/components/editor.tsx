@@ -23,6 +23,8 @@ import {
   List as ListIcon,
   Maximize2,
   Minimize2,
+  ImagePlus,
+  SeparatorHorizontal,
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
@@ -99,6 +101,13 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [showIllustrations, setShowIllustrations] = useState(false);
+  const [imageCaption, setImageCaption] = useState("");
+  const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageSize, setImageSize] = useState<"small" | "medium" | "full">("medium");
+  const [imagePlacement, setImagePlacement] = useState<"cursor" | "start" | "end">("cursor");
+  const cursorRef = useRef(0);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [pending, setPending] = useState("");
@@ -289,6 +298,87 @@ export function Editor({
     dirtyRef.current = true;
     setDirty(true);
   }
+  const imagePosition = (text: string) => imagePlacement === "start" ? 0 :
+    imagePlacement === "end" ? text.length : Math.min(cursorRef.current, text.length);
+  function addDivider() {
+    if (!active || !current || disabled) return;
+    const pos = imagePosition(current.content);
+    change(b => {
+      const ch = b.chapters[active.id];
+      const content = ch.content.slice(0, pos) + "\n\n***\n\n" + ch.content.slice(pos);
+      return content.length <= 30000 ? { ...b, chapters: {
+        ...b.chapters, [active.id]: { ...ch, content },
+      }} : b;
+    });
+  }
+  async function insertLibrary(preset: "mountain" | "botanical" | "stars" | "waves") {
+    if (!draft || !active || !current || disabled) return;
+    const position = imagePosition(current.content);
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const d = await request<{ book: BookWithCover }>(`/api/books/${id}/illustrations`, {
+        method: "POST", body: JSON.stringify({
+          revision: draft.revision + (wasDirty ? 1 : 0),
+          chapter_id: active.id, position, preset,
+          size: imageSize, caption: imageCaption,
+        }),
+      });
+      setBook(d.book); setDraft(d.book);
+      dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
+    } catch (e) { setError(codeOf(e)); }
+    finally { setPending(""); }
+  }
+  async function uploadIllustration(file: File) {
+    if (!draft || !active || !current || disabled) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+        file.size > 3_000_000) { setError("invalid_input"); return; }
+    const position = imagePosition(current.content);
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const params = new URLSearchParams({
+        revision: String(draft.revision + (wasDirty ? 1 : 0)),
+        chapter_id: active.id, position: String(position),
+        size: imageSize, caption: imageCaption,
+      });
+      const response = await fetch(`/api/books/${id}/illustrations/upload?${params}`, {
+        method: "POST", headers: { "Content-Type": file.type }, body: file,
+      });
+      const payload = await response.json().catch(() => ({ error: "service_error" }));
+      if (!response.ok) throw new Error(payload.error || "service_error");
+      setBook(payload.book); setDraft(payload.book);
+      dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
+    } catch (e) { setError(e instanceof Error ? e.message : "service_error"); }
+    finally { setPending(""); }
+  }
+  async function changeExistingImage(imageId: string, remove = false) {
+    const illustration = draft?.illustrations?.[imageId];
+    if (!illustration || disabled) return;
+    if (remove && !window.confirm(tr(locale,
+      "Remove this illustration from the current book? Previous saved versions will keep it.",
+      "حذف هذه الصورة من النسخة الحالية؟ ستبقى في الإصدارات القديمة المحفوظة.",
+      "Ta bort bilden från aktuell bok? Tidigare versioner behåller den."))) return;
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const updated = imageEdits[imageId];
+      const result = await request<{ book: BookWithCover }>(
+        `/api/books/${id}/illustrations/${imageId}`, {
+          method: remove ? "DELETE" : "PATCH",
+          body: JSON.stringify({ revision: draft!.revision + (wasDirty ? 1 : 0),
+            ...(!remove ? { caption: updated?.caption ?? illustration.caption,
+              size: updated?.size ?? illustration.size } : {}) }),
+        });
+      setBook(result.book); setDraft(result.book);
+      dirtyRef.current = false; setDirty(false);
+      setImageEdits(state => { const next = { ...state }; delete next[imageId]; return next; });
+    } catch (e) { setError(codeOf(e)); }
+    finally { setPending(""); }
+  }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
     const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
@@ -392,6 +482,11 @@ export function Editor({
       !window.confirm(t.regenerateConfirm)
     )
       return;
+    if (kind === "illustration" && (!chapter || !draft.chapters[chapter] || imagePrompt.trim().length < 10)) {
+      setError("invalid_input"); return;
+    }
+    const imageInsertPosition = kind === "illustration" && chapter ?
+      imagePosition(draft.chapters[chapter].content) : 0;
     if (dirtyRef.current && !(await save())) return;
     // A lost HTTP response must not trigger a second (billable) AI job.
     // Reuse the same request ID on uncertain network errors, even after reload.
@@ -410,6 +505,10 @@ export function Editor({
           kind,
           chapter_id: chapter,
           request_id: requestId,
+          ...(kind === "illustration" ? {
+            image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
+            image_position: imageInsertPosition, image_size: imageSize,
+          } : {}),
         }),
       });
       try { sessionStorage.removeItem(requestKey); } catch {}
@@ -497,9 +596,9 @@ export function Editor({
       setPending("");
     }
   }
-  async function decideCoverSuggestion(accept: boolean) {
-    if (!book?.cover_candidate_path || disabled) return;
-    let revision = book.revision;
+  async function decideCoverSuggestion(accept: boolean, side: "front" | "back" = "front") {
+    if (!(side === "back" ? book?.back_cover_candidate_path : book?.cover_candidate_path) || disabled) return;
+    let revision = book!.revision;
     if (dirtyRef.current) {
       if (!(await save())) return;
       revision++;
@@ -509,7 +608,7 @@ export function Editor({
     try {
       const { book: updated } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/cover`,
-        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision }) },
+        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision, side }) },
       );
       setBook(updated);
       setDraft(updated);
@@ -1172,6 +1271,71 @@ export function Editor({
                   </button>
                 )}
               </div>
+              {current && (
+                <div className="illustration-toolbar">
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled || !book.unlocked}
+                    onClick={() => setShowIllustrations(value => !value)}>
+                    <ImagePlus size={17} /> {tr(locale, "Insert image", "إضافة صورة داخل الفصل", "Infoga bild")}
+                  </button>
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled} onClick={addDivider}>
+                    <SeparatorHorizontal size={17} /> {tr(locale, "Scene divider", "فاصل زخرفي صغير", "Scenavdelare")}
+                  </button>
+                </div>
+              )}
+              {current && showIllustrations && (
+                <div className="illustration-inserter" dir={locale === "ar" ? "rtl" : "ltr"}>
+                  <strong>{tr(locale, "Illustrations inside your book", "صور ورسومات داخل كتابك", "Illustrationer i din bok")}</strong>
+                  <p className="muted">{tr(locale, "Place images between paragraphs or at chapter boundaries. Pages adapt to each reader's screen.", "أدرج الصور بين الفقرات أو في بداية الفصل أو نهايته. صفحات الكتاب تتغير بحسب شاشة القارئ.", "Lägg till bilder mellan stycken eller vid kapitelgränser. Sidor anpassas efter skärmen.")}</p>
+                  <div className="illustration-fields">
+                    <label>{tr(locale, "Insert at", "موضع الصورة", "Placering")}
+                      <select value={imagePlacement} onChange={e => setImagePlacement(e.target.value as "cursor"|"start"|"end")}>
+                        <option value="cursor">{tr(locale, "Text cursor", "موضع المؤشر", "Textmarkören")}</option>
+                        <option value="start">{tr(locale, "Chapter start", "بداية الفصل", "Kapitelstart")}</option>
+                        <option value="end">{tr(locale, "Chapter end", "نهاية الفصل", "Kapitelslut")}</option>
+                      </select>
+                    </label>
+                    <label>{tr(locale, "Image size", "حجم الصورة", "Bildstorlek")}
+                      <select value={imageSize} onChange={e => setImageSize(e.target.value as "small"|"medium"|"full")}>
+                        <option value="small">{tr(locale, "Small", "صغير", "Liten")}</option>
+                        <option value="medium">{tr(locale, "Medium", "متوسط", "Mellan")}</option>
+                        <option value="full">{tr(locale, "Full width", "عرض كامل", "Full bredd")}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label>{tr(locale, "Caption (optional)", "وصف أسفل الصورة (اختياري)", "Bildtext (valfritt)")}
+                    <input maxLength={240} value={imageCaption} onChange={e => setImageCaption(e.target.value)} />
+                  </label>
+                  <strong>{tr(locale, "Built-in illustration library · free", "مكتبة الرسومات الداخلية · مجانية", "Inbyggt bildbibliotek · gratis")}</strong>
+                  <div className="illustration-library-grid">
+                    {(["mountain", "botanical", "stars", "waves"] as const).map(name => (
+                      <button type="button" key={name} disabled={disabled}
+                        onClick={() => void insertLibrary(name)}>
+                        <img src={`/illustrations/${name}.png`} alt={name} loading="lazy" />
+                        <span>{tr(locale,
+                          ({mountain:"Landscape",botanical:"Botanical",stars:"Night sky",waves:"Ocean"} as const)[name],
+                          ({mountain:"طبيعة",botanical:"نباتات",stars:"سماء ليلية",waves:"بحر"} as const)[name],
+                          ({mountain:"Landskap",botanical:"Botanik",stars:"Stjärnhimmel",waves:"Hav"} as const)[name])}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <label className="cover-upload-label">
+                    {tr(locale, "Upload an image (PNG, JPG, WebP · max 3 MB)", "ارفع صورة من جهازك (PNG أو JPG أو WebP · حتى 3 ميغابايت)", "Ladda upp bild (PNG, JPG, WebP · max 3 MB)")}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
+                      onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
+                  </label>
+                  <label>{tr(locale, "Describe the AI illustration", "صف الصورة التي تريد توليدها بالذكاء الاصطناعي", "Beskriv AI-illustrationen")}
+                    <textarea rows={3} maxLength={700} value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
+                      placeholder={tr(locale, "A scene from this chapter, a character, or a visual explanation…", "مشهد من هذا الفصل أو شخصية أو رسم يوضح فكرة...", "En scen, en karaktär eller en förklarande bild…")} />
+                  </label>
+                  <button type="button" className="button button-primary"
+                    disabled={disabled || !config.artwork || !config.ai || imagePrompt.trim().length < 10}
+                    onClick={() => void generate("illustration", active?.id)}>
+                    <Sparkles size={17} /> {tr(locale, "Generate and insert AI image", "توليد الصورة وإدراجها في الفصل", "Skapa och infoga AI-bild")}
+                  </button>
+                </div>
+              )}
               <h3
                 className="current-chapter-title"
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
@@ -1185,7 +1349,7 @@ export function Editor({
                     dir={draft.language === "ar" ? "rtl" : "ltr"}
                     lang={draft.language}
                   >
-                    <Markdown text={current.content} />
+                    <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
                 ) : (
                   <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
@@ -1206,7 +1370,11 @@ export function Editor({
                       value={current.content}
                       maxLength={30000}
                       disabled={disabled}
+                      onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onKeyUp={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart; }}
                       onChange={(e) => {
+                        cursorRef.current = e.currentTarget.selectionStart;
                         if (active)
                           change((b) => ({
                             ...b,
@@ -1245,6 +1413,47 @@ export function Editor({
                       ? t.generate
                       : t.unlock}
                   </button>
+                </div>
+              )}
+              {current && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
+                <div className="illustration-manager">
+                  <strong>{tr(locale, "Images in this chapter", "صور هذا الفصل", "Bilder i detta kapitel")}</strong>
+                  {Object.values(draft.illustrations || {}).filter(asset => current.content.includes(`[[illustration:${asset.id}]]`)).map(asset => (
+                    <div className="illustration-manager-row" key={asset.id}>
+                      <img src={asset.source === "library" && asset.preset
+                        ? `/illustrations/${asset.preset}.png`
+                        : `/api/books/${id}/illustrations/${asset.id}`}
+                        alt={asset.alt || asset.caption} loading="lazy" />
+                      <div className="illustration-manager-fields">
+                        <input aria-label={tr(locale, "Image caption", "وصف الصورة", "Bildtext")}
+                          maxLength={240} disabled={disabled}
+                          value={imageEdits[asset.id]?.caption ?? asset.caption}
+                          onChange={e => setImageEdits(prev => ({
+                            ...prev, [asset.id]: { caption: e.target.value, size: prev[asset.id]?.size ?? asset.size },
+                          }))} />
+                        <select aria-label={tr(locale, "Image size", "حجم الصورة", "Bildstorlek")}
+                          disabled={disabled} value={imageEdits[asset.id]?.size ?? asset.size}
+                          onChange={e => setImageEdits(prev => ({
+                            ...prev, [asset.id]: { caption: prev[asset.id]?.caption ?? asset.caption,
+                              size: e.target.value as "small" | "medium" | "full" },
+                          }))}>
+                          <option value="small">{tr(locale, "Small", "صغير", "Liten")}</option>
+                          <option value="medium">{tr(locale, "Medium", "متوسط", "Mellan")}</option>
+                          <option value="full">{tr(locale, "Full", "كامل", "Full")}</option>
+                        </select>
+                        <div className="cover-confirm-buttons">
+                          <button type="button" className="button button-small button-outline"
+                            disabled={disabled} onClick={() => void changeExistingImage(asset.id)}>
+                            <Save size={14}/>{tr(locale, "Apply", "تطبيق", "Spara")}
+                          </button>
+                          <button type="button" className="button button-small button-outline"
+                            disabled={disabled} onClick={() => void changeExistingImage(asset.id, true)}>
+                            <Trash2 size={14}/>{tr(locale, "Remove", "حذف", "Ta bort")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               <div className="editor-bottom-actions">
@@ -1290,7 +1499,8 @@ export function Editor({
                     <BookBackCover title={draft.title} author={draft.author}
                       style={draft.cover_style} language={draft.language}
                       blurb={draft.back_blurb || draft.idea}
-                      authorBio={draft.author_bio || ""} />
+                      authorBio={draft.author_bio || ""}
+                      image={draft.back_cover_candidate_url || draft.back_cover_url} />
                   )}
                 </div>
                 <div className="stack">
@@ -1420,6 +1630,20 @@ export function Editor({
                       </div>
                     </div>
                   )}
+                  {draft.back_cover_candidate_url && (
+                    <div className="cover-confirm">
+                      <strong>{tr(locale, "AI back cover proposal", "صورة مقترحة للغلاف الخلفي", "AI-förslag för baksidan")}</strong>
+                      <div className="cover-confirm-buttons">
+                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(true, "back")}><Check size={15} />{tr(locale, "Accept back cover", "اعتماد الغلاف الخلفي", "Godkänn baksidan")}</button>
+                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(false, "back")}>{tr(locale, "Discard", "رفض", "Avvisa")}</button>
+                      </div>
+                    </div>
+                  )}
+                  <button type="button" className="button button-outline"
+                    disabled={disabled || !config.ai || !config.artwork || !book.unlocked}
+                    onClick={() => { setCoverSide("back"); void generate("back_cover"); }}>
+                    <Sparkles size={17} />{tr(locale, "Generate AI back cover image", "توليد صورة الغلاف الخلفي بالذكاء الاصطناعي", "Generera AI-bild för baksidan")}
+                  </button>
                   <label className="cover-upload-label">
                     <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
                     <input
@@ -1582,7 +1806,7 @@ export function Editor({
                     </span>
                     <h2>{c.title}</h2>
                     {draft.chapters[c.id] ? (
-                      <Markdown text={draft.chapters[c.id].content} />
+                      <Markdown text={draft.chapters[c.id].content} illustrations={draft.illustrations} bookId={id} />
                     ) : (
                       <p className="muted">{t.chapterEmpty}</p>
                     )}
@@ -1592,7 +1816,8 @@ export function Editor({
                   <BookBackCover title={draft.title} author={draft.author}
                     style={draft.cover_style} language={draft.language}
                     blurb={draft.back_blurb || draft.idea}
-                    authorBio={draft.author_bio || ""} />
+                    authorBio={draft.author_bio || ""}
+                    image={draft.back_cover_url} />
                 </div>
               </div>
               <p className="review-note">{t.reviewNote}</p>

@@ -19,7 +19,7 @@ export async function POST(
     await ownedBook(id, user.id);
     const input = await readJson(request, jobRequestSchema, 2000),
       config = configuration();
-    if (!config.ai || (input.kind === "cover" && !config.artwork))
+    if (!config.ai || (["cover", "back_cover", "illustration"].includes(input.kind) && !config.artwork))
       throw new AppError("not_configured", 503);
     const store = studioStore();
     // Release stale locks left by crashes, cancelled workflows or disconnected runs.
@@ -34,6 +34,12 @@ export async function POST(
         !!process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
         user.email.toLowerCase() ===
           process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase(),
+      input.kind === "illustration" ? {
+        prompt: input.image_prompt || "",
+        position: input.image_position ?? -1,
+        caption: input.image_caption || "",
+        size: input.image_size || "medium",
+      } : undefined,
     );
     if (job.run_id || job.status !== "queued") return json({ job });
     try {

@@ -150,7 +150,10 @@ export async function generateDirectStructured<T>(
 
 
 /** Generates a cover from the same direct OpenAI API, never Vercel AI Gateway. */
-export async function generateDirectCover(prompt: string, model = "gpt-image-1-mini"): Promise<{
+export async function generateDirectCover(
+  prompt: string, model = "gpt-image-1-mini",
+  size: "1024x1536" | "1536x1024" = "1024x1536",
+): Promise<{
   image: { uint8Array: Uint8Array; mediaType: string };
   usage: { inputTokens: number; outputTokens: number };
 }> {
@@ -160,7 +163,7 @@ export async function generateDirectCover(prompt: string, model = "gpt-image-1-m
     method: "POST",
     headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model, prompt, n: 1, size: "1024x1536",
+      model, prompt, n: 1, size,
       quality: "medium", output_format: "png",
     }),
     signal: AbortSignal.timeout(120_000),

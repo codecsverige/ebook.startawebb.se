@@ -14,6 +14,8 @@ import {
   type JobKind,
   type Chapter,
   type OutlineItem,
+  type Illustration,
+  illustrationMarker,
 } from "./domain";
 import { AppError } from "./http";
 import { STUDIO_PATH } from "./firebase-config";
@@ -193,6 +195,9 @@ export class FirestoreStudio {
         preface: "",
         cover_path: null,
         cover_candidate_path: null,
+        back_cover_path: null,
+        back_cover_candidate_path: null,
+        illustrations: {},
         use_artwork: false,
         unlocked: false,
         revision: 0,
@@ -330,6 +335,9 @@ export class FirestoreStudio {
         chapters: {},
         cover_path: null,
         cover_candidate_path: null,
+        back_cover_path: null,
+        back_cover_candidate_path: null,
+        illustrations: {},
         use_artwork: false,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
@@ -364,7 +372,7 @@ export class FirestoreStudio {
   }
 
   /** Approve or discard an AI cover suggestion without touching saved chapters. */
-  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean): Promise<Book> {
+  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean, side: "front" | "back" = "front"): Promise<Book> {
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -373,13 +381,15 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== revision) fail("conflict");
-      if (!book.cover_candidate_path) fail("not_found");
+      const candidate = side === "back" ? book.back_cover_candidate_path : book.cover_candidate_path;
+      if (!candidate) fail("not_found");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
         ...book,
-        cover_path: accept ? book.cover_candidate_path : book.cover_path,
-        cover_candidate_path: null,
-        use_artwork: accept ? true : book.use_artwork,
+        ...(side === "back"
+          ? { back_cover_path: accept ? candidate : book.back_cover_path, back_cover_candidate_path: null }
+          : { cover_path: accept ? candidate : book.cover_path, cover_candidate_path: null,
+              use_artwork: accept ? true : book.use_artwork }),
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -465,6 +475,9 @@ export class FirestoreStudio {
         preface: snapshot.preface || "",
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
+        back_cover_path: snapshot.back_cover_path || null,
+        back_cover_candidate_path: null,
+        illustrations: structuredClone(snapshot.illustrations || {}),
         use_artwork: snapshot.use_artwork,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
@@ -477,6 +490,85 @@ export class FirestoreStudio {
     });
   }
 
+  /** Atomically attach a reviewed image at a manuscript cursor position. */
+  async insertIllustration(
+    uid: string, bookId: string, revision: number, chapterId: string,
+    position: number, illustration: Illustration,
+  ): Promise<Book> {
+    if (!uuid(bookId) || !uuid(chapterId) || !uuid(illustration.id) ||
+        !Number.isInteger(position) || position < 0)
+      fail("invalid_input");
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.books().doc(bookId);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (!book.unlocked) fail("insufficient_credits");
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      const chapter = book.chapters[chapterId];
+      if (!chapter || position > chapter.content.length ||
+          Object.keys(book.illustrations || {}).length >= 24)
+        fail("invalid_input");
+      const mark = illustrationMarker(illustration.id);
+      const content = chapter.content.slice(0, position) + "\n\n" + mark +
+        "\n\n" + chapter.content.slice(position);
+      if (content.length > 30000) fail("too_large");
+      const versions = await this.versionPlan(tx, ref);
+      const next: StoredBook = {
+        ...book,
+        chapters: { ...book.chapters, [chapterId]: { ...chapter, content } },
+        illustrations: { ...book.illustrations, [illustration.id]: illustration },
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
+      };
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
+  async editIllustration(
+    uid: string, bookId: string, revision: number, assetId: string,
+    change: { size?: "small" | "medium" | "full"; caption?: string } | null,
+  ): Promise<Book> {
+    if (!uuid(bookId) || !uuid(assetId)) fail("invalid_input");
+    return this.db.runTransaction(async tx => {
+      const ref = this.books().doc(bookId);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      const old = book.illustrations?.[assetId];
+      if (!old) fail("not_found");
+      const versions = await this.versionPlan(tx, ref);
+      const next = structuredClone(book);
+      if (change) {
+        next.illustrations = { ...next.illustrations, [assetId]: {
+          ...old, size: change.size || old.size,
+          caption: change.caption ?? old.caption,
+        }};
+      } else {
+        // Only remove a reference from the current book; the image file
+        // remains for previous revisions, until the entire book is deleted.
+        const illustrations = { ...next.illustrations };
+        delete illustrations[assetId];
+        next.illustrations = illustrations;
+        const token = illustrationMarker(assetId);
+        for (const chapter of Object.values(next.chapters)) {
+          chapter.content = chapter.content.split(token).join("")
+            .replace(/\n{3,}/g, "\n\n").trim();
+        }
+      }
+      next.revision++;
+      next.updated_at = new Date().toISOString();
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
   async takeRate(key: string, limit: number, seconds = 3600) {
     const now = Date.now();
     const ref = this.root
@@ -496,6 +588,7 @@ export class FirestoreStudio {
     chapter: string | null,
     requestId: string,
     ownerTrial = false,
+    image?: { prompt: string; position: number; caption: string; size: "small" | "medium" | "full" },
   ): Promise<WorkerJob> {
     if (!uuid(id) || !uuid(requestId)) fail("invalid_input");
     const jobId = digest(`${uid}:${requestId}`);
@@ -518,7 +611,8 @@ export class FirestoreStudio {
         if (
           old.book_id !== id ||
           old.kind !== kind ||
-          old.chapter_id !== chapter
+          old.chapter_id !== chapter ||
+          (kind === "illustration" && (old.image_prompt !== image?.prompt || old.image_position !== image?.position))
         )
           fail("invalid_input");
         return old;
@@ -532,7 +626,7 @@ export class FirestoreStudio {
       if (!ownerTrial && (recent(profile.ai_times || [], now).length >= limits.user ||
           (global.get("hits") || 0) >= limits.global))
         fail("ai_daily_limit");
-      if (!ownerTrial && kind === "cover" &&
+      if (!ownerTrial && ["cover", "back_cover", "illustration"].includes(kind) &&
           (recent(profile.image_times || [], now).length >= limits.imagesUser ||
           (images.get("hits") || 0) >= limits.imagesGlobal))
         fail("ai_image_daily_limit");
@@ -543,14 +637,21 @@ export class FirestoreStudio {
         fail("invalid_input");
       if (kind === "chapter" && !book.outline.some((c) => c.id === chapter))
         fail("invalid_input");
-      if (!ownerTrial && kind === "cover" && book.state.covers >= 5) fail("rate_limit");
+      if (kind === "illustration") {
+        const draft = chapter ? book.chapters[chapter] : undefined;
+        if (!image || image.prompt.trim().length < 10 || image.prompt.length > 700 ||
+            !draft || !book.unlocked || image.position > draft.content.length ||
+            Object.keys(book.illustrations || {}).length >= 24)
+          fail("invalid_input");
+      }
+      if (!ownerTrial && ["cover", "back_cover"].includes(kind) && book.state.covers >= 5) fail("rate_limit");
       if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
         fail("rate_limit");
       let credits = profile.credits,
         free = profile.free_book_id;
       if (!book.unlocked) {
         if (
-          ["book", "chapter", "cover"].includes(kind) ||
+          ["book", "chapter", "cover", "back_cover", "illustration"].includes(kind) ||
           book.state.ai_calls >= 8 ||
           (kind === "outline" && free && free !== id)
         ) {
@@ -572,6 +673,12 @@ export class FirestoreStudio {
         user_id: uid,
         kind,
         chapter_id: chapter,
+        ...(kind === "illustration" ? {
+          image_prompt: image!.prompt,
+          image_position: image!.position,
+          image_caption: image!.caption,
+          image_size: image!.size,
+        } : {}),
         status: "queued",
         progress: 0,
         error_code: null,
@@ -647,7 +754,9 @@ export class FirestoreStudio {
       const dayId = Math.floor(now / day);
       const gRef = this.root.collection("rates").doc(`ai-${dayId}`);
       const imageRef = this.root.collection("rates").doc(`ai-image-${dayId}`);
-      const imageRequest = operation === "cover" || operation.startsWith("cover:");
+      const imageRequest = ["cover", "back_cover", "illustration"].some(
+        (kind) => operation === kind || operation.startsWith(kind + ":")
+      );
       const [p, b, g, imageCount] = await tx.getAll(pRef, bRef, gRef, imageRef);
       const limits = aiDailyLimits();
       const profile = this.checkedProfile(p.data() as Profile | undefined);
@@ -732,6 +841,8 @@ export class FirestoreStudio {
       chapter_id?: string;
       chapter?: Chapter;
       cover_path?: string;
+      back_cover_path?: string;
+      illustration_path?: string;
     },
     progress: number,
   ) {
@@ -740,7 +851,8 @@ export class FirestoreStudio {
         j = await tx.get(jRef),
         job = j.data() as WorkerJob | undefined;
       if (!job || !active(job)) fail("not_found");
-      const unit = patch.outline ? "outline" : patch.chapter_id || "cover";
+      const unit = patch.outline ? "outline" : job.kind === "illustration" ? "illustration" :
+        job.kind === "back_cover" ? "back_cover" : patch.chapter_id || "cover";
       if (job.result_units[unit]) return;
       const bRef = this.books().doc(job.book_id),
         pRef = this.userRef(job.user_id);
@@ -769,9 +881,28 @@ export class FirestoreStudio {
         )
           fail("invalid_input");
         next.chapters[patch.chapter_id] = patch.chapter;
-      } else if (patch.cover_path) {
-        // Keep the active cover until the author explicitly approves the AI draft.
+      } else if (patch.cover_path && job.kind === "cover") {
         next.cover_candidate_path = patch.cover_path;
+      } else if (patch.back_cover_path && job.kind === "back_cover") {
+        next.back_cover_candidate_path = patch.back_cover_path;
+      } else if (patch.illustration_path && job.kind === "illustration") {
+        const chapter = job.chapter_id ? next.chapters[job.chapter_id] : undefined;
+        if (!chapter || Object.keys(next.illustrations || {}).length >= 24)
+          fail("invalid_input");
+        const position = job.image_position ?? chapter.content.length;
+        if (position > chapter.content.length) fail("conflict");
+        const id = job.request_id;
+        const mark = illustrationMarker(id);
+        const content = chapter.content.slice(0, position) + "\n\n" + mark +
+          "\n\n" + chapter.content.slice(position);
+        if (content.length > 30000) fail("too_large");
+        chapter.content = content;
+        next.illustrations = {
+          ...next.illustrations,
+          [id]: { id, source: "ai", path: patch.illustration_path,
+            alt: job.image_prompt || "", caption: job.image_caption || "",
+            size: job.image_size || "medium" },
+        };
       } else fail("invalid_input");
       next.revision++;
       next.updated_at = new Date().toISOString();
@@ -803,7 +934,7 @@ export class FirestoreStudio {
         profile = p.data() as Profile | undefined;
       if (book?.state.active_job === id) {
         const state = { ...book.state, active_job: null };
-        if (!error && job.kind === "cover") state.covers++;
+        if (!error && ["cover", "back_cover"].includes(job.kind)) state.covers++;
         if (!error && job.kind === "chapter")
           state.rewrites = {
             ...state.rewrites,
