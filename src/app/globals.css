@@ -3375,3 +3375,34 @@ html[dir="rtl"] .muted {
 .book-reader-nav>span{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;font-size:.8rem;color:#697188}
 .book-reader-note{font-size:.74rem;color:#687184;margin:10px 0 0}
 @media(max-width:580px){.book-reader-page{min-height:370px}.book-reader-nav>span{display:none}}
+
+/* Manual first-draft entry keeps empty chapters writable with no AI request. */
+.manual-first-chapter {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 700px);
+  margin: 18px auto;
+  padding: 18px;
+  text-align: start;
+  border: 1px solid #dce2ef;
+  border-radius: 15px;
+  background: #fafbfe;
+}
+.manual-first-chapter strong { color: #273b58; font-size: .95rem; }
+.manual-first-chapter textarea {
+  width: 100%;
+  min-height: 165px;
+  padding: 14px 16px;
+  border: 1px solid #cbd5e6;
+  border-radius: 10px;
+  background: white;
+  color: #192b42;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.8;
+  resize: vertical;
+}
+.manual-first-chapter textarea:focus-visible {
+  outline: 2px solid #5484ca;
+  outline-offset: 2px;
+}

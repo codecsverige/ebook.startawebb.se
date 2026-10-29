@@ -1647,6 +1647,27 @@ export function Editor({
                 <div className="chapter-empty">
                   <PencilIcon />
                   <p>{t.chapterEmpty}</p>
+                  {active && <label className="manual-first-chapter" dir={draft.language === "ar" ? "rtl" : "ltr"}>
+                    <strong>{tr(locale, "Write this chapter yourself, without AI", "اكتب هذا الفصل بنفسك دون ذكاء اصطناعي", "Skriv kapitlet själv utan AI")}</strong>
+                    <textarea rows={5} maxLength={30000} disabled={disabled}
+                      placeholder={tr(locale,
+                        "Start typing your chapter here. You can continue in the editor and insert pictures later.",
+                        "ابدأ كتابة الفصل هنا. يمكنك إكماله في المحرر وإضافة الصور لاحقًا.",
+                        "Börja skriva kapitlet här. Fortsätt sedan i redigeraren och lägg till bilder.")}
+                      onChange={e=>{
+                        const content=e.currentTarget.value;
+                        if(!content.trim())return;
+                        change(b=>({...b,chapters:{...b.chapters,[active.id]:{
+                          content,
+                          summary:active.summary,
+                        }}}));
+                        setVisualMode(false);
+                        requestAnimationFrame(()=>{
+                          const editor=chapterEditorRef.current;
+                          if(editor){editor.focus();editor.setSelectionRange(content.length,content.length);}
+                        });
+                      }}/>
+                  </label>}
                   <button
                     className="button button-primary"
                     disabled={disabled || !config.ai}
