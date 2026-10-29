@@ -193,6 +193,9 @@ export class FirestoreStudio {
         author_bio: "",
         dedication: "",
         preface: "",
+        acknowledgments: "",
+        copyright_notice: "",
+        layout_theme: "classic",
         cover_path: null,
         cover_candidate_path: null,
         back_cover_path: null,
@@ -252,15 +255,20 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== input.revision) fail("conflict");
-      if (
-        input.outline.length !== book.chapter_count ||
-        input.outline.some((c) => !book.outline.some((old) => old.id === c.id))
-      )
+      // Allow original authors to insert, reorder, merge and remove chapters.
+      // Manuscript ownership is still enforced here; image paths never come from PATCH.
+      if (!book.outline.length || input.outline.length > 30 ||
+          (book.outline.length > 0 && input.outline.length < 1))
         fail("invalid_input");
       const previous = await this.versionPlan(tx, ref);
       const next = {
         ...book,
         ...input,
+        chapter_count: input.outline.length,
+        state: { ...book.state, rewrites: Object.fromEntries(
+          Object.entries(book.state.rewrites).filter(([id]) =>
+            input.outline.some((item) => item.id === id)),
+        ) },
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -331,6 +339,9 @@ export class FirestoreStudio {
         author_bio: "",
         dedication: "",
         preface: "",
+        acknowledgments: "",
+        copyright_notice: "",
+        layout_theme: "classic",
         outline: [],
         chapters: {},
         cover_path: null,
@@ -473,6 +484,9 @@ export class FirestoreStudio {
         author_bio: snapshot.author_bio || "",
         dedication: snapshot.dedication || "",
         preface: snapshot.preface || "",
+        acknowledgments: snapshot.acknowledgments || "",
+        copyright_notice: snapshot.copyright_notice || "",
+        layout_theme: snapshot.layout_theme || "classic",
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
         back_cover_path: snapshot.back_cover_path || null,
