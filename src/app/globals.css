@@ -3262,3 +3262,42 @@ html[dir="rtl"] .muted {
   .preview-cover-pair .cover-back-blurb { -webkit-line-clamp: 8; }
   .preview-cover-pair .cover-back-author { display: none; }
 }
+
+
+/* The same book illustration proportions apply in the editor, reader and exports. */
+.illustration-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:14px 0 18px; }
+.illustration-inserter {
+  border:1px solid #d9e2ed; border-radius:16px; background:#fff;
+  padding:20px; display:grid; gap:15px; margin:0 0 24px;
+  box-shadow:0 12px 28px #22314a0b;
+}
+.illustration-inserter label { display:grid; gap:6px; font-size:13px; font-weight:600; min-width:0; }
+.illustration-inserter input:not([type=file]),
+.illustration-inserter select,.illustration-inserter textarea {
+  width:100%; min-width:0; border:1px solid #d7dde9; border-radius:9px;
+  padding:10px; font-size:14px; background:white; color:var(--ink);
+}
+.illustration-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.illustration-library-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.illustration-library-grid button { border:1px solid #e0e5eb; background:white;
+  padding:5px; border-radius:10px; display:grid; gap:4px; text-align:center; min-width:0; overflow:hidden; }
+.illustration-library-grid button:hover:not(:disabled) { border-color:var(--blue); background:#f2f5ff; }
+.illustration-library-grid img { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:6px; }
+.illustration-library-grid span { font-size:11px; font-weight:600; line-height:1.3; }
+.manuscript-figure { margin:25px auto; break-inside:avoid; page-break-inside:avoid; text-align:center; max-width:100%; }
+.manuscript-figure.figure-small { width:43%; }
+.manuscript-figure.figure-medium { width:78%; }
+.manuscript-figure.figure-full { width:100%; }
+.manuscript-figure img { display:block; width:100%; height:auto; max-height:600px; object-fit:contain; border-radius:4px; }
+.manuscript-figure figcaption { color:var(--muted); font-size:12px; margin-top:8px; }
+.scene-divider { text-align:center; margin:28px auto; letter-spacing:6px; color:#8d91a1; }
+.book-cover.cover-back.has-artwork { color:#fffdf6; }
+.book-cover.cover-back.has-artwork .cover-back-content { z-index:2; }
+.book-cover.cover-back.has-artwork .cover-bottom { z-index:2; }
+@media(max-width:650px) {
+ .illustration-inserter { padding:13px; border-radius:12px; }
+ .illustration-library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .illustration-fields { grid-template-columns:1fr; }
+ .manuscript-figure.figure-small { width:65%; }
+ .manuscript-figure.figure-medium { width:95%; }
+}
