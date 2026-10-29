@@ -62,6 +62,14 @@ export async function pdfHtml(
     book.title.length > 38 ? 27 : (book.language === "ar" ? 32 : 29);
   const rtl = book.language === "ar";
   const toc = { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language];
+  const dedicationLabel = { en: "Dedication", ar: "الإهداء", sv: "Dedikation" }[book.language];
+  const prefaceLabel = { en: "Preface", ar: "المقدمة", sv: "Förord" }[book.language];
+  const introPages = (book.dedication?.trim()
+    ? `<section class="front-matter"><h2>${dedicationLabel}</h2><p>${esc(book.dedication)}</p></section>` : "") +
+    (book.preface?.trim()
+    ? `<section class="front-matter"><h2>${prefaceLabel}</h2>${markdownHtml(book.preface)}</section>` : "");
+  const backBlurb = book.back_blurb?.trim() || book.idea;
+  const authorBio = book.author_bio?.trim() || "";
   const image =
     artwork && book.use_artwork
       ? `<img class="cover-image" src="data:${esc(artwork.type)};base64,${Buffer.from(artwork.data).toString("base64")}" alt="">`
@@ -69,8 +77,8 @@ export async function pdfHtml(
   return `<!doctype html><html lang="${book.language}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>
   @font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}
   @font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}
-  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}
-  </style></head><body><section class="cover">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section><section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}</body></html>`;
+  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}.cover.has-artwork:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0b0f1e90 0%,#15182344 45%,#0b0f1ea8 100%);z-index:1}.cover.has-artwork h1,.cover.has-artwork p,.cover.has-artwork small{z-index:2;color:#fffdf6}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}.front-matter{break-before:page;white-space:pre-wrap}.back-cover{break-before:page;height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:14mm;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}.back-cover h2{font-size:19pt;margin:9mm 0 7mm;overflow-wrap:anywhere}.back-cover .blurb{font-size:${rtl ? 12 : 10}pt;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:94mm;overflow:hidden}.back-cover .author-bio{border-top:1px solid ${colors.accent};padding-top:4mm;font-size:9pt;white-space:pre-wrap;max-height:34mm;overflow:hidden}.back-cover small{display:block;letter-spacing:2px}
+  </style></head><body><section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}<section class="back-cover"><div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section></body></html>`;
 }
 export async function makePdf(
   book: Book,
@@ -158,6 +166,20 @@ export async function makeDocx(
       }),
     );
   }
+  if (book.dedication?.trim()) children.push(
+    new Paragraph({ children: [new PageBreak()] }),
+    new Paragraph({ ...base, heading: HeadingLevel.HEADING_1,
+      children: [text({ en: "Dedication", ar: "الإهداء", sv: "Dedikation" }[book.language], true)] }),
+    new Paragraph({ ...base, children: [text(book.dedication)] }),
+  );
+  if (book.preface?.trim()) {
+    children.push(new Paragraph({ children: [new PageBreak()] }),
+      new Paragraph({ ...base, heading: HeadingLevel.HEADING_1,
+        children: [text({ en: "Preface", ar: "المقدمة", sv: "Förord" }[book.language], true)] }));
+    for (const block of parseManuscript(book.preface)) {
+      children.push(new Paragraph({ ...base, children: [text(stripInlineMarkdown(block.text))] }));
+    }
+  }
   children.push(
     new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
@@ -210,6 +232,14 @@ export async function makeDocx(
       }
     }
   }
+  // The EPUB and PDF include a distinct back cover; Word includes the same editable text.
+  children.push(new Paragraph({ children: [new PageBreak()] }),
+    new Paragraph({ ...base, heading: HeadingLevel.HEADING_1, children: [text(book.title, true)] }),
+    new Paragraph({ ...base, children: [text(book.back_blurb?.trim() || book.idea)] }));
+  if (book.author_bio?.trim()) children.push(
+    new Paragraph({ ...base, children: [text(book.author, true)] }),
+    new Paragraph({ ...base, children: [text(book.author_bio)] }),
+  );
   return Packer.toBuffer(
     new Document({
       creator: book.author || "Ebook Studio",
