@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/firebase-session";
 import { ownedBook, takeRate } from "@/lib/books";
 import { assertOrigin, apiError, AppError, json } from "@/lib/http";
-import { parseDocxManuscript } from "@/lib/docx-import";
+import { parseDocxManuscript, parseTextManuscript } from "@/lib/docx-import";
 
 export const runtime = "nodejs";
 export const maxDuration = 25;
@@ -13,7 +13,7 @@ export async function POST(request: Request, ctx: {params:Promise<{id:string}>})
     const {id}=await ctx.params;
     await ownedBook(id,user.id);
     const contentType=(request.headers.get("content-type")||"").split(";")[0];
-    if(contentType!=="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    if(!["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/markdown"].includes(contentType))
       throw new AppError("invalid_input");
     if(Number(request.headers.get("content-length")||0)>MAX)throw new AppError("too_large",413);
     await takeRate("docx-import:"+user.id,15);
@@ -28,7 +28,10 @@ export async function POST(request: Request, ctx: {params:Promise<{id:string}>})
       chunks.push(value);
     }
     try {
-      return json({sections:parseDocxManuscript(Buffer.concat(chunks))});
+      const data=Buffer.concat(chunks);
+      const sections=contentType==="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ? parseDocxManuscript(data) : parseTextManuscript(data.toString("utf8"));
+      return json({sections});
     } catch {
       throw new AppError("invalid_input");
     }
