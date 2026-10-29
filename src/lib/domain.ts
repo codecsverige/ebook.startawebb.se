@@ -89,7 +89,10 @@ export const editBookSchema = z
     author_bio: z.string().trim().max(800).default(""),
     dedication: z.string().trim().max(500).default(""),
     preface: z.string().trim().max(5000).default(""),
-    outline: z.array(outlineItemSchema).min(3).max(10),
+    acknowledgments: z.string().trim().max(5000).default(""),
+    copyright_notice: z.string().trim().max(1000).default(""),
+    layout_theme: z.enum(["classic", "modern", "literary"]).default("classic"),
+    outline: z.array(outlineItemSchema).min(1).max(30),
     chapters: z.record(
       z.string().uuid(),
       z.object({
@@ -155,6 +158,9 @@ export type Book = Brief & {
   author_bio?: string;
   dedication?: string;
   preface?: string;
+  acknowledgments?: string;
+  copyright_notice?: string;
+  layout_theme?: "classic" | "modern" | "literary";
   cover_candidate_path?: string | null;
   use_artwork: boolean;
   unlocked: boolean;
