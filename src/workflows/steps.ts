@@ -287,13 +287,13 @@ export async function createCover(jobId: string) {
       const usageId = await reserve(jobId, variant + ":" + backend,
         backend === "gateway" ? model : "openai/" + model);
       if (backend === "direct") {
-        const generated = await generateDirectCover(prompt, model);
+        const generated = await generateDirectCover(prompt, model, variant === "illustration" ? "1536x1024" : "1024x1536");
         return { ...generated, usageId };
       }
       const generated = await generateImage({
         model,
         prompt,
-        size: "1024x1536",
+        size: variant === "illustration" ? "1536x1024" : "1024x1536",
         maxRetries: 0,
         abortSignal: AbortSignal.timeout(110_000),
       });
