@@ -250,12 +250,11 @@ export async function createCover(jobId: string) {
   "use step";
   const { job, book } = await context(jobId);
   if (job.result_units.cover) return;
-  if (!process.env.OPENAI_API_KEY?.trim()) {
+  const backends = availableAiBackends("cover");
+  if (!backends.length) {
     await persistFailure(jobId, "not_configured");
     throw new FatalError("not_configured");
   }
-  const model = "gpt-image-1-mini";
-  const usageId = await reserve(jobId, "cover", "openai/" + model);
   console.info("cover_started", { jobId });
   const genreDirection: Record<string, string> = {
     novel: "A cinematic, emotionally expressive fiction illustration. Suggest a key character, atmosphere and central conflict without imitating an existing novel cover.",
@@ -265,15 +264,47 @@ export async function createCover(jobId: string) {
     guide: "A restrained, authoritative nonfiction editorial illustration that expresses the actual topic through a clear visual metaphor.",
     ebook: "An elegant contemporary publishing design with a memorable visual concept and simple hierarchy.",
   };
-  let result: Awaited<ReturnType<typeof generateDirectCover>>;
+  const prompt = `Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`;
+  let result: {
+    image: { uint8Array: Uint8Array; mediaType: string };
+    usage: { inputTokens: number; outputTokens: number };
+    usageId: string;
+  };
   try {
-    result = await generateDirectCover(`Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`, model);
+    result = await callWithAiFallback(backends, async (backend) => {
+      const model = backend === "gateway"
+        ? process.env.AI_GATEWAY_IMAGE_MODEL!.trim()
+        : "gpt-image-1-mini";
+      const usageId = await reserve(jobId, "cover:" + backend,
+        backend === "gateway" ? model : "openai/" + model);
+      if (backend === "direct") {
+        const generated = await generateDirectCover(prompt, model);
+        return { ...generated, usageId };
+      }
+      const generated = await generateImage({
+        model,
+        prompt,
+        size: "1024x1536",
+        maxRetries: 0,
+        timeout: 110_000,
+      });
+      const usage = generated.usage as {
+        inputTokens?: number;
+        outputTokens?: number;
+      } | undefined;
+      return {
+        image: generated.image,
+        usage: {
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+        },
+        usageId,
+      };
+    }, (from, code) => {
+      console.warn("cover_fallback_started", { jobId, from, code });
+    });
   } catch (error) {
-    const safeCode = error instanceof Error ? error.message : "";
-    const code = [
-      "ai_auth_failed", "ai_credits_exhausted", "ai_model_unavailable",
-      "ai_provider_busy", "ai_provider_unavailable", "ai_generation_invalid",
-    ].includes(safeCode) ? safeCode : classifyAiFailure(error);
+    const code = aiErrorCode(error);
     console.warn("cover_request_failed", { jobId, code });
     await persistFailure(jobId, code);
     throw new FatalError(code);
@@ -297,13 +328,11 @@ export async function createCover(jobId: string) {
       },
     });
   await commit(jobId, { cover_path: path }, 95);
-  const imageUsage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
-  // Cover was already saved. A non-critical accounting update must never
-  // turn a successfully generated book cover into a failed user operation.
+  // Accounting must never turn a successfully saved cover into a failure.
   await studioStore().recordUsage(
-    usageId,
-    imageUsage?.inputTokens ?? 0,
-    imageUsage?.outputTokens ?? 0,
+    result.usageId,
+    result.usage.inputTokens,
+    result.usage.outputTokens,
   ).catch(() => console.warn("image_usage_record_failed", { jobId }));
 }
 export async function finishJob(jobId: string) {
