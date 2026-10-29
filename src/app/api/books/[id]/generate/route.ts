@@ -43,6 +43,7 @@ export async function POST(
       input.kind === "text_edit" && input.text_action &&
         input.text_start !== undefined && input.text_end !== undefined ? {
         action: input.text_action, start: input.text_start, end: input.text_end,
+        instruction: input.text_instruction || "",
       } : undefined,
     );
     if (job.run_id || job.status !== "queued") return json({ job });

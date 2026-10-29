@@ -113,6 +113,9 @@ export function makeEpub(
     ".interior-image img{max-width:100%;height:auto;}" +
     ".figure-medium{max-width:78%;}.figure-small{max-width:42%;}" +
     ".interior-image figcaption{font-size:.8em;opacity:.7;}.scene-divider{text-align:center;margin:2em 0;}" +
+    ".book-quote{border-inline-start:3px solid #ab977b;padding:.7em 1.2em;margin:1em 0;background:#f8f5ee;font-style:italic;}" +
+    ".book-note{border:1px solid #cfdae4;border-inline-start:4px solid #6686a2;padding:1em;margin:1em 0;background:#f3f7fa;}" +
+    ".page-break{break-before:page;page-break-before:always;}" +
     ".back-illustration{width:100%;max-height:25vh;object-fit:cover;opacity:.82;}";
   content.push({ name: "OEBPS/style.css", body: css });
   const xhtml = (name: string, body: string): Asset => ({

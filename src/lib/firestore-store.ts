@@ -638,7 +638,7 @@ export class FirestoreStudio {
     requestId: string,
     ownerTrial = false,
     image?: { prompt: string; position: number; caption: string; size: "small" | "medium" | "full" },
-    textEdit?: { action: "improve" | "shorten" | "expand" | "proofread" | "tone"; start: number; end: number },
+    textEdit?: { action: "improve" | "shorten" | "expand" | "proofread" | "tone" | "simplify" | "custom"; start: number; end: number; instruction?: string },
   ): Promise<WorkerJob> {
     if (!uuid(id) || !uuid(requestId)) fail("invalid_input");
     const jobId = digest(`${uid}:${requestId}`);
@@ -699,7 +699,9 @@ export class FirestoreStudio {
         if (!textEdit || !content || !book.unlocked || book.text_edit_candidate ||
             textEdit.start < 0 || textEdit.end <= textEdit.start ||
             textEdit.end > content.length || textEdit.end-textEdit.start > 1800 ||
-            !content.slice(textEdit.start, textEdit.end).trim()) fail("invalid_input");
+            !content.slice(textEdit.start, textEdit.end).trim() ||
+            (textEdit.action === "custom" && (!textEdit.instruction?.trim() || textEdit.instruction.length > 500)))
+          fail("invalid_input");
       }
       if (!ownerTrial && ["cover", "back_cover"].includes(kind) && book.state.covers >= 5) fail("rate_limit");
       if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
@@ -738,6 +740,7 @@ export class FirestoreStudio {
         } : {}),
         ...(kind === "text_edit" ? {
           text_action: textEdit!.action,
+          text_instruction: textEdit!.instruction?.slice(0,500) || "",
           text_start: textEdit!.start, text_end: textEdit!.end,
           text_original: book.chapters[chapter!]!.content.slice(textEdit!.start, textEdit!.end),
         } : {}),

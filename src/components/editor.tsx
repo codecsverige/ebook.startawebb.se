@@ -104,6 +104,9 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [toolPanel, setToolPanel] = useState<"add" | "ai">("add");
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [aiInstruction, setAiInstruction] = useState("");
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
   const [readerMode, setReaderMode] = useState(true);
@@ -596,7 +599,7 @@ export function Editor({
     }
   }
   async function generate(kind: JobKind, chapter?: string,
-    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"}) {
+    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom";instruction?:string}) {
     if (!draft || generatingRef.current || disabled) return;
     if (!online) {
       setError("offline");
@@ -633,6 +636,7 @@ export function Editor({
           request_id: requestId,
           ...(kind === "text_edit" && edit ? {
             text_action: edit.action, text_start: edit.start, text_end: edit.end,
+            ...(edit.action==="custom" ? {text_instruction:edit.instruction?.trim().slice(0,500)} : {}),
           } : {}),
           ...(kind === "illustration" ? {
             image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
@@ -725,8 +729,11 @@ export function Editor({
       setPending("");
     }
   }
-  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone") {
+  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom") {
     if (!draft || !active || !current || disabled || !book?.unlocked) return;
+    if (action === "custom" && aiInstruction.trim().length < 5) {
+      setImportError(tr(locale,"Write an instruction first.","اكتب تعليمات التعديل أولًا.","Skriv en instruktion först."));return;
+    }
     let start=0,end=0;
     if (visualMode && !read) {
       const selection=visualSelectedRef.current.trim();
@@ -751,7 +758,7 @@ export function Editor({
         "حدد نصًا من 4 إلى 1800 حرف.","Markera 4–1800 tecken."));return;
     }
     setImportError("");
-    void generate("text_edit",active.id,{start,end,action});
+    void generate("text_edit",active.id,{start,end,action,instruction:action==="custom"?aiInstruction.trim():undefined});
   }
   async function decideTextEdit(accept:boolean) {
     if (!book?.text_edit_candidate || disabled) return;
@@ -981,6 +988,11 @@ export function Editor({
             )}{" "}
             {pending === "save" ? t.saving : dirty ? t.unsaved : t.saved}
           </span>
+          <button className="button button-small button-outline"
+            type="button" onClick={()=>setTab("preview")} disabled={!draft?.outline.length}
+            title={tr(locale,"Preview your book","معاينة كتابك","Förhandsgranska din bok")}>
+            <Eye size={16}/>{tr(locale,"Preview","معاينة","Förhandsvisa")}
+          </button>
           <button
             className="icon-button"
             onClick={history}
@@ -1020,6 +1032,7 @@ export function Editor({
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
+            <div className="studio-journey-first"><span className="tab-number">01</span><Check size={15}/>{tr(locale, "Idea and audience", "الفكرة والجمهور", "Idé och målgrupp")}</div>
             {(
               [
                 { id: "outline", icon: ListTree },
@@ -1035,13 +1048,21 @@ export function Editor({
                 disabled={!draft.outline.length && tabId !== "outline"}
                 aria-current={tab === tabId ? "page" : undefined}
               >
-                <span className="tab-number">0{i + 1}</span>
+                <span className="tab-number">0{i + 2}</span>
                 <Icon size={17} />
                 <span>{t[tabId]}</span>
                 <ChevronRight className="tab-chevron" size={15} />
               </button>
             ))}
           </nav>
+          {draft.outline.length > 0 && <div className="studio-chapter-nav">
+            <strong>{tr(locale,"Chapters","الفصول","Kapitel")}</strong>
+            <div className="studio-chapter-links">{draft.outline.map((c,i)=><button type="button" key={c.id}
+              className={tab==="write" && active?.id===c.id?"active":""}
+              onClick={()=>{setChapterId(c.id);setTab("write");}}>
+              <span>{i+1}</span><span className="studio-chapter-label">{c.title}</span>{draft.chapters[c.id]&&<Check size={14}/>}
+            </button>)}</div>
+          </div>}
           <div className="sidebar-stats">
             <BookOpen size={18} />
             <div>
@@ -1068,6 +1089,17 @@ export function Editor({
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
+          <nav className="studio-progress-steps" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
+            {(["outline","write","design","preview"] as const).map((step,i)=><button type="button" key={step}
+              className={tab===step?"active":""}
+              aria-current={tab===step?"step":undefined}
+              disabled={!draft.outline.length&&step!=="outline"} onClick={()=>setTab(step)}>
+              <span>{i+2}</span>{step==="outline"?tr(locale,"Plan","التخطيط","Planera")
+                :step==="write"?tr(locale,"Write","الكتابة","Skriv")
+                :step==="design"?tr(locale,"Design","التصميم","Design")
+                :tr(locale,"Review","المراجعة","Granska")}
+            </button>)}
+          </nav>
           {!online && (
             <div className="notice offline-warning" role="status">
               {tr(locale,
@@ -1416,6 +1448,10 @@ export function Editor({
                   ))}
                 </select>
               </label>
+              <p className="studio-writing-hint">{tr(locale,
+                "Write directly in your book. Select text for AI; use + to insert images, logos and blocks.",
+                "اكتب مباشرة داخل كتابك. حدّد النص ليظهر تصحيح AI، واستعمل + لإضافة الصور والشعارات والعناصر.",
+                "Skriv direkt i boken. Markera text för AI och använd + för bilder, logotyper och block.")}</p>
               <div className="chapter-author-actions">
                  <button type="button" className="button button-outline button-small"
                    disabled={disabled || draft.outline.length >= 30} onClick={() => addChapter(active?.id)}>
@@ -1434,20 +1470,6 @@ export function Editor({
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
-               {current && book.unlocked && config.ai && (
-                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
-                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
-                   {([
-                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
-                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
-                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
-                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
-                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
-                   ] as const).map(([action,label])=><button type="button" key={action}
-                     disabled={disabled || !!book.text_edit_candidate}
-                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
-                 </div>
-               )}
                {book.text_edit_candidate && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -1565,6 +1587,15 @@ export function Editor({
                     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
                       onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
                   </label>
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled || !current}
+                    onClick={()=>setImagePrompt(tr(locale,
+                      "An original, clear, professional book illustration connected to this text: ",
+                      "رسم أصلي واحترافي مرتبط مباشرة بهذا النص: ",
+                      "En originell, professionell illustration som passar denna text: ")+
+                      current.content.slice(Math.max(0,cursorRef.current-250),cursorRef.current+350).slice(0,530))}>
+                    <Sparkles size={16}/>{tr(locale,"Suggest from the paragraph (free)","اقترح من الفقرة (مجاني)","Föreslå utifrån stycket (gratis)")}
+                  </button>
                   <label>{tr(locale, "Describe the AI illustration", "صف الصورة التي تريد توليدها بالذكاء الاصطناعي", "Beskriv AI-illustrationen")}
                     <textarea rows={3} maxLength={700} value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
                       placeholder={tr(locale, "A scene from this chapter, a character, or a visual explanation…", "مشهد من هذا الفصل أو شخصية أو رسم يوضح فكرة...", "En scen, en karaktär eller en förklarande bild…")} />
@@ -1592,13 +1623,13 @@ export function Editor({
                     <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
                 ) : visualMode && active ? (
-                  <VisualChapterEditor key={active.id} chapterId={active.id}
+                  <VisualChapterEditor key={active.id} chapterId={active.id} locale={locale}
                     content={current.content} bookId={id} illustrations={draft.illustrations}
                     disabled={disabled}
                     onChange={content => change(b=>({...b,chapters:{
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
-                    onSelection={value=>{visualSelectedRef.current=value;}}
+                    onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);if(value.trim().length>=4)setToolPanel("ai");}}
                     onInsertImage={position=>{
                       cursorRef.current=position;
                       setImagePlacement("cursor");
@@ -1625,7 +1656,7 @@ export function Editor({
                       disabled={disabled}
                       onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
                       onKeyUp={e => { cursorRef.current = e.currentTarget.selectionStart; }}
-                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart;setSelectedCount(e.currentTarget.selectionEnd-e.currentTarget.selectionStart); }}
                       onChange={(e) => {
                         cursorRef.current = e.currentTarget.selectionStart;
                         if (active)
@@ -1754,6 +1785,11 @@ export function Editor({
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
               </div>
+              <div className="studio-design-steps">
+                <div><span>01</span><strong>{tr(locale,"Describe the mood and visual idea","صف الجو والفكرة البصرية","Beskriv känsla och motiv")}</strong></div>
+                <div><span>02</span><strong>{tr(locale,"Choose one of the suggested covers","اختر تصميم الغلاف المناسب","Välj omslag")}</strong></div>
+                <div><span>03</span><strong>{tr(locale,"Review front and back covers","راجع الغلاف الأمامي والخلفي","Granska framsida och baksida")}</strong></div>
+              </div>
               <div className="design-layout">
                 <div className="design-cover">
                   <div className="cover-side-switch" role="group" aria-label={tr(locale, "Cover side", "جهة الغلاف", "Omslagssida")}>
@@ -1834,7 +1870,7 @@ export function Editor({
                     <label>
                       {tr(locale, "Describe your ideal AI cover", "صف للذكاء الاصطناعي الغلاف الذي تتخيله", "Beskriv ditt drömomslag för AI")}
                       <textarea rows={4} maxLength={800} disabled={disabled} value={draft.cover_direction || ""}
-                        placeholder={tr(locale, "Scene, main character, symbol, atmosphere, colors... The AI will use this alongside your book's idea.", "ما المشهد أو الشخصية أو الرمز أو الجو والألوان التي تريدها؟ سيقرأ الذكاء الاصطناعي وصفك مع فكرة الكتاب.", "Scen, huvudperson, symbol, stämning, färger... AI kombinerar detta med bokens idé.")}
+                        placeholder={tr(locale, "Mood? Main scene or symbol? What must never appear? The AI also reads your book's topic.", "١. ما الجو المطلوب؟ ٢. ما الرمز أو المشهد؟ ٣. ما الذي تريد تجنبه؟ يقرأ AI فكرة الكتاب أيضًا.", "Vilken stämning? Motiv? Vad ska undvikas? AI läser också bokens idé.")}
                         onChange={(e) => change((b) => ({ ...b, cover_direction: e.target.value }))} />
                     </label>
                     <p className="muted">{tr(locale,
@@ -2026,6 +2062,23 @@ export function Editor({
                       "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.")
                   : t.exportHint}</p>
               </div>
+              <div className="studio-readiness" role="group" aria-label={tr(locale,"Publication readiness","جاهزية الكتاب","Publiceringskontroll")}>
+                <div className="studio-readiness-heading">
+                  <Check size={18}/><strong>{tr(locale,"Ready to publish?","هل كتابك جاهز؟","Redo att publicera?")}</strong>
+                  <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length} {tr(locale,"chapters written","فصل مكتمل","skrivna kapitel")}</span>
+                </div>
+                <div className="studio-readiness-items">
+                  {([
+                    [Boolean(draft.title.trim()),tr(locale,"Book title","عنوان الكتاب","Boktitel"),"outline"],
+                    [Boolean(draft.outline.length && draft.outline.every(c=>draft.chapters[c.id]?.content.trim())),tr(locale,"All chapters finished","كتابة جميع الفصول","Alla kapitel klara"),"write"],
+                    [Boolean(draft.author.trim()),tr(locale,"Author's name (recommended)","اسم المؤلف (مستحسن)","Författarnamn (rekommenderas)"),"design"],
+                    [Boolean(draft.back_blurb?.trim()),tr(locale,"Back cover description (recommended)","نبذة الغلاف الخلفي (مستحسنة)","Baksidestext (rekommenderas)"),"design"],
+                    [!dirty && !pending,tr(locale,"All changes saved","حفظ جميع التعديلات","Alla ändringar sparade"),"preview"],
+                  ] as const).map(([done,label,step],i)=>
+                    <button type="button" key={i} className={done?"is-ready":"needs-attention"}
+                      onClick={()=>setTab(step)}><span>{done?<Check size={15}/>:i+1}</span>{label}</button>)}
+                </div>
+              </div>
               <div className="export-buttons">
                 <button
                   className="button button-primary"
@@ -2126,7 +2179,66 @@ export function Editor({
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
+          {tab!=="preview" && draft.outline.length>0 && <div className="studio-next-step">
+            <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
+            <button type="button" className="button button-primary"
+              onClick={()=>setTab(tab==="outline"?"write":tab==="write"?"design":"preview")}>
+              {tab==="outline"?tr(locale,"Next: Write the book","التالي: كتابة الكتاب","Nästa: Skriv")
+               :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
+               :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
+              <ChevronRight size={16}/>
+            </button>
+          </div>}
         </div>
+        {tab==="write" && draft.outline.length>0 && <aside className="studio-tool-rail" aria-label={tr(locale,"Book tools","أدوات الكتاب","Bokverktyg")}>
+          <div className="studio-rail-heading"><Sparkles size={18}/><h3>{tr(locale,"Your tools","أدواتك","Verktyg")}</h3></div>
+          <p className="muted">{tr(locale,"Only the tools you need, when you need them.","تظهر الأدوات المناسبة وقت الحاجة فقط.","Bara verktygen du behöver, när du behöver dem.")}</p>
+          <div className="studio-rail-switch">
+            <button type="button" className={toolPanel==="add"?"active":""} onClick={()=>setToolPanel("add")}><Plus size={16}/>{tr(locale,"Add","إضافة","Lägg till")}</button>
+            <button type="button" className={toolPanel==="ai"?"active":""} onClick={()=>setToolPanel("ai")}><Sparkles size={16}/>{tr(locale,"AI editor","تصحيح AI","AI-redigering")}</button>
+          </div>
+          {toolPanel==="add" && <div className="studio-rail-body">
+            <p className="muted">{tr(locale,"Use + between paragraphs for text, headings, quotes and dividers.","استعمل + بين الفقرات لإضافة النص والعناوين والاقتباسات والفواصل.","Använd + mellan stycken för text, rubriker, citat och avdelare.")}</p>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>setShowIllustrations(true)}><ImagePlus size={17}/>{tr(locale,"Image or logo","صورة أو شعار","Bild eller logotyp")}</button>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={addDivider}><SeparatorHorizontal size={17}/>{tr(locale,"Scene divider","فاصل زخرفي","Avdelare")}</button>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>{setVisualMode(true);setRead(false);}}><FileText size={17}/>{tr(locale,"Visual editor","المحرر البصري","Visuell redigerare")}</button>
+          </div>}
+          {toolPanel==="ai" && <div className="studio-rail-body">
+            <p className="muted">{selectedCount>=4?
+              tr(locale,"Choose an action. The change requires approval.","اختر التصحيح، ولن يتغير النص إلا بموافقتك.","Välj en åtgärd. Du godkänner alltid ändringen."):
+              tr(locale,"Select a sentence or paragraph first.","حدّد جملة أو فقرة أولًا.","Markera först en mening eller ett stycke.")}</p>
+            {selectedCount>=4 && <>
+               {current && book.unlocked && config.ai && (
+                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
+                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
+                   {([
+                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
+                     ["simplify",tr(locale,"Simplify","تبسيط","Förenkla")],
+                   ] as const).map(([action,label])=><button type="button" key={action}
+                     disabled={disabled || !!book.text_edit_candidate}
+                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+                 </div>
+               )}
+               {current && book.unlocked && config.ai && <div className="studio-custom-ai">
+                 <label>{tr(locale,"Special instructions","تعليمات خاصة","Egna instruktioner")}
+                   <textarea rows={3} maxLength={500} value={aiInstruction}
+                     placeholder={tr(locale,"For example: make the tone warmer without changing facts.","مثال: اجعل الأسلوب أبسط دون تغيير الحقائق.","Exempel: förenkla tonen utan att ändra fakta.")}
+                     onChange={e=>setAiInstruction(e.target.value)} disabled={disabled}/>
+                 </label>
+                 <button className="button button-outline button-small" type="button"
+                   disabled={disabled||!!book.text_edit_candidate||selectedCount<4||aiInstruction.trim().length<5}
+                   onClick={()=>proposeTextEdit("custom")}>
+                   <Sparkles size={15}/>{tr(locale,"Apply custom instruction","اقترح تعديلًا خاصًا","Föreslå egen ändring")}
+                 </button>
+               </div>}
+
+            </>}
+          </div>}
+        </aside>}
       </div>
       {modal && (
         <Dialog
