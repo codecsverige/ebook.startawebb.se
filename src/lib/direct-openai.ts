@@ -72,11 +72,12 @@ export async function generateDirectStructured<T>(
 ): Promise<{ output: T; usage: { inputTokens: number; outputTokens: number }; finishReason: string }> {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new DirectOpenAiError(401, "ai_auth_failed");
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const primaryModel = directModelFor(operation);
+  const request = (model: string) => fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: directModelFor(operation),
+      model,
       store: false,
       instructions: system,
       input: [{ role: "user", content: prompt }],
@@ -86,6 +87,23 @@ export async function generateDirectStructured<T>(
     signal: AbortSignal.timeout(120_000),
     cache: "no-store",
   });
+  let response = await request(primaryModel);
+  // API project model permissions differ from Gateway permissions.
+  // 403/404 does not necessarily mean a bad API key. Retry once using the
+  // ALREADY configured Gateway model (4.1-mini), never an untested new model.
+  // Refused model requests cannot produce billable generations; a successful
+  // primary attempt never triggers a second paid request.
+  if ((response.status === 403 || response.status === 404) &&
+      primaryModel !== "gpt-4.1-mini") {
+    let refusal: unknown;
+    try { refusal = await response.clone().json(); } catch { /* no body */ }
+    if (classifyOpenAiHttpFailure(response.status, refusal) === "ai_model_unavailable") {
+      console.warn("direct_model_access_fallback", {
+        from: primaryModel, to: "gpt-4.1-mini", status: response.status,
+      });
+      response = await request("gpt-4.1-mini");
+    }
+  }
   if (!response.ok) {
     let errorBody: unknown;
     try { errorBody = await response.json(); } catch { /* no response body */ }
