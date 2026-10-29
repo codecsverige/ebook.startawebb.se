@@ -23,8 +23,10 @@ import {
   List as ListIcon,
   Maximize2,
   Minimize2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
-import { BookCover } from "./book-cover";
+import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
@@ -93,6 +95,7 @@ export function Editor({
   const [chapterId, setChapterId] = useState("");
   const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
   const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
+  const [coverSide, setCoverSide] = useState<"front" | "back">("front");
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
@@ -340,6 +343,11 @@ export function Editor({
           author: draft.author,
           cover_style: draft.cover_style,
           use_artwork: draft.use_artwork,
+          cover_direction: draft.cover_direction || "",
+          back_blurb: draft.back_blurb || "",
+          author_bio: draft.author_bio || "",
+          dedication: draft.dedication || "",
+          preface: draft.preface || "",
           outline: draft.outline,
           chapters: draft.chapters,
         }),
@@ -1051,9 +1059,23 @@ export function Editor({
                             />
                           </label>
                         </div>
-                        {draft.chapters[c.id] && (
-                          <Check className="chapter-check" size={17} />
-                        )}
+                        <div className="chapter-move-actions">
+                          <button type="button" aria-label={tr(locale, "Move chapter up", "نقل الفصل للأعلى", "Flytta kapitlet upp")}
+                            title={tr(locale, "Move up", "أعلى", "Flytta upp")} disabled={disabled || i === 0}
+                            onClick={() => change((b) => {
+                              const outline = [...b.outline];
+                              [outline[i - 1], outline[i]] = [outline[i], outline[i - 1]];
+                              return { ...b, outline };
+                            })}><ArrowUp size={16} /></button>
+                          <button type="button" aria-label={tr(locale, "Move chapter down", "نقل الفصل للأسفل", "Flytta kapitlet ned")}
+                            title={tr(locale, "Move down", "أسفل", "Flytta ned")} disabled={disabled || i === draft.outline.length - 1}
+                            onClick={() => change((b) => {
+                              const outline = [...b.outline];
+                              [outline[i], outline[i + 1]] = [outline[i + 1], outline[i]];
+                              return { ...b, outline };
+                            })}><ArrowDown size={16} /></button>
+                          {draft.chapters[c.id] && <Check className="chapter-check" size={17} />}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1251,14 +1273,25 @@ export function Editor({
               </div>
               <div className="design-layout">
                 <div className="design-cover">
-                  <BookCover
-                    title={draft.title}
-                    subtitle={draft.subtitle}
-                    author={draft.author}
-                    style={draft.cover_style}
-                    language={draft.language}
-                    image={draft.cover_candidate_url || (draft.use_artwork ? draft.cover_url : null)}
-                  />
+                  <div className="cover-side-switch" role="group" aria-label={tr(locale, "Cover side", "جهة الغلاف", "Omslagssida")}>
+                    <button type="button" className={coverSide === "front" ? "active" : ""} aria-pressed={coverSide === "front"} onClick={() => setCoverSide("front")}>{tr(locale, "Front", "الأمام", "Framsida")}</button>
+                    <button type="button" className={coverSide === "back" ? "active" : ""} aria-pressed={coverSide === "back"} onClick={() => setCoverSide("back")}>{tr(locale, "Back", "الخلف", "Baksida")}</button>
+                  </div>
+                  {coverSide === "front" ? (
+                    <BookCover
+                      title={draft.title}
+                      subtitle={draft.subtitle}
+                      author={draft.author}
+                      style={draft.cover_style}
+                      language={draft.language}
+                      image={draft.cover_candidate_url || (draft.use_artwork ? draft.cover_url : null)}
+                    />
+                  ) : (
+                    <BookBackCover title={draft.title} author={draft.author}
+                      style={draft.cover_style} language={draft.language}
+                      blurb={draft.back_blurb || draft.idea}
+                      authorBio={draft.author_bio || ""} />
+                  )}
                 </div>
                 <div className="stack">
                   <fieldset className="cover-gallery" disabled={disabled}>
@@ -1313,6 +1346,49 @@ export function Editor({
                       }
                     />
                   </label>
+                  <div className="cover-content-fields" dir={draft.language === "ar" ? "rtl" : "ltr"}>
+                    <label>
+                      {tr(locale, "Describe your ideal AI cover", "صف للذكاء الاصطناعي الغلاف الذي تتخيله", "Beskriv ditt drömomslag för AI")}
+                      <textarea rows={4} maxLength={800} disabled={disabled} value={draft.cover_direction || ""}
+                        placeholder={tr(locale, "Scene, main character, symbol, atmosphere, colors... The AI will use this alongside your book's idea.", "ما المشهد أو الشخصية أو الرمز أو الجو والألوان التي تريدها؟ سيقرأ الذكاء الاصطناعي وصفك مع فكرة الكتاب.", "Scen, huvudperson, symbol, stämning, färger... AI kombinerar detta med bokens idé.")}
+                        onChange={(e) => change((b) => ({ ...b, cover_direction: e.target.value }))} />
+                    </label>
+                    <p className="muted">{tr(locale,
+                      "Need an idea? Choose a starting direction below, then edit it before generating. These starters are free and do not call AI.",
+                      "لست متأكدًا من شكل الغلاف؟ اختر فكرة أولية وعدّلها قبل التوليد. هذه المقترحات مجانية ولا تطلب الذكاء الاصطناعي.",
+                      "Behöver du en idé? Välj ett gratis förslag och redigera det innan du genererar. Dessa förslag använder inte AI.")}</p>
+                    <div className="cover-concept-list">
+                      {[
+                        tr(locale, "Symbolic: a single distinctive object representing the central theme, generous negative space, editorial lighting.", "رمزي: عنصر واحد مميز يرمز إلى فكرة الكتاب الأساسية مع إضاءة فنية ومساحة هادئة للعنوان.", "Symbolisk: ett föremål som fångar bokens kärna, gott om utrymme och redaktionellt ljus."),
+                        tr(locale, "Cinematic: a compelling scene from the book's central situation, depth, atmosphere and dramatic composition.", "سينمائي: مشهد مؤثر من موضوع الكتاب الأساسي، بعمق وأجواء وتكوين بصري درامي.", "Filmisk: en stark scen från bokens huvudtema, djup och dramatisk komposition."),
+                        tr(locale, "Minimalist: original geometric shapes and a striking visual metaphor specific to this story or subject.", "بسيط وأنيق: أشكال هندسية أصلية واستعارة بصرية قوية مرتبطة بقصة الكتاب أو موضوعه.", "Minimalistisk: originella geometriska former och en tydlig visuell metafor för ämnet."),
+                      ].map((idea, index) => (
+                        <button type="button" key={index} className="cover-concept-chip" disabled={disabled}
+                          onClick={() => change((b) => ({ ...b, cover_direction: idea }))}>{index + 1}. {idea}</button>
+                      ))}
+                    </div>
+                    <label>
+                      {tr(locale, "Back cover description", "نبذة الغلاف الخلفي", "Baksidestext")}
+                      <textarea rows={5} maxLength={1800} disabled={disabled} value={draft.back_blurb || ""}
+                        placeholder={tr(locale, "Write the description a reader sees on the back cover.", "اكتب نصًا يشجّع القارئ على قراءة كتابك.", "Skriv en lockande baksidestext.")}
+                        onChange={(e) => change((b) => ({ ...b, back_blurb: e.target.value }))} />
+                    </label>
+                    <label>
+                      {tr(locale, "About the author (back cover)", "نبذة عن المؤلف (الغلاف الخلفي)", "Om författaren (baksida)")}
+                      <textarea rows={3} maxLength={800} disabled={disabled} value={draft.author_bio || ""}
+                        onChange={(e) => change((b) => ({ ...b, author_bio: e.target.value }))} />
+                    </label>
+                    <label>
+                      {tr(locale, "Dedication (optional)", "الإهداء (اختياري)", "Dedikation (valfritt)")}
+                      <textarea rows={2} maxLength={500} disabled={disabled} value={draft.dedication || ""}
+                        onChange={(e) => change((b) => ({ ...b, dedication: e.target.value }))} />
+                    </label>
+                    <label>
+                      {tr(locale, "Preface (optional)", "المقدمة (اختيارية)", "Förord (valfritt)")}
+                      <textarea rows={5} maxLength={5000} disabled={disabled} value={draft.preface || ""}
+                        onChange={(e) => change((b) => ({ ...b, preface: e.target.value }))} />
+                    </label>
+                  </div>
                   <button
                     className="button button-outline"
                     disabled={
@@ -1321,7 +1397,7 @@ export function Editor({
                       !config.artwork ||
                       !book.unlocked
                     }
-                    onClick={() => generate("cover")}
+                    onClick={() => { setCoverSide("front"); void generate("cover"); }}
                   >
                     <Sparkles size={17} />
                     {t.aiCover}
@@ -1468,21 +1544,37 @@ export function Editor({
                   {t.exportEpub}
                 </button>
               </div>
+              {canExport && !dirty && !pending && (
+                <a className="button button-outline button-small" href={`/api/books/${id}/export?format=pdf&preview=1`}
+                  target="_blank" rel="noopener noreferrer">
+                  <Eye size={16} /> {tr(locale, "View the real exported PDF", "معاينة ملف PDF النهائي الحقيقي", "Förhandsgranska den riktiga PDF-filen")}
+                </a>
+              )}
               <div
                 className="book-preview"
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
               >
-                <div className="preview-cover">
-                  <BookCover
-                    title={draft.title}
-                    subtitle={draft.subtitle}
-                    author={draft.author}
-                    style={draft.cover_style}
-                    language={draft.language}
-                    image={draft.use_artwork ? draft.cover_url : null}
-                  />
+                <div className="preview-cover-pair">
+                  <div className="preview-cover">
+                    <BookCover
+                      title={draft.title}
+                      subtitle={draft.subtitle}
+                      author={draft.author}
+                      style={draft.cover_style}
+                      language={draft.language}
+                      image={draft.use_artwork ? draft.cover_url : null}
+                    />
+                  </div>
+                  <div className="preview-cover">
+                    <BookBackCover title={draft.title} author={draft.author}
+                      style={draft.cover_style} language={draft.language}
+                      blurb={draft.back_blurb || draft.idea}
+                      authorBio={draft.author_bio || ""} />
+                  </div>
                 </div>
+                {draft.dedication && <section className="preview-toc"><h2>{tr(draft.language, "Dedication", "الإهداء", "Dedikation")}</h2><p>{draft.dedication}</p></section>}
+                {draft.preface && <section className="preview-toc"><h2>{tr(draft.language, "Preface", "المقدمة", "Förord")}</h2><Markdown text={draft.preface} /></section>}
                 <section className="preview-toc">
                   <h2>
                     {tr(draft.language, "Contents", "الفهرس", "Innehåll")}
