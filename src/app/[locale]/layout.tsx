@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isLocale, locales } from "@/lib/domain";
 import { appUrl } from "@/lib/config";
+import { BOOK_DESIGN_CSS } from "@/lib/book-design";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl()),
@@ -33,6 +34,7 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"}>
       <body>
+        <style>{BOOK_DESIGN_CSS}</style>
         <a className="skip-link" href="#main">
           {locale === "ar"
             ? "انتقل إلى المحتوى"

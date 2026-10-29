@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: `default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://${firebaseWebConfig.authDomain}${process.env.NODE_ENV === "development" ? " ws: wss:" : ""}; frame-src https://${firebaseWebConfig.authDomain} https://apis.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://${firebaseWebConfig.authDomain}${process.env.NODE_ENV === "development" ? " ws: wss:" : ""}; frame-src 'self' blob: https://${firebaseWebConfig.authDomain} https://apis.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
           },
         ],
       },

@@ -16,6 +16,7 @@ export type ChapterBook = Pick<
   | "language"
   | "outline"
   | "chapters"
+  | "chapter_length"
 >;
 type WriteChapter = (
   operation: "chapter" | "chapter_recovery",
@@ -38,9 +39,18 @@ export function chapterGenerationPrompt(
   const fiction = ["novel", "short_story", "children_story"].includes(
     book.kind,
   );
+  const length = book.chapter_length || "standard";
+  const target =
+    length === "short"
+      ? "400–650"
+      : length === "long"
+        ? "1400–2000"
+        : fiction
+          ? "650–1000"
+          : "700–1100";
   const writing = fiction
-    ? "Write a vivid, original 650–1000 word narrative chapter. Use scenes, natural dialogue, character actions and sensory details. Preserve character names, viewpoint, chronology and unresolved threads. No Markdown headings or bullet points within the story. For children use age-appropriate language."
-    : "Write a substantial 700–1100 word chapter. Use Markdown subheadings, short paragraphs and concrete examples as appropriate. Include exercises for workbooks. Avoid repetition.";
+    ? `Write a vivid, original ${target} word narrative chapter. Use scenes, natural dialogue, character actions and sensory details. Preserve character names, viewpoint, chronology and unresolved threads. No Markdown headings or bullet points within the story. For children use age-appropriate language.`
+    : `Write a substantial ${target} word chapter. Use Markdown subheadings, short paragraphs and concrete examples as appropriate. Include exercises for workbooks. Avoid repetition.`;
   const previous = book.outline.slice(0, index);
   const previousChapter = previous.at(-1);
   const previousDraft = previousChapter && book.chapters[previousChapter.id];
@@ -97,7 +107,13 @@ export async function generateCompleteChapter(
     return chapter;
   }
   try {
-    return validate(await write("chapter", prompt, 6500));
+    return validate(
+      await write(
+        "chapter",
+        prompt,
+        book.chapter_length === "long" ? 14000 : 6500,
+      ),
+    );
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";
     // Authentication, budget, network and policy errors must not trigger another paid request.
@@ -110,7 +126,7 @@ export async function generateCompleteChapter(
           reason +
           ". Return a complete replacement chapter using the original requirements below. Keep the SAME target word count; do not shorten, summarize or replace the chapter with an introduction. " +
           prompt,
-        8500,
+        book.chapter_length === "long" ? 16000 : 8500,
       ),
     );
   }

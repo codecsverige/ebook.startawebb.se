@@ -56,6 +56,7 @@ export function Dashboard({
     tone: "clear",
     author: "",
     chapter_count: 6,
+    chapter_length: "standard",
   });
   const draftStorageKey = `ebook-studio:new-book:${locale}`;
   useEffect(() => {
@@ -65,13 +66,58 @@ export function Dashboard({
       const saved = JSON.parse(raw) as Partial<Brief>;
       setBrief((current) => ({
         ...current,
-        idea: typeof saved.idea === "string" ? saved.idea.slice(0, 2000) : current.idea,
-        audience: typeof saved.audience === "string" ? saved.audience.slice(0, 300) : current.audience,
-        author: typeof saved.author === "string" ? saved.author.slice(0, 100) : current.author,
-        kind: (["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as string[]).includes(saved.kind || "") ? saved.kind! : current.kind,
-        language: (["ar", "en", "sv"] as string[]).includes(saved.language || "") ? saved.language! : current.language,
-        tone: (["clear", "friendly", "professional", "literary", "dramatic", "playful"] as string[]).includes(saved.tone || "") ? saved.tone! : current.tone,
-        chapter_count: typeof saved.chapter_count === "number" && saved.chapter_count >= 3 && saved.chapter_count <= 10 ? Math.floor(saved.chapter_count) : current.chapter_count,
+        idea:
+          typeof saved.idea === "string"
+            ? saved.idea.slice(0, 2000)
+            : current.idea,
+        audience:
+          typeof saved.audience === "string"
+            ? saved.audience.slice(0, 300)
+            : current.audience,
+        author:
+          typeof saved.author === "string"
+            ? saved.author.slice(0, 100)
+            : current.author,
+        kind: (
+          [
+            "guide",
+            "ebook",
+            "workbook",
+            "novel",
+            "short_story",
+            "children_story",
+          ] as string[]
+        ).includes(saved.kind || "")
+          ? saved.kind!
+          : current.kind,
+        language: (["ar", "en", "sv"] as string[]).includes(
+          saved.language || "",
+        )
+          ? saved.language!
+          : current.language,
+        tone: (
+          [
+            "clear",
+            "friendly",
+            "professional",
+            "literary",
+            "dramatic",
+            "playful",
+          ] as string[]
+        ).includes(saved.tone || "")
+          ? saved.tone!
+          : current.tone,
+        chapter_count:
+          typeof saved.chapter_count === "number" &&
+          saved.chapter_count >= 1 &&
+          saved.chapter_count <= 30
+            ? Math.floor(saved.chapter_count)
+            : current.chapter_count,
+        chapter_length: (["short", "standard", "long"] as string[]).includes(
+          saved.chapter_length || "",
+        )
+          ? saved.chapter_length
+          : "standard",
       }));
     } catch {
       // Browsers that disable session storage still support the cloud editor.
@@ -79,7 +125,9 @@ export function Dashboard({
   }, [draftStorageKey]);
   useEffect(() => {
     if (!brief.idea && !brief.audience) return;
-    try { sessionStorage.setItem(draftStorageKey, JSON.stringify(brief)); } catch {}
+    try {
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(brief));
+    } catch {}
   }, [brief, draftStorageKey]);
 
   async function load() {
@@ -120,7 +168,9 @@ export function Dashboard({
         method: "POST",
         body: JSON.stringify(parsed.data),
       });
-      try { sessionStorage.removeItem(draftStorageKey); } catch {}
+      try {
+        sessionStorage.removeItem(draftStorageKey);
+      } catch {}
       router.push(`/${locale}/studio/${d.id}`);
     } catch (e) {
       setError(codeOf(e));
@@ -176,7 +226,12 @@ export function Dashboard({
             </button>
           ) : config.ownerTrial ? (
             <span className="status-tag" role="status">
-              {tr(locale, "Private free trial", "تجربة مجانية خاصة", "Privat gratis test")}
+              {tr(
+                locale,
+                "Private free trial",
+                "تجربة مجانية خاصة",
+                "Privat gratis test",
+              )}
             </span>
           ) : null}
           <button
@@ -351,7 +406,14 @@ export function Dashboard({
                       field("kind", e.target.value as Brief["kind"])
                     }
                   >
-                    {["guide", "ebook", "workbook", "novel", "short_story", "children_story"].map((k) => (
+                    {[
+                      "guide",
+                      "ebook",
+                      "workbook",
+                      "novel",
+                      "short_story",
+                      "children_story",
+                    ].map((k) => (
                       <option key={k} value={k}>
                         {t[k as Brief["kind"]]}
                       </option>
@@ -372,7 +434,12 @@ export function Dashboard({
                   </select>
                   {isArabicBrief(brief.idea) && brief.language !== "ar" && (
                     <span className="notice" role="alert">
-                      {tr(locale, "Your brief is Arabic. Choose Arabic for the book or write the brief in the selected language.", "فكرتك بالعربية. اختر العربية كلغة للكتاب حتى لا يُنشأ بالإنجليزية.", "Din bokidé är på arabiska. Välj arabiska som bokens språk.")}
+                      {tr(
+                        locale,
+                        "Your brief is Arabic. Choose Arabic for the book or write the brief in the selected language.",
+                        "فكرتك بالعربية. اختر العربية كلغة للكتاب حتى لا يُنشأ بالإنجليزية.",
+                        "Din bokidé är på arabiska. Välj arabiska som bokens språk.",
+                      )}
                     </span>
                   )}
                 </label>
@@ -384,7 +451,14 @@ export function Dashboard({
                       field("tone", e.target.value as Brief["tone"])
                     }
                   >
-                    {["clear", "friendly", "professional", "literary", "dramatic", "playful"].map((k) => (
+                    {[
+                      "clear",
+                      "friendly",
+                      "professional",
+                      "literary",
+                      "dramatic",
+                      "playful",
+                    ].map((k) => (
                       <option key={k} value={k}>
                         {t[k as Brief["tone"]]}
                       </option>
@@ -399,12 +473,49 @@ export function Dashboard({
                       field("chapter_count", Number(e.target.value))
                     }
                   >
-                    {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
                       <option key={n}>{n}</option>
                     ))}
                   </select>
                 </label>
               </div>
+              <label>
+                {tr(locale, "Chapter length", "طول الفصل", "Kapitellängd")}
+                <select
+                  value={brief.chapter_length || "standard"}
+                  onChange={(e) =>
+                    field(
+                      "chapter_length",
+                      e.target.value as Brief["chapter_length"],
+                    )
+                  }
+                >
+                  <option value="short">
+                    {tr(
+                      locale,
+                      "Short · 400–650 words",
+                      "قصير · 400–650 كلمة",
+                      "Kort · 400–650 ord",
+                    )}
+                  </option>
+                  <option value="standard">
+                    {tr(
+                      locale,
+                      "Standard · about 1,000 words",
+                      "متوسط · نحو 1,000 كلمة",
+                      "Standard · cirka 1 000 ord",
+                    )}
+                  </option>
+                  <option value="long">
+                    {tr(
+                      locale,
+                      "Detailed · 1,400–2,000 words",
+                      "مفصّل · 1,400–2,000 كلمة",
+                      "Utförligt · 1 400–2 000 ord",
+                    )}
+                  </option>
+                </select>
+              </label>
               <label>
                 {t.author}
                 <input

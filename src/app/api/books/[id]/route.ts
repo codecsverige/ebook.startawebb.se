@@ -31,9 +31,7 @@ export async function PATCH(request: Request, ctx: Context) {
     const { id } = await ctx.params,
       { user } = await requireUser();
     await takeRate(`save:${user.id}`, 1000);
-    const input = await readJson(request, editBookSchema);
-    for (const chapter of Object.values(input.chapters))
-      chapter.summary = chapter.content.replace(/[#*]/g, "").slice(0, 1000);
+    const input = await readJson(request, editBookSchema, 850000);
     return json({
       book: await withCover(await studioStore().saveBook(user.id, id, input)),
     });
@@ -63,9 +61,15 @@ export async function POST(request: Request, ctx: Context) {
       1200,
     );
     await takeRate(`book-actions:${user.id}`, 15);
-    const book = input.action === "restart"
-      ? await studioStore().restartBook(user.id, id, input.language, input.revision)
-      : await studioStore().createManualOutline(user.id, id, input.revision);
+    const book =
+      input.action === "restart"
+        ? await studioStore().restartBook(
+            user.id,
+            id,
+            input.language,
+            input.revision,
+          )
+        : await studioStore().createManualOutline(user.id, id, input.revision);
     return json({ book: await withCover(book) });
   } catch (e) {
     return apiError(e);

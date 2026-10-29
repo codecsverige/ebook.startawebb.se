@@ -23,8 +23,19 @@ import {
   List as ListIcon,
   Maximize2,
   Minimize2,
+  Plus,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { BookCover } from "./book-cover";
+import {
+  WritingAssistant,
+  CoverWorkshop,
+  PublicationControls,
+  PublicationPreview,
+  ReviewPanel,
+} from "./editor-tools";
+import { applyTextSuggestion } from "@/lib/editorial";
 import { Markdown } from "./markdown";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
@@ -33,6 +44,10 @@ import { request, codeOf } from "@/lib/client";
 import { allowStudioNavigation } from "@/lib/navigation";
 import {
   bookWords,
+  bookSettings,
+  type BookSettings,
+  type AssistantInput,
+  type AssistantResult,
   coverStyles,
   recommendedCoverStyles,
   type CoverStyle,
@@ -82,7 +97,12 @@ export function Editor({
 }: {
   id: string;
   locale: Locale;
-  config: { ai: boolean; billing: boolean; artwork: boolean; ownerTrial: boolean };
+  config: {
+    ai: boolean;
+    billing: boolean;
+    artwork: boolean;
+    ownerTrial: boolean;
+  };
 }) {
   const t = copy[locale];
   const [book, setBook] = useState<BookWithCover | null>(null);
@@ -91,6 +111,16 @@ export function Editor({
   const [credits, setCredits] = useState(0);
   const [tab, setTab] = useState<Tab>("outline");
   const [chapterId, setChapterId] = useState("");
+  const [selection, setSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+  const [dismissedJob, setDismissedJob] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<{
+    url: string;
+    revision: number;
+  } | null>(null);
+  const revisionRef = useRef(0);
   const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
   const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
@@ -102,10 +132,26 @@ export function Editor({
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [recoveryDraft, setRecoveryDraft] = useState<BookWithCover | null>(null);
+  const [recoveryDraft, setRecoveryDraft] = useState<BookWithCover | null>(
+    null,
+  );
   const recoveryCheckedRef = useRef(false);
   const backupKey = `ebook-studio:draft:${id}`;
   const [online, setOnline] = useState(true);
+  useEffect(() => {
+    setSelection(null);
+  }, [chapterId]);
+  useEffect(
+    () => () => {
+      if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    },
+    [pdfPreview],
+  );
+  useEffect(() => {
+    setPdfPreview((current) =>
+      current && current.revision !== book?.revision ? null : current,
+    );
+  }, [book?.revision]);
   const saveFailuresRef = useRef(0);
   const savingRef = useRef(false);
   const generatingRef = useRef(false);
@@ -130,9 +176,13 @@ export function Editor({
           const data = sessionStorage.getItem(backupKey);
           if (data) {
             const saved = JSON.parse(data) as BookWithCover;
-            if (saved.id === id && saved.revision === d.book.revision &&
-                Array.isArray(saved.outline) && typeof saved.chapters === "object" &&
-                saved.title !== undefined) {
+            if (
+              saved.id === id &&
+              saved.revision === d.book.revision &&
+              Array.isArray(saved.outline) &&
+              typeof saved.chapters === "object" &&
+              saved.title !== undefined
+            ) {
               setRecoveryDraft(saved);
             }
           }
@@ -141,7 +191,10 @@ export function Editor({
         }
       }
       setBook(d.book);
-      if (!dirtyRef.current) setDraft(d.book);
+      if (!dirtyRef.current) {
+        setDraft(d.book);
+        revisionRef.current = d.book.revision;
+      }
       setRestartLanguage(isArabicBrief(d.book.idea) ? "ar" : d.book.language);
       setJob(d.job);
       setCredits(d.credits);
@@ -271,11 +324,21 @@ export function Editor({
     };
   }, []);
   useEffect(() => {
-    if (!dirty || !online || disabled || !draft?.outline.length ||
-        error === "conflict" || error === "rate_limit" ||
-        saveFailuresRef.current >= 4) return;
+    if (
+      !dirty ||
+      !online ||
+      disabled ||
+      !draft?.outline.length ||
+      error === "conflict" ||
+      error === "rate_limit" ||
+      saveFailuresRef.current >= 4
+    )
+      return;
     // Debounce saves and back off if the network is unavailable.
-    const delay = Math.min(30_000, 2_200 * (2 ** Math.min(4, saveFailuresRef.current)));
+    const delay = Math.min(
+      30_000,
+      2_200 * 2 ** Math.min(4, saveFailuresRef.current),
+    );
     const timer = window.setTimeout(() => void save(), delay);
     return () => window.clearTimeout(timer);
   }, [draft, dirty, online, disabled, pending, error]);
@@ -288,9 +351,10 @@ export function Editor({
   }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
-    const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
-      || draft?.outline[0];
-    if (!editor || !selectedChapter || !draft?.chapters[selectedChapter.id]) return;
+    const selectedChapter =
+      draft?.outline.find((item) => item.id === chapterId) || draft?.outline[0];
+    if (!editor || !selectedChapter || !draft?.chapters[selectedChapter.id])
+      return;
     const value = draft.chapters[selectedChapter.id].content;
     const from = editor.selectionStart;
     const to = editor.selectionEnd;
@@ -305,18 +369,29 @@ export function Editor({
     } else {
       prefix = (from > 0 && value[from - 1] !== "\n" ? "\n" : "") + "- ";
     }
-    const updated = value.slice(0, from) + prefix + (selected || " ") + suffix + value.slice(to);
+    const updated =
+      value.slice(0, from) +
+      prefix +
+      (selected || " ") +
+      suffix +
+      value.slice(to);
     if (updated.length > 30000) return;
     change((b) => ({
       ...b,
       chapters: {
         ...b.chapters,
-        [selectedChapter.id]: { ...b.chapters[selectedChapter.id], content: updated },
+        [selectedChapter.id]: {
+          ...b.chapters[selectedChapter.id],
+          content: updated,
+        },
       },
     }));
     requestAnimationFrame(() => {
       editor.focus();
-      editor.setSelectionRange(from + prefix.length, from + prefix.length + (selected || " ").length);
+      editor.setSelectionRange(
+        from + prefix.length,
+        from + prefix.length + (selected || " ").length,
+      );
     });
   }
   async function save(): Promise<boolean> {
@@ -342,23 +417,28 @@ export function Editor({
           use_artwork: draft.use_artwork,
           outline: draft.outline,
           chapters: draft.chapters,
+          settings: draft.settings,
+          chapter_length: draft.chapter_length,
         }),
       });
       setBook(d.book);
       const editedWhileSaving = editSequenceRef.current !== savingSequence;
+      revisionRef.current = d.book.revision;
       if (editedWhileSaving) {
         // Never replace a newer on-screen draft with the older request body.
         // Advance only the optimistic revision so autosave can persist it next.
-        setDraft((current) => current
-          ? { ...current, revision: d.book.revision }
-          : d.book);
+        setDraft((current) =>
+          current ? { ...current, revision: d.book.revision } : d.book,
+        );
         dirtyRef.current = true;
         setDirty(true);
       } else {
         setDraft(d.book);
         dirtyRef.current = false;
         setDirty(false);
-        try { sessionStorage.removeItem(backupKey); } catch {}
+        try {
+          sessionStorage.removeItem(backupKey);
+        } catch {}
         setRecoveryDraft(null);
       }
       saveFailuresRef.current = 0;
@@ -372,7 +452,11 @@ export function Editor({
       setPending("");
     }
   }
-  async function generate(kind: JobKind, chapter?: string) {
+  async function generate(
+    kind: JobKind,
+    chapter?: string,
+    input?: Omit<AssistantInput, "revision">,
+  ) {
     if (!draft || generatingRef.current || disabled) return;
     if (!online) {
       setError("offline");
@@ -387,11 +471,18 @@ export function Editor({
     if (dirtyRef.current && !(await save())) return;
     // A lost HTTP response must not trigger a second (billable) AI job.
     // Reuse the same request ID on uncertain network errors, even after reload.
-    const requestKey = `ebook-studio:generate:${id}:${kind}:${chapter || "all"}`;
+    const assistant = input
+      ? { ...input, revision: revisionRef.current }
+      : undefined;
+    const requestKey = `ebook-studio:generate:${id}:${kind}:${chapter || "all"}:${assistant ? JSON.stringify(assistant) : ""}`;
     let requestId = "";
-    try { requestId = sessionStorage.getItem(requestKey) || ""; } catch {}
+    try {
+      requestId = sessionStorage.getItem(requestKey) || "";
+    } catch {}
     if (!/^[0-9a-f-]{36}$/i.test(requestId)) requestId = crypto.randomUUID();
-    try { sessionStorage.setItem(requestKey, requestId); } catch {}
+    try {
+      sessionStorage.setItem(requestKey, requestId);
+    } catch {}
     generatingRef.current = true;
     setPending("generate");
     setError("");
@@ -402,20 +493,29 @@ export function Editor({
           kind,
           chapter_id: chapter,
           request_id: requestId,
+          assistant,
         }),
       });
-      try { sessionStorage.removeItem(requestKey); } catch {}
+      try {
+        sessionStorage.removeItem(requestKey);
+      } catch {}
       setJob(d.job);
+      setDismissedJob("");
       await load();
     } catch (e) {
       const code = codeOf(e);
       // On an unknown failure the request might have started server-side.
       // Retain its idempotency key for a safe retry rather than double billing.
       if (code !== "service_error" && code !== "offline") {
-        try { sessionStorage.removeItem(requestKey); } catch {}
+        try {
+          sessionStorage.removeItem(requestKey);
+        } catch {}
       }
       setError(code);
-      if (config.billing && (code === "insufficient_credits" || code === "free_preview_used"))
+      if (
+        config.billing &&
+        (code === "insufficient_credits" || code === "free_preview_used")
+      )
         setModal("credits");
       if (code === "busy") await load();
     } finally {
@@ -423,22 +523,131 @@ export function Editor({
       setPending("");
     }
   }
+  function updateSettings(patch: Partial<BookSettings>) {
+    change((b) => ({ ...b, settings: { ...bookSettings(b), ...patch } }));
+  }
+  function applySuggestion(result: Extract<AssistantResult, { type: "edit" }>) {
+    if (!draft || disabled || result.revision !== draft.revision) {
+      setError("conflict");
+      return;
+    }
+    const chapter = draft.chapters[result.chapter_id];
+    const content = chapter && applyTextSuggestion(chapter.content, result);
+    if (!content) {
+      setError("conflict");
+      return;
+    }
+    change((b) => ({
+      ...b,
+      chapters: {
+        ...b.chapters,
+        [result.chapter_id]: { content, summary: result.summary },
+      },
+    }));
+    setDismissedJob(job?.id || "");
+    setSelection(null);
+  }
+  function moveChapter(chapter: string, offset: number) {
+    change((b) => {
+      const outline = [...b.outline],
+        from = outline.findIndex((c) => c.id === chapter),
+        to = from + offset;
+      if (from < 0 || to < 0 || to >= outline.length) return b;
+      [outline[from], outline[to]] = [outline[to], outline[from]];
+      return { ...b, outline };
+    });
+  }
+  function deleteChapter(chapter: string) {
+    if (!draft || draft.outline.length <= 1 || disabled) return;
+    if (
+      !window.confirm(
+        tr(
+          locale,
+          "Remove this chapter? You can restore the saved manuscript from version history.",
+          "حذف هذا الفصل؟ يمكنك استعادة النسخة المحفوظة من سجل النسخ.",
+          "Ta bort kapitlet? Du kan återställa det sparade manuset från versionshistoriken.",
+        ),
+      )
+    )
+      return;
+    change((b) => {
+      const chapters = { ...b.chapters };
+      delete chapters[chapter];
+      const outline = b.outline.filter((c) => c.id !== chapter);
+      return { ...b, outline, chapters, chapter_count: outline.length };
+    });
+    setChapterId("");
+  }
+  function addChapter() {
+    if (!draft || disabled || draft.outline.length >= 30) return;
+    const chapter = {
+      id: crypto.randomUUID(),
+      title: tr(locale, "New chapter", "فصل جديد", "Nytt kapitel"),
+      summary: tr(
+        locale,
+        "Describe what this chapter should cover.",
+        "اكتب ما تريد أن يتناوله هذا الفصل.",
+        "Beskriv vad kapitlet ska handla om.",
+      ),
+    };
+    change((b) => ({
+      ...b,
+      outline: [...b.outline, chapter],
+      chapter_count: b.outline.length + 1,
+    }));
+    setChapterId(chapter.id);
+    setTab("outline");
+  }
+  async function showPdfPreview() {
+    if (!draft || disabled) return;
+    if (dirtyRef.current && !(await save())) return;
+    setPending("pdf-preview");
+    setError("");
+    try {
+      const response = await fetch(`/api/books/${id}/export?format=pdf`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "service_error");
+      }
+      const blob = await response.blob();
+      if (!mounted.current) return;
+      setPdfPreview({
+        url: URL.createObjectURL(blob),
+        revision: revisionRef.current,
+      });
+    } catch (error) {
+      setError(codeOf(error));
+    } finally {
+      if (mounted.current) setPending("");
+    }
+  }
   async function createManualOutline() {
     if (!book || !draft || disabled || draft.outline.length) return;
-    if (!window.confirm(tr(
-      locale,
-      "Create an editable chapter outline without AI? Nothing will be charged. You will write the titles and summaries yourself.",
-      "هل تريد إنشاء فهرس يدوي قابل للتعديل دون ذكاء اصطناعي ودون أي تكلفة؟ ستكتب عناوين الفصول وملخصاتها بنفسك.",
-      "Skapa en redigerbar disposition utan AI och utan kostnad? Du skriver själv rubriker och sammanfattningar.",
-    ))) return;
+    if (
+      !window.confirm(
+        tr(
+          locale,
+          "Create an editable chapter outline without AI? Nothing will be charged. You will write the titles and summaries yourself.",
+          "هل تريد إنشاء فهرس يدوي قابل للتعديل دون ذكاء اصطناعي ودون أي تكلفة؟ ستكتب عناوين الفصول وملخصاتها بنفسك.",
+          "Skapa en redigerbar disposition utan AI och utan kostnad? Du skriver själv rubriker och sammanfattningar.",
+        ),
+      )
+    )
+      return;
     setPending("manual-outline");
     setError("");
     try {
       const { book: result } = await request<{ book: BookWithCover }>(
         `/api/books/${id}`,
-        { method: "POST", body: JSON.stringify({
-          action: "manual_outline", revision: book.revision,
-        }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            action: "manual_outline",
+            revision: book.revision,
+          }),
+        },
       );
       setBook(result);
       setDraft(result);
@@ -446,7 +655,9 @@ export function Editor({
       setChapterId(result.outline[0]?.id || "");
       setDirty(false);
       dirtyRef.current = false;
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      try {
+        sessionStorage.removeItem(backupKey);
+      } catch {}
     } catch (error) {
       setError(codeOf(error));
     } finally {
@@ -465,17 +676,22 @@ export function Editor({
     setPending("restart");
     setError("");
     try {
-      const { book: fresh } = await request<{ book: BookWithCover }>(`/api/books/${id}`, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "restart",
-          revision: book.revision,
-          language: restartLanguage,
-        }),
-      });
+      const { book: fresh } = await request<{ book: BookWithCover }>(
+        `/api/books/${id}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            action: "restart",
+            revision: book.revision,
+            language: restartLanguage,
+          }),
+        },
+      );
       setBook(fresh);
       setDraft(fresh);
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      try {
+        sessionStorage.removeItem(backupKey);
+      } catch {}
       setRecoveryDraft(null);
       setJob(null);
       setChapterId("");
@@ -501,7 +717,13 @@ export function Editor({
     try {
       const { book: updated } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/cover`,
-        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            action: accept ? "accept" : "reject",
+            revision,
+          }),
+        },
       );
       setBook(updated);
       setDraft(updated);
@@ -567,12 +789,17 @@ export function Editor({
   }
   async function restore(version: Version) {
     if (!book || disabled) return;
-    if (!window.confirm(tr(
-      locale,
-      "Restore this saved book and its language? Your current version will be archived and can be restored later.",
-      "هل تريد استعادة هذا الإصدار بلغته وفصوله؟ ستُحفظ نسختك الحالية أيضًا في السجل ويمكن استعادتها لاحقًا.",
-      "Återställa den sparade boken och dess språk? Den aktuella versionen arkiveras och kan återställas senare.",
-    ))) return;
+    if (
+      !window.confirm(
+        tr(
+          locale,
+          "Restore this saved book and its language? Your current version will be archived and can be restored later.",
+          "هل تريد استعادة هذا الإصدار بلغته وفصوله؟ ستُحفظ نسختك الحالية أيضًا في السجل ويمكن استعادتها لاحقًا.",
+          "Återställa den sparade boken och dess språk? Den aktuella versionen arkiveras och kan återställas senare.",
+        ),
+      )
+    )
+      return;
     // Save the draft first, then restore from the new server revision.
     let revision = book.revision;
     if (dirtyRef.current) {
@@ -584,17 +811,24 @@ export function Editor({
     try {
       const { book: restored } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/versions`,
-        { method: "POST", body: JSON.stringify({ version_id: version.id, revision }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ version_id: version.id, revision }),
+        },
       );
       setBook(restored);
       setDraft(restored);
       setJob(null);
-      setRestartLanguage(isArabicBrief(restored.idea) ? "ar" : restored.language);
+      setRestartLanguage(
+        isArabicBrief(restored.idea) ? "ar" : restored.language,
+      );
       setChapterId(restored.outline[0]?.id || "");
       dirtyRef.current = false;
       setDirty(false);
       setModal(null);
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      try {
+        sessionStorage.removeItem(backupKey);
+      } catch {}
     } catch (e) {
       setError(codeOf(e));
     } finally {
@@ -602,8 +836,10 @@ export function Editor({
     }
   }
   async function uploadCover(file: File) {
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-        file.size > 3_000_000) {
+    if (
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+      file.size > 3_000_000
+    ) {
       setError("invalid_input");
       return;
     }
@@ -612,11 +848,14 @@ export function Editor({
     setError("");
     try {
       const response = await fetch("/api/books/" + id + "/cover/upload", {
-        method: "POST", cache: "no-store",
+        method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": file.type },
         body: file,
       });
-      const payload = await response.json().catch(() => ({ error: "service_error" }));
+      const payload = await response
+        .json()
+        .catch(() => ({ error: "service_error" }));
       if (!response.ok) {
         setError(payload.error || "service_error");
         return;
@@ -630,7 +869,9 @@ export function Editor({
       setPending("");
     }
   }
-  async function download(format: "pdf" | "docx" | "epub") {
+  async function download(
+    format: "pdf" | "docx" | "epub" | "cover" | "back-cover",
+  ) {
     if (dirtyRef.current && !(await save())) return;
     setPending(format);
     setError("");
@@ -646,7 +887,8 @@ export function Editor({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${filename(draft?.title || "ebook")}.${format}`;
+      const coverOnly = format === "cover" || format === "back-cover";
+      a.download = `${filename(draft?.title || "ebook")}${coverOnly ? "-" + format : ""}.${coverOnly ? "png" : format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -684,7 +926,9 @@ export function Editor({
   const active =
     draft.outline.find((c) => c.id === chapterId) || draft.outline[0];
   const current = active ? draft.chapters[active.id] : null;
-  const complete = isComplete(book);
+  const complete = isComplete(draft);
+  const settings = bookSettings(draft);
+  const visibleJob = job?.id === dismissedJob ? null : job;
   const canExport = complete && book.unlocked && !busy;
   return (
     <div className="editor-shell">
@@ -739,7 +983,18 @@ export function Editor({
                 tr(locale, "Your next book", "كتابك القادم", "Din nästa bok")}
             </h1>
             <span className="status-tag">
-              {book.unlocked ? (config.ownerTrial ? tr(locale, "Ready to test", "جاهز للتجربة", "Redo att testa") : t.unlocked) : config.ownerTrial ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test") : t.sampleBadge}
+              {book.unlocked
+                ? config.ownerTrial
+                  ? tr(
+                      locale,
+                      "Ready to test",
+                      "جاهز للتجربة",
+                      "Redo att testa",
+                    )
+                  : t.unlocked
+                : config.ownerTrial
+                  ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test")
+                  : t.sampleBadge}
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
@@ -765,15 +1020,59 @@ export function Editor({
               </button>
             ))}
           </nav>
+          {draft.outline.length > 0 && (
+            <nav
+              className="manuscript-nav"
+              aria-label={tr(locale, "Chapters", "فصول الكتاب", "Kapitel")}
+            >
+              <div className="manuscript-nav-heading">
+                <span className="small-label">
+                  {tr(locale, "Manuscript", "المخطوط", "Manus")}
+                </span>
+                <button
+                  className="icon-button"
+                  type="button"
+                  disabled={disabled || draft.outline.length >= 30}
+                  onClick={addChapter}
+                  aria-label={tr(
+                    locale,
+                    "Add chapter",
+                    "إضافة فصل",
+                    "Lägg till kapitel",
+                  )}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {draft.outline.map((c, i) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={
+                    tab === "write" && active?.id === c.id ? "is-current" : ""
+                  }
+                  onClick={() => {
+                    setChapterId(c.id);
+                    setTab("write");
+                  }}
+                >
+                  <span>{String(i + 1).padStart(2, "0")}</span>
+                  <span>{c.title}</span>
+                  {draft.chapters[c.id] && <Check size={13} />}
+                </button>
+              ))}
+            </nav>
+          )}
           <div className="sidebar-stats">
             <BookOpen size={18} />
             <div>
               <strong>
-                {Object.keys(book.chapters).length}/{book.chapter_count}
+                {Object.keys(draft.chapters).length}/
+                {draft.outline.length || draft.chapter_count}
               </strong>{" "}
               {t.chapters}
               <small>
-                {bookWords(book).toLocaleString(locale)} {t.words}
+                {bookWords(draft).toLocaleString(locale)} {t.words}
               </small>
             </div>
           </div>
@@ -786,38 +1085,127 @@ export function Editor({
               <b>{credits}</b> {t.credits}
             </button>
           ) : config.ownerTrial ? (
-            <span className="status-tag sidebar-credits">{tr(locale, "Free private testing", "اختبار مجاني خاص", "Gratis privat test")}</span>
+            <span className="status-tag sidebar-credits">
+              {tr(
+                locale,
+                "Free private testing",
+                "اختبار مجاني خاص",
+                "Gratis privat test",
+              )}
+            </span>
           ) : null}
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
+          {draft.outline.length > 0 && (
+            <div className="studio-next-step">
+              <div>
+                <span className="small-label">
+                  {tr(
+                    locale,
+                    "Your book, taking shape",
+                    "كتابك يتشكّل",
+                    "Din bok tar form",
+                  )}
+                </span>
+                <p>
+                  {!complete
+                    ? tr(
+                        locale,
+                        "Build your manuscript chapter by chapter, with a clear view of the whole book.",
+                        "اكتب فصولك وراجعها مع رؤية واضحة للكتاب كاملًا.",
+                        "Skriv och granska kapitlen med hela boken i blick.",
+                      )
+                    : tr(
+                        locale,
+                        "Your chapters are ready. Finish the cover, review, and export your book.",
+                        "فصولك مكتملة. أكمل الغلاف والمراجعة ثم نزّل كتابك.",
+                        "Kapitlen är klara. Slutför omslaget, granska och exportera boken.",
+                      )}
+                </p>
+              </div>
+              <button
+                className="button button-outline button-small"
+                onClick={() =>
+                  setTab(
+                    !complete
+                      ? "write"
+                      : tab === "design"
+                        ? "preview"
+                        : "design",
+                  )
+                }
+              >
+                {!complete ? t.write : tab === "design" ? t.preview : t.design}
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+
           {!online && (
             <div className="notice offline-warning" role="status">
-              {tr(locale,
+              {tr(
+                locale,
                 "You are offline. Your changes are not saved to the cloud yet. Keep this page open; automatic saving resumes when the connection returns.",
                 "الاتصال مقطوع. تعديلاتك لم تُحفظ على السحابة بعد. اترك الصفحة مفتوحة، وسيُستأنف الحفظ تلقائيًا عند عودة الإنترنت.",
-                "Du är offline. Ändringarna har inte sparats i molnet ännu. Låt sidan vara öppen. Automatisk sparning återupptas när anslutningen återkommer.")}
+                "Du är offline. Ändringarna har inte sparats i molnet ännu. Låt sidan vara öppen. Automatisk sparning återupptas när anslutningen återkommer.",
+              )}
             </div>
           )}
           {recoveryDraft && !dirty && (
             <div className="notice draft-recovery" role="status">
-              <strong>{tr(locale, "Recover unsaved changes?", "هل تريد استعادة التعديلات غير المحفوظة؟", "Återställa osparade ändringar?")}</strong>
-              <p>{tr(locale,
-                "A draft from this browser tab was found. You can restore it or keep the last cloud-saved version.",
-                "وُجدت مسودة من هذا المتصفح. يمكنك استعادتها أو الإبقاء على آخر نسخة محفوظة على السحابة.",
-                "Ett utkast från den här webbläsarfliken hittades. Återställ det eller behåll den senast molnsparade versionen.")}</p>
+              <strong>
+                {tr(
+                  locale,
+                  "Recover unsaved changes?",
+                  "هل تريد استعادة التعديلات غير المحفوظة؟",
+                  "Återställa osparade ändringar?",
+                )}
+              </strong>
+              <p>
+                {tr(
+                  locale,
+                  "A draft from this browser tab was found. You can restore it or keep the last cloud-saved version.",
+                  "وُجدت مسودة من هذا المتصفح. يمكنك استعادتها أو الإبقاء على آخر نسخة محفوظة على السحابة.",
+                  "Ett utkast från den här webbläsarfliken hittades. Återställ det eller behåll den senast molnsparade versionen.",
+                )}
+              </p>
               <div className="cover-confirm-buttons">
-                <button type="button" className="button button-primary button-small" onClick={() => {
-                  editSequenceRef.current += 1;
-                  setDraft(recoveryDraft);
-                  dirtyRef.current = true;
-                  setDirty(true);
-                  setRecoveryDraft(null);
-                }}>{tr(locale, "Restore draft", "استعادة المسودة", "Återställ utkast")}</button>
-                <button type="button" className="button button-outline button-small" onClick={() => {
-                  try { sessionStorage.removeItem(backupKey); } catch {}
-                  setRecoveryDraft(null);
-                }}>{tr(locale, "Keep saved version", "الإبقاء على النسخة المحفوظة", "Behåll sparad version")}</button>
+                <button
+                  type="button"
+                  className="button button-primary button-small"
+                  onClick={() => {
+                    editSequenceRef.current += 1;
+                    setDraft(recoveryDraft);
+                    dirtyRef.current = true;
+                    setDirty(true);
+                    setRecoveryDraft(null);
+                  }}
+                >
+                  {tr(
+                    locale,
+                    "Restore draft",
+                    "استعادة المسودة",
+                    "Återställ utkast",
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="button button-outline button-small"
+                  onClick={() => {
+                    try {
+                      sessionStorage.removeItem(backupKey);
+                    } catch {}
+                    setRecoveryDraft(null);
+                  }}
+                >
+                  {tr(
+                    locale,
+                    "Keep saved version",
+                    "الإبقاء على النسخة المحفوظة",
+                    "Behåll sparad version",
+                  )}
+                </button>
               </div>
             </div>
           )}
@@ -852,27 +1240,50 @@ export function Editor({
           )}
           {job?.status === "failed" && !busy && (
             <div className="notice" role="alert">
-              <p>{config.ownerTrial &&
-                ["ai_daily_limit", "ai_image_daily_limit", "ai_book_limit", "rate_limit"].includes(job.error_code || "")
-                ? tr(locale,
-                  "This error came from an earlier test limit. Your private test account is now exempt. Retry generation.",
-                  "هذا خطأ قديم من حدود التجربة السابقة. رُفعت حدود التوليد عن حسابك الخاص؛ اضغط إعادة محاولة التوليد.",
-                  "Felet kommer från en tidigare testgräns. Ditt privata testkonto är nu undantaget. Försök generera igen.")
-                : errorMessage(job.error_code || "generation_failed", locale)}</p>
-              <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
-                {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
+              <p>
+                {config.ownerTrial &&
+                [
+                  "ai_daily_limit",
+                  "ai_image_daily_limit",
+                  "ai_book_limit",
+                  "rate_limit",
+                ].includes(job.error_code || "")
+                  ? tr(
+                      locale,
+                      "This error came from an earlier test limit. Your private test account is now exempt. Retry generation.",
+                      "هذا خطأ قديم من حدود التجربة السابقة. رُفعت حدود التوليد عن حسابك الخاص؛ اضغط إعادة محاولة التوليد.",
+                      "Felet kommer från en tidigare testgräns. Ditt privata testkonto är nu undantaget. Försök generera igen.",
+                    )
+                  : errorMessage(job.error_code || "generation_failed", locale)}
               </p>
-              {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
-                <button
-                  type="button"
-                  className="button button-small button-outline"
-                  disabled={disabled}
-                  onClick={() => void generate(job.kind, job.chapter_id || undefined)}
-                >
-                  <RotateCcw size={15} />
-                  {tr(locale, "Retry generation", "إعادة محاولة التوليد", "Försök generera igen")}
-                </button>
-              )}
+              <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
+                {tr(
+                  locale,
+                  "Support reference",
+                  "رقم الخطأ للدعم",
+                  "Felreferens",
+                )}
+                : {job.id.slice(0, 12)}
+              </p>
+              {config.ai &&
+                ["chapter", "book", "sample", "outline"].includes(job.kind) && (
+                  <button
+                    type="button"
+                    className="button button-small button-outline"
+                    disabled={disabled}
+                    onClick={() =>
+                      void generate(job.kind, job.chapter_id || undefined)
+                    }
+                  >
+                    <RotateCcw size={15} />
+                    {tr(
+                      locale,
+                      "Retry generation",
+                      "إعادة محاولة التوليد",
+                      "Försök generera igen",
+                    )}
+                  </button>
+                )}
             </div>
           )}
           {tab === "outline" && (
@@ -892,19 +1303,43 @@ export function Editor({
                 <p>{draft.outline.length ? t.outlineHint : t.briefBody}</p>
               </div>
 
-              <div className="restart-tools" dir={locale === "ar" ? "rtl" : "ltr"}>
+              <div
+                className="restart-tools"
+                dir={locale === "ar" ? "rtl" : "ltr"}
+              >
                 <div>
-                  <strong>{tr(locale, "Book language", "لغة الكتاب", "Bokens språk")}</strong>
-                  <p>{tr(locale, "Current language", "اللغة الحالية", "Nuvarande språk")}: {languageNames[book.language]}</p>
+                  <strong>
+                    {tr(locale, "Book language", "لغة الكتاب", "Bokens språk")}
+                  </strong>
+                  <p>
+                    {tr(
+                      locale,
+                      "Current language",
+                      "اللغة الحالية",
+                      "Nuvarande språk",
+                    )}
+                    : {languageNames[book.language]}
+                  </p>
                   {isArabicBrief(book.idea) && book.language !== "ar" && (
                     <p className="language-warning" role="alert">
-                      {tr(locale, "Your idea is Arabic but this book is set to another language. Restart it in Arabic to correct its contents.", "طلبك مكتوب بالعربية لكن لغة هذا الكتاب ليست العربية. اختر العربية وأعد إنشاء الفهرس والفصول.", "Bokidén är på arabiska men bokens språk är ett annat. Starta om den på arabiska.")}
+                      {tr(
+                        locale,
+                        "Your idea is Arabic but this book is set to another language. Restart it in Arabic to correct its contents.",
+                        "طلبك مكتوب بالعربية لكن لغة هذا الكتاب ليست العربية. اختر العربية وأعد إنشاء الفهرس والفصول.",
+                        "Bokidén är på arabiska men bokens språk är ett annat. Starta om den på arabiska.",
+                      )}
                     </p>
                   )}
                 </div>
                 <label>
                   <span className="sr-only">{t.bookLanguage}</span>
-                  <select value={restartLanguage} disabled={disabled} onChange={(e) => setRestartLanguage(e.target.value as Locale)}>
+                  <select
+                    value={restartLanguage}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      setRestartLanguage(e.target.value as Locale)
+                    }
+                  >
                     <option value="ar">العربية</option>
                     <option value="en">English</option>
                     <option value="sv">Svenska</option>
@@ -917,7 +1352,12 @@ export function Editor({
                   onClick={() => void restartManuscript()}
                 >
                   <RotateCcw size={17} />
-                  {tr(locale, "Restart this book", "إعادة إنشاء الكتاب من البداية", "Starta om boken")}
+                  {tr(
+                    locale,
+                    "Restart this book",
+                    "إعادة إنشاء الكتاب من البداية",
+                    "Starta om boken",
+                  )}
                 </button>
               </div>
               {draft.outline.length === 0 ? (
@@ -953,10 +1393,12 @@ export function Editor({
                     onClick={() => void createManualOutline()}
                   >
                     <BookOpen size={17} />
-                    {tr(locale,
+                    {tr(
+                      locale,
                       "Create editable outline without AI (free)",
                       "إنشاء فهرس يدوي دون ذكاء اصطناعي (مجاني)",
-                      "Skapa redigerbar disposition utan AI (gratis)")}
+                      "Skapa redigerbar disposition utan AI (gratis)",
+                    )}
                   </button>
                   {!config.ai && (
                     <p className="notice" role="status">
@@ -971,6 +1413,50 @@ export function Editor({
                 </div>
               ) : (
                 <>
+                  <label className="chapter-length-control">
+                    {tr(
+                      locale,
+                      "Length of new chapters",
+                      "طول الفصول الجديدة",
+                      "Nya kapitels längd",
+                    )}
+                    <select
+                      disabled={disabled}
+                      value={draft.chapter_length || "standard"}
+                      onChange={(e) =>
+                        change((b) => ({
+                          ...b,
+                          chapter_length: e.target
+                            .value as Book["chapter_length"],
+                        }))
+                      }
+                    >
+                      <option value="short">
+                        {tr(
+                          locale,
+                          "Short · 400–650 words",
+                          "قصير · 400–650 كلمة",
+                          "Kort · 400–650 ord",
+                        )}
+                      </option>
+                      <option value="standard">
+                        {tr(
+                          locale,
+                          "Standard · about 1,000 words",
+                          "متوسط · نحو 1,000 كلمة",
+                          "Standard · cirka 1 000 ord",
+                        )}
+                      </option>
+                      <option value="long">
+                        {tr(
+                          locale,
+                          "Detailed · 1,400–2,000 words",
+                          "مفصّل · 1,400–2,000 كلمة",
+                          "Utförligt · 1 400–2 000 ord",
+                        )}
+                      </option>
+                    </select>
+                  </label>
                   <div
                     className="stack book-title-fields"
                     dir={draft.language === "ar" ? "rtl" : "ltr"}
@@ -1051,12 +1537,72 @@ export function Editor({
                             />
                           </label>
                         </div>
+                        <div className="outline-item-tools">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            disabled={disabled || i === 0}
+                            onClick={() => moveChapter(c.id, -1)}
+                            aria-label={tr(
+                              locale,
+                              "Move chapter up",
+                              "نقل الفصل إلى الأعلى",
+                              "Flytta kapitlet uppåt",
+                            )}
+                          >
+                            <ArrowUp size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            disabled={
+                              disabled || i === draft.outline.length - 1
+                            }
+                            onClick={() => moveChapter(c.id, 1)}
+                            aria-label={tr(
+                              locale,
+                              "Move chapter down",
+                              "نقل الفصل إلى الأسفل",
+                              "Flytta kapitlet nedåt",
+                            )}
+                          >
+                            <ArrowDown size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button danger-icon"
+                            disabled={disabled || draft.outline.length === 1}
+                            onClick={() => deleteChapter(c.id)}
+                            aria-label={tr(
+                              locale,
+                              "Remove chapter",
+                              "حذف الفصل",
+                              "Ta bort kapitlet",
+                            )}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                         {draft.chapters[c.id] && (
                           <Check className="chapter-check" size={17} />
                         )}
                       </div>
                     ))}
                   </div>
+                  <button
+                    type="button"
+                    className="button button-outline button-small add-chapter"
+                    disabled={disabled || draft.outline.length >= 30}
+                    onClick={addChapter}
+                  >
+                    <Plus size={16} />
+                    {tr(
+                      locale,
+                      "Add a chapter",
+                      "إضافة فصل",
+                      "Lägg till ett kapitel",
+                    )}
+                  </button>
                   <div className="editor-bottom-actions">
                     {!draft.chapters[draft.outline[0].id] && (
                       <button
@@ -1084,7 +1630,14 @@ export function Editor({
                         ? Object.keys(book.chapters).length
                           ? t.resume
                           : t.generateBook
-                        : config.ownerTrial ? tr(locale, "Generate complete book for free", "توليد الكتاب كاملًا مجانًا", "Skapa hela boken gratis") : t.unlock}
+                        : config.ownerTrial
+                          ? tr(
+                              locale,
+                              "Generate complete book for free",
+                              "توليد الكتاب كاملًا مجانًا",
+                              "Skapa hela boken gratis",
+                            )
+                          : t.unlock}
                     </button>
                   </div>
                 </>
@@ -1092,155 +1645,283 @@ export function Editor({
             </section>
           )}
           {tab === "write" && (
-            <section className="editor-panel chapter-panel">
-              <div className="panel-heading">
-                <span className="eyebrow">02 / {t.write}</span>
-                <h2>{t.write}</h2>
-              </div>
-              <label className="chapter-selector">
-                <span className="sr-only">{t.chapters}</span>
-                <select
-                  value={active?.id || ""}
-                  onChange={(e) => setChapterId(e.target.value)}
-                >
-                  {draft.outline.map((c, i) => (
-                    <option key={c.id} value={c.id}>
-                      {i + 1}. {c.title} {draft.chapters[c.id] ? "✓" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="chapter-toolbar">
-                <div className="segmented">
-                  <button
-                    className={!read ? "selected" : ""}
-                    onClick={() => setRead(false)}
-                  >
-                    {t.editing}
-                  </button>
-                  <button
-                    className={read ? "selected" : ""}
-                    onClick={() => setRead(true)}
-                  >
-                    {t.reading}
-                  </button>
+            <div className="writing-workspace">
+              <section className="editor-panel chapter-panel">
+                <div className="panel-heading">
+                  <span className="eyebrow">02 / {t.write}</span>
+                  <h2>{t.write}</h2>
                 </div>
-                {active && (
-                  <button
-                    className="text-link"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : !current && active.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active.id,
-                      )
-                    }
+                <label className="chapter-selector">
+                  <span className="sr-only">{t.chapters}</span>
+                  <select
+                    value={active?.id || ""}
+                    onChange={(e) => setChapterId(e.target.value)}
                   >
-                    <RotateCcw size={15} />
-                    {!book.unlocked &&
-                    (current || active.id !== draft.outline[0]?.id)
-                      ? t.unlock
-                      : current
-                        ? t.regenerate
-                        : t.generate}
-                  </button>
-                )}
-              </div>
-              <h3
-                className="current-chapter-title"
-                dir={draft.language === "ar" ? "rtl" : "ltr"}
-              >
-                {active?.title}
-              </h3>
-              {current ? (
-                read ? (
-                  <div
-                    className="chapter-read"
-                    dir={draft.language === "ar" ? "rtl" : "ltr"}
-                    lang={draft.language}
-                  >
-                    <Markdown text={current.content} />
+                    {draft.outline.map((c, i) => (
+                      <option key={c.id} value={c.id}>
+                        {i + 1}. {c.title} {draft.chapters[c.id] ? "✓" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="chapter-toolbar">
+                  <div className="segmented">
+                    <button
+                      className={!read ? "selected" : ""}
+                      onClick={() => setRead(false)}
+                    >
+                      {t.editing}
+                    </button>
+                    <button
+                      className={read ? "selected" : ""}
+                      onClick={() => setRead(true)}
+                    >
+                      {t.reading}
+                    </button>
                   </div>
-                ) : (
-                  <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
-                    <span className="sr-only">{t.content}</span>
-                    <span className="chapter-format-toolbar" role="toolbar" aria-label={tr(locale, "Text formatting", "تنسيق النص", "Textformatering")}>
-                      <button type="button" disabled={disabled} aria-label={tr(locale, "Bold", "غامق", "Fetstil")} title={tr(locale, "Bold", "غامق", "Fetstil")} onClick={() => formatSelection("bold")}><BoldIcon size={18}/></button>
-                      <button type="button" disabled={disabled} aria-label={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} title={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} onClick={() => formatSelection("heading")}><Heading2 size={18}/></button>
-                      <button type="button" disabled={disabled} aria-label={tr(locale, "List", "قائمة", "Lista")} title={tr(locale, "List", "قائمة", "Lista")} onClick={() => formatSelection("list")}><ListIcon size={18}/></button>
-                      <span className="chapter-format-spacer"/>
-                      <span className="chapter-word-count">{current.content.trim().split(/\s+/u).filter(Boolean).length.toLocaleString(locale)} {t.words}</span>
-                      <button type="button" aria-label={fullscreenEditor ? tr(locale, "Close full-screen editor", "إغلاق وضع الشاشة الكاملة", "Stäng helskärm") : tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} title={tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} onClick={() => setFullscreenEditor(v => !v)}>{fullscreenEditor ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}</button>
-                    </span>
-                    <textarea
-                      ref={chapterEditorRef}
-                      className="chapter-editor"
+                  {active && (
+                    <button
+                      className="text-link"
+                      disabled={disabled || !config.ai}
+                      onClick={() =>
+                        generate(
+                          book.unlocked
+                            ? "chapter"
+                            : !current && active.id === draft.outline[0]?.id
+                              ? "sample"
+                              : "book",
+                          active.id,
+                        )
+                      }
+                    >
+                      <RotateCcw size={15} />
+                      {!book.unlocked &&
+                      (current || active.id !== draft.outline[0]?.id)
+                        ? t.unlock
+                        : current
+                          ? t.regenerate
+                          : t.generate}
+                    </button>
+                  )}
+                </div>
+                <h3
+                  className="current-chapter-title"
+                  dir={draft.language === "ar" ? "rtl" : "ltr"}
+                >
+                  {active?.title}
+                </h3>
+                {current ? (
+                  read ? (
+                    <div
+                      className="chapter-read"
                       dir={draft.language === "ar" ? "rtl" : "ltr"}
                       lang={draft.language}
-                      value={current.content}
-                      maxLength={30000}
-                      disabled={disabled}
-                      onChange={(e) => {
-                        if (active)
-                          change((b) => ({
-                            ...b,
-                            chapters: {
-                              ...b.chapters,
-                              [active.id]: {
-                                ...b.chapters[active.id],
-                                content: e.target.value,
+                    >
+                      <Markdown text={current.content} />
+                    </div>
+                  ) : (
+                    <label
+                      className={
+                        fullscreenEditor
+                          ? "chapter-edit-wrap is-fullscreen"
+                          : "chapter-edit-wrap"
+                      }
+                    >
+                      <span className="sr-only">{t.content}</span>
+                      <span
+                        className="chapter-format-toolbar"
+                        role="toolbar"
+                        aria-label={tr(
+                          locale,
+                          "Text formatting",
+                          "تنسيق النص",
+                          "Textformatering",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          aria-label={tr(locale, "Bold", "غامق", "Fetstil")}
+                          title={tr(locale, "Bold", "غامق", "Fetstil")}
+                          onClick={() => formatSelection("bold")}
+                        >
+                          <BoldIcon size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          aria-label={tr(
+                            locale,
+                            "Heading",
+                            "عنوان فرعي",
+                            "Rubrik",
+                          )}
+                          title={tr(locale, "Heading", "عنوان فرعي", "Rubrik")}
+                          onClick={() => formatSelection("heading")}
+                        >
+                          <Heading2 size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          aria-label={tr(locale, "List", "قائمة", "Lista")}
+                          title={tr(locale, "List", "قائمة", "Lista")}
+                          onClick={() => formatSelection("list")}
+                        >
+                          <ListIcon size={18} />
+                        </button>
+                        <span className="chapter-format-spacer" />
+                        <span className="chapter-word-count">
+                          {current.content
+                            .trim()
+                            .split(/\s+/u)
+                            .filter(Boolean)
+                            .length.toLocaleString(locale)}{" "}
+                          {t.words}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={
+                            fullscreenEditor
+                              ? tr(
+                                  locale,
+                                  "Close full-screen editor",
+                                  "إغلاق وضع الشاشة الكاملة",
+                                  "Stäng helskärm",
+                                )
+                              : tr(
+                                  locale,
+                                  "Full-screen editor",
+                                  "تحرير بملء الشاشة",
+                                  "Helskärmsredigering",
+                                )
+                          }
+                          title={tr(
+                            locale,
+                            "Full-screen editor",
+                            "تحرير بملء الشاشة",
+                            "Helskärmsredigering",
+                          )}
+                          onClick={() => setFullscreenEditor((v) => !v)}
+                        >
+                          {fullscreenEditor ? (
+                            <Minimize2 size={18} />
+                          ) : (
+                            <Maximize2 size={18} />
+                          )}
+                        </button>
+                      </span>
+                      <textarea
+                        ref={chapterEditorRef}
+                        onSelect={(e) => {
+                          const el = e.currentTarget;
+                          setSelection(
+                            el.selectionEnd > el.selectionStart
+                              ? {
+                                  start: el.selectionStart,
+                                  end: el.selectionEnd,
+                                }
+                              : null,
+                          );
+                        }}
+                        className="chapter-editor"
+                        dir={draft.language === "ar" ? "rtl" : "ltr"}
+                        lang={draft.language}
+                        value={current.content}
+                        maxLength={30000}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          if (active)
+                            change((b) => ({
+                              ...b,
+                              chapters: {
+                                ...b.chapters,
+                                [active.id]: {
+                                  ...b.chapters[active.id],
+                                  content: e.target.value,
+                                },
                               },
-                            },
-                          }));
-                      }}
-                    />
-                  </label>
-                )
-              ) : (
-                <div className="chapter-empty">
-                  <PencilIcon />
-                  <p>{t.chapterEmpty}</p>
-                  <button
-                    className="button button-primary"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : active?.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active?.id,
-                      )
-                    }
-                  >
-                    <Sparkles size={17} />
-                    {book.unlocked || active?.id === draft.outline[0]?.id
-                      ? t.generate
-                      : t.unlock}
-                  </button>
-                </div>
-              )}
-              <div className="editor-bottom-actions">
-                <p className="muted">
-                  {book.unlocked ? t.background : config.ownerTrial ? tr(locale, "Your private test: generate a full book without buying credits.", "تجربتك الخاصة: أنشئ كتابًا كاملًا دون شراء رصيد.", "Din privata test: skapa en hel bok utan att köpa krediter.") : t.unlockBody}
-                </p>
-                {!complete && (
-                  <button
-                    className="button button-primary"
-                    disabled={disabled || !config.ai}
-                    onClick={() => generate("book")}
-                  >
-                    <BookOpen size={17} />
-                    {book.unlocked ? t.resume : config.ownerTrial ? tr(locale, "Generate complete book for free", "توليد الكتاب كاملًا مجانًا", "Skapa hela boken gratis") : t.unlock}
-                  </button>
+                            }));
+                        }}
+                      />
+                    </label>
+                  )
+                ) : (
+                  <div className="chapter-empty">
+                    <PencilIcon />
+                    <p>{t.chapterEmpty}</p>
+                    <button
+                      className="button button-primary"
+                      disabled={disabled || !config.ai}
+                      onClick={() =>
+                        generate(
+                          book.unlocked
+                            ? "chapter"
+                            : active?.id === draft.outline[0]?.id
+                              ? "sample"
+                              : "book",
+                          active?.id,
+                        )
+                      }
+                    >
+                      <Sparkles size={17} />
+                      {book.unlocked || active?.id === draft.outline[0]?.id
+                        ? t.generate
+                        : t.unlock}
+                    </button>
+                  </div>
                 )}
-              </div>
-            </section>
+                <div className="editor-bottom-actions">
+                  <p className="muted">
+                    {book.unlocked
+                      ? t.background
+                      : config.ownerTrial
+                        ? tr(
+                            locale,
+                            "Your private test: generate a full book without buying credits.",
+                            "تجربتك الخاصة: أنشئ كتابًا كاملًا دون شراء رصيد.",
+                            "Din privata test: skapa en hel bok utan att köpa krediter.",
+                          )
+                        : t.unlockBody}
+                  </p>
+                  {!complete && (
+                    <button
+                      className="button button-primary"
+                      disabled={disabled || !config.ai}
+                      onClick={() => generate("book")}
+                    >
+                      <BookOpen size={17} />
+                      {book.unlocked
+                        ? t.resume
+                        : config.ownerTrial
+                          ? tr(
+                              locale,
+                              "Generate complete book for free",
+                              "توليد الكتاب كاملًا مجانًا",
+                              "Skapa hela boken gratis",
+                            )
+                          : t.unlock}
+                    </button>
+                  )}
+                </div>
+              </section>
+              {active && current && (
+                <WritingAssistant
+                  key={active.id}
+                  locale={locale}
+                  chapterId={active.id}
+                  selection={selection}
+                  job={visibleJob}
+                  disabled={disabled}
+                  available={config.ai}
+                  generate={(kind, chapter, input) =>
+                    void generate(kind, chapter, input)
+                  }
+                  onApply={applySuggestion}
+                  onDismiss={() => setDismissedJob(job?.id || "")}
+                />
+              )}
+            </div>
           )}
           {tab === "design" && (
             <section className="editor-panel">
@@ -1251,21 +1932,81 @@ export function Editor({
               </div>
               <div className="design-layout">
                 <div className="design-cover">
+                  <span className="small-label">
+                    {tr(locale, "Front cover", "الغلاف الأمامي", "Framsida")}
+                  </span>
                   <BookCover
                     title={draft.title}
                     subtitle={draft.subtitle}
                     author={draft.author}
                     style={draft.cover_style}
+                    layout={settings.cover_layout}
                     language={draft.language}
-                    image={draft.cover_candidate_url || (draft.use_artwork ? draft.cover_url : null)}
+                    image={
+                      draft.cover_candidate_url ||
+                      (draft.use_artwork ? draft.cover_url : null)
+                    }
                   />
+                  {settings.back_cover && (
+                    <div className="back-cover-preview">
+                      <span className="small-label">
+                        {tr(locale, "Back cover", "الغلاف الخلفي", "Baksida")}
+                      </span>
+                      <BookCover
+                        title={draft.title}
+                        author={draft.author}
+                        style={draft.cover_style}
+                        layout={settings.cover_layout}
+                        language={draft.language}
+                        image={draft.use_artwork ? draft.cover_url : null}
+                        back
+                        blurb={settings.back_cover_text}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="stack">
+                  <CoverWorkshop
+                    book={draft}
+                    locale={locale}
+                    disabled={disabled}
+                    available={config.ai}
+                    job={visibleJob}
+                    generate={(kind, chapter, input) =>
+                      void generate(kind, chapter, input)
+                    }
+                    update={updateSettings}
+                  />
                   <fieldset className="cover-gallery" disabled={disabled}>
-                    <legend>{tr(locale, "Choose a professionally designed cover", "اختر تصميم الغلاف المناسب لكتابك", "Välj ett professionellt bokomslag")}</legend>
-                    <p className="muted">{tr(locale, "18 templates. Suggested designs for your book type come first. No AI credits needed.", "18 تصميمًا. تظهر التصاميم المناسبة لنوع كتابك أولًا، وتغييرها لا يستهلك الذكاء الاصطناعي.", "18 omslagsmallar. Rekommendationerna för din boktyp visas först. Ingen AI-kostnad.")}</p>
+                    <legend>
+                      {tr(
+                        locale,
+                        "Choose a professionally designed cover",
+                        "اختر تصميم الغلاف المناسب لكتابك",
+                        "Välj ett professionellt bokomslag",
+                      )}
+                    </legend>
+                    <p className="muted">
+                      {tr(
+                        locale,
+                        "18 templates. Suggested designs for your book type come first. No AI credits needed.",
+                        "18 تصميمًا. تظهر التصاميم المناسبة لنوع كتابك أولًا، وتغييرها لا يستهلك الذكاء الاصطناعي.",
+                        "18 omslagsmallar. Rekommendationerna för din boktyp visas först. Ingen AI-kostnad.",
+                      )}
+                    </p>
                     <div className="cover-template-grid">
-                      {(showAllCoverTemplates ? [...recommendedCoverStyles(draft.kind), ...coverStyles.filter((style) => !recommendedCoverStyles(draft.kind).includes(style))] : recommendedCoverStyles(draft.kind)).map((style, index) => (
+                      {(showAllCoverTemplates
+                        ? [
+                            ...recommendedCoverStyles(draft.kind),
+                            ...coverStyles.filter(
+                              (style) =>
+                                !recommendedCoverStyles(draft.kind).includes(
+                                  style,
+                                ),
+                            ),
+                          ]
+                        : recommendedCoverStyles(draft.kind)
+                      ).map((style, index) => (
                         <button
                           type="button"
                           className={`cover-template-card ${draft.cover_style === style ? "is-selected" : ""}`}
@@ -1273,21 +2014,36 @@ export function Editor({
                           aria-pressed={draft.cover_style === style}
                           aria-label={tr(locale, ...coverNames[style])}
                           disabled={disabled}
-                          onClick={() => change((b) => ({ ...b, cover_style: style }))}
+                          onClick={() =>
+                            change((b) => ({ ...b, cover_style: style }))
+                          }
                         >
                           <BookCover
-                            title={draft.title || tr(locale, "Your book", "كتابك", "Din bok")}
+                            title={
+                              draft.title ||
+                              tr(locale, "Your book", "كتابك", "Din bok")
+                            }
                             subtitle=""
                             author=""
                             style={style}
                             language={draft.language}
+                            layout={settings.cover_layout}
                             small
                           />
-                          <span className="cover-template-name">{tr(locale, ...coverNames[style])}</span>
+                          <span className="cover-template-name">
+                            {tr(locale, ...coverNames[style])}
+                          </span>
                           {index < 5 && (
-                            <span className="cover-template-hint">{tr(locale, "Suggested", "مقترح", "Förslag")}</span>
+                            <span className="cover-template-hint">
+                              {tr(locale, "Suggested", "مقترح", "Förslag")}
+                            </span>
                           )}
-                          {draft.cover_style === style && <Check className="cover-template-selected" size={18} />}
+                          {draft.cover_style === style && (
+                            <Check
+                              className="cover-template-selected"
+                              size={18}
+                            />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -1295,11 +2051,23 @@ export function Editor({
                       type="button"
                       className="text-link"
                       disabled={disabled}
-                      onClick={() => setShowAllCoverTemplates((value) => !value)}
+                      onClick={() =>
+                        setShowAllCoverTemplates((value) => !value)
+                      }
                     >
                       {showAllCoverTemplates
-                        ? tr(locale, "Show the five recommendations", "عرض المقترحات الخمسة فقط", "Visa bara fem förslag")
-                        : tr(locale, "Explore all 18 cover designs", "استكشف جميع تصاميم الأغلفة الـ18", "Utforska alla 18 omslagsmallar")}
+                        ? tr(
+                            locale,
+                            "Show the five recommendations",
+                            "عرض المقترحات الخمسة فقط",
+                            "Visa bara fem förslag",
+                          )
+                        : tr(
+                            locale,
+                            "Explore all 18 cover designs",
+                            "استكشف جميع تصاميم الأغلفة الـ18",
+                            "Utforska alla 18 omslagsmallar",
+                          )}
                     </button>
                   </fieldset>
                   <label>
@@ -1326,26 +2094,114 @@ export function Editor({
                     <Sparkles size={17} />
                     {t.aiCover}
                   </button>
-                  <p className="muted">{tr(locale,
-                    "Generated cover art appears here for your review. It is never included in exports until you approve it.",
-                    "ستظهر صورة الغلاف المقترحة هنا لمراجعتها. لن تُستخدم في التنزيل قبل موافقتك.",
-                    "Den genererade omslagsbilden visas här för granskning. Den används inte i exporten förrän du godkänner den.")}</p>
+                  <div className="tool-actions">
+                    <button
+                      type="button"
+                      className="button button-outline button-small"
+                      disabled={disabled || !book.unlocked}
+                      onClick={() => void download("cover")}
+                    >
+                      <Download size={15} />
+                      {tr(
+                        locale,
+                        "Download front PNG",
+                        "تنزيل الغلاف الأمامي PNG",
+                        "Ladda ner framsida PNG",
+                      )}
+                    </button>
+                    {settings.back_cover && (
+                      <button
+                        type="button"
+                        className="button button-outline button-small"
+                        disabled={disabled || !book.unlocked}
+                        onClick={() => void download("back-cover")}
+                      >
+                        <Download size={15} />
+                        {tr(
+                          locale,
+                          "Download back PNG",
+                          "تنزيل الغلاف الخلفي PNG",
+                          "Ladda ner baksida PNG",
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <p className="muted">
+                    {tr(
+                      locale,
+                      "Generated cover art appears here for your review. It is never included in exports until you approve it.",
+                      "ستظهر صورة الغلاف المقترحة هنا لمراجعتها. لن تُستخدم في التنزيل قبل موافقتك.",
+                      "Den genererade omslagsbilden visas här för granskning. Den används inte i exporten förrän du godkänner den.",
+                    )}
+                  </p>
                   {draft.cover_candidate_url && (
-                    <div className="cover-confirm" role="group" aria-label={tr(locale, "Review AI cover image", "مراجعة الغلاف المقترح", "Granska AI-omslag")}>
-                      <strong>{tr(locale, "AI cover suggestion", "غلاف مقترح بالذكاء الاصطناعي", "Förslag på AI-omslag")}</strong>
-                      <p>{tr(locale, "The preview on the left shows the suggestion. Accept it, or discard it without changing your current book cover.", "المعاينة على اليسار تُظهر الصورة المقترحة. وافق عليها أو ارفضها دون تغيير الغلاف الحالي.", "Förhandsvisningen till vänster visar förslaget. Godkänn eller avvisa det utan att ändra ditt aktuella omslag.")}</p>
+                    <div
+                      className="cover-confirm"
+                      role="group"
+                      aria-label={tr(
+                        locale,
+                        "Review AI cover image",
+                        "مراجعة الغلاف المقترح",
+                        "Granska AI-omslag",
+                      )}
+                    >
+                      <strong>
+                        {tr(
+                          locale,
+                          "AI cover suggestion",
+                          "غلاف مقترح بالذكاء الاصطناعي",
+                          "Förslag på AI-omslag",
+                        )}
+                      </strong>
+                      <p>
+                        {tr(
+                          locale,
+                          "The preview on the left shows the suggestion. Accept it, or discard it without changing your current book cover.",
+                          "المعاينة على اليسار تُظهر الصورة المقترحة. وافق عليها أو ارفضها دون تغيير الغلاف الحالي.",
+                          "Förhandsvisningen till vänster visar förslaget. Godkänn eller avvisa det utan att ändra ditt aktuella omslag.",
+                        )}
+                      </p>
                       <div className="cover-confirm-buttons">
-                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(true)}>
-                          <Check size={15} /> {tr(locale, "Use this cover", "اعتماد هذا الغلاف", "Använd detta omslag")}
+                        <button
+                          type="button"
+                          className="button button-primary button-small"
+                          disabled={disabled}
+                          onClick={() => void decideCoverSuggestion(true)}
+                        >
+                          <Check size={15} />{" "}
+                          {tr(
+                            locale,
+                            "Use this cover",
+                            "اعتماد هذا الغلاف",
+                            "Använd detta omslag",
+                          )}
                         </button>
-                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(false)}>
-                          <Trash2 size={15} /> {tr(locale, "Discard suggestion", "رفض الصورة المقترحة", "Avvisa förslag")}
+                        <button
+                          type="button"
+                          className="button button-outline button-small"
+                          disabled={disabled}
+                          onClick={() => void decideCoverSuggestion(false)}
+                        >
+                          <Trash2 size={15} />{" "}
+                          {tr(
+                            locale,
+                            "Discard suggestion",
+                            "رفض الصورة المقترحة",
+                            "Avvisa förslag",
+                          )}
                         </button>
                       </div>
                     </div>
                   )}
                   <label className="cover-upload-label">
-                    <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
+                    <span>
+                      {tr(
+                        locale,
+                        "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)",
+                        "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)",
+                        "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)",
+                      )}
+                    </span>
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
@@ -1354,8 +2210,12 @@ export function Editor({
                         const file = e.currentTarget.files?.[0];
                         e.currentTarget.value = "";
                         if (file) {
-                          if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-                              file.size > 3_000_000) {
+                          if (
+                            !["image/png", "image/jpeg", "image/webp"].includes(
+                              file.type,
+                            ) ||
+                            file.size > 3_000_000
+                          ) {
                             setError("invalid_input");
                           } else {
                             setCoverCandidate(file);
@@ -1366,17 +2226,56 @@ export function Editor({
                   </label>
                   {coverCandidate && (
                     <div className="cover-confirm">
-                      <strong>{tr(locale, "Review your selected image", "راجع الصورة قبل اعتمادها", "Granska vald bild")}</strong>
+                      <strong>
+                        {tr(
+                          locale,
+                          "Review your selected image",
+                          "راجع الصورة قبل اعتمادها",
+                          "Granska vald bild",
+                        )}
+                      </strong>
                       <p>{coverCandidate.name}</p>
                       {coverPreviewUrl && (
-                        <img className="cover-candidate-thumb" src={coverPreviewUrl} alt={tr(locale, "Preview of your chosen image", "معاينة الصورة التي اخترتها", "Förhandsvisning av vald bild")} />
+                        <img
+                          className="cover-candidate-thumb"
+                          src={coverPreviewUrl}
+                          alt={tr(
+                            locale,
+                            "Preview of your chosen image",
+                            "معاينة الصورة التي اخترتها",
+                            "Förhandsvisning av vald bild",
+                          )}
+                        />
                       )}
-                      <p className="muted">{tr(locale, "Choose an illustration or photo for your own book, not a screenshot of a webpage or social media.", "استخدم رسمة أو صورة مناسبة للكتاب، لا لقطة شاشة من موقع أو تطبيق.", "Välj en illustration eller bild som passar boken, inte en skärmbild från en webbplats.")}</p>
+                      <p className="muted">
+                        {tr(
+                          locale,
+                          "Choose an illustration or photo for your own book, not a screenshot of a webpage or social media.",
+                          "استخدم رسمة أو صورة مناسبة للكتاب، لا لقطة شاشة من موقع أو تطبيق.",
+                          "Välj en illustration eller bild som passar boken, inte en skärmbild från en webbplats.",
+                        )}
+                      </p>
                       <div className="cover-confirm-buttons">
-                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void uploadCover(coverCandidate)}>
-                          <Check size={15} /> {tr(locale, "Apply this image", "اعتماد هذه الصورة", "Använd bilden")}
+                        <button
+                          type="button"
+                          className="button button-primary button-small"
+                          disabled={disabled}
+                          onClick={() => void uploadCover(coverCandidate)}
+                        >
+                          <Check size={15} />{" "}
+                          {tr(
+                            locale,
+                            "Apply this image",
+                            "اعتماد هذه الصورة",
+                            "Använd bilden",
+                          )}
                         </button>
-                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => setCoverCandidate(null)}>
+                        <button
+                          type="button"
+                          className="button button-outline button-small"
+                          disabled={disabled}
+                          onClick={() => setCoverCandidate(null)}
+                        >
                           {t.cancel}
                         </button>
                       </div>
@@ -1390,7 +2289,12 @@ export function Editor({
                       onClick={() => void clearCoverArtwork()}
                     >
                       <Trash2 size={16} />
-                      {tr(locale, "Remove cover image and use a clean design", "حذف صورة الغلاف واستعمال تصميم نظيف", "Ta bort omslagsbilden och använd ett rent omslag")}
+                      {tr(
+                        locale,
+                        "Remove cover image and use a clean design",
+                        "حذف صورة الغلاف واستعمال تصميم نظيف",
+                        "Ta bort omslagsbilden och använd ett rent omslag",
+                      )}
                     </button>
                   )}
                   {draft.cover_path && (
@@ -1415,7 +2319,14 @@ export function Editor({
                       onClick={() => generate("book")}
                       disabled={disabled || !config.ai}
                     >
-                      {config.ownerTrial ? tr(locale, "Generate book for free", "توليد الكتاب مجانًا", "Skapa boken gratis") : t.unlock}
+                      {config.ownerTrial
+                        ? tr(
+                            locale,
+                            "Generate book for free",
+                            "توليد الكتاب مجانًا",
+                            "Skapa boken gratis",
+                          )
+                        : t.unlock}
                     </button>
                   )}
                 </div>
@@ -1427,12 +2338,16 @@ export function Editor({
               <div className="panel-heading">
                 <span className="eyebrow">04 / {t.preview}</span>
                 <h2>{t.previewTitle}</h2>
-                <p>{config.ownerTrial
-                  ? tr(locale,
-                      "Complete every chapter, then download your book in PDF, Word or EPUB. No site payment is required for your private test.",
-                      "أكمل كل الفصول ثم نزّل كتابك بصيغة PDF أو Word أو EPUB. لا يلزم أي دفع داخل الموقع أثناء تجربتك.",
-                      "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.")
-                  : t.exportHint}</p>
+                <p>
+                  {config.ownerTrial
+                    ? tr(
+                        locale,
+                        "Complete every chapter, then download your book in PDF, Word or EPUB. No site payment is required for your private test.",
+                        "أكمل كل الفصول ثم نزّل كتابك بصيغة PDF أو Word أو EPUB. لا يلزم أي دفع داخل الموقع أثناء تجربتك.",
+                        "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.",
+                      )
+                    : t.exportHint}
+                </p>
               </div>
               <div className="export-buttons">
                 <button
@@ -1464,50 +2379,101 @@ export function Editor({
                   disabled={!canExport || !!pending}
                   onClick={() => download("epub")}
                 >
-                  {pending === "epub" ? <Loader2 size={17} className="spin" /> : <Download size={17} />}{" "}
+                  {pending === "epub" ? (
+                    <Loader2 size={17} className="spin" />
+                  ) : (
+                    <Download size={17} />
+                  )}{" "}
                   {t.exportEpub}
                 </button>
               </div>
-              <div
-                className="book-preview"
-                dir={draft.language === "ar" ? "rtl" : "ltr"}
-                lang={draft.language}
-              >
-                <div className="preview-cover">
-                  <BookCover
-                    title={draft.title}
-                    subtitle={draft.subtitle}
-                    author={draft.author}
-                    style={draft.cover_style}
-                    language={draft.language}
-                    image={draft.use_artwork ? draft.cover_url : null}
-                  />
-                </div>
-                <section className="preview-toc">
-                  <h2>
-                    {tr(draft.language, "Contents", "الفهرس", "Innehåll")}
-                  </h2>
-                  {draft.outline.map((c, i) => (
-                    <p key={c.id}>
-                      <span>{String(i + 1).padStart(2, "0")}</span>
-                      {c.title}
-                    </p>
-                  ))}
-                </section>
-                {draft.outline.map((c, i) => (
-                  <article className="preview-chapter" key={c.id}>
-                    <span className="small-label">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <h2>{c.title}</h2>
-                    {draft.chapters[c.id] ? (
-                      <Markdown text={draft.chapters[c.id].content} />
-                    ) : (
-                      <p className="muted">{t.chapterEmpty}</p>
-                    )}
-                  </article>
-                ))}
+              <PublicationControls
+                book={draft}
+                locale={locale}
+                disabled={disabled}
+                update={updateSettings}
+              />
+              <ReviewPanel
+                locale={locale}
+                job={visibleJob}
+                disabled={disabled}
+                available={config.ai}
+                generate={(kind, chapter, input) =>
+                  void generate(kind, chapter, input)
+                }
+                onChapter={(chapter) => {
+                  setChapterId(chapter);
+                  setTab("write");
+                }}
+              />
+              <div className="pdf-preview-tools">
+                <button
+                  type="button"
+                  className="button button-outline"
+                  disabled={!canExport || disabled}
+                  onClick={() => void showPdfPreview()}
+                >
+                  {pending === "pdf-preview" ? (
+                    <Loader2 className="spin" size={16} />
+                  ) : (
+                    <Eye size={16} />
+                  )}{" "}
+                  {tr(
+                    locale,
+                    "Preview final PDF",
+                    "معاينة ملف PDF النهائي",
+                    "Förhandsgranska färdig PDF",
+                  )}
+                </button>
+                <p className="muted">
+                  {tr(
+                    locale,
+                    "The PDF preview is the actual export, including page breaks and typography.",
+                    "معاينة PDF تعرض ملف التنزيل نفسه، بخطوطه وفواصل صفحاته.",
+                    "PDF-förhandsvisningen visar den faktiska exporten med sidbrytningar och typsnitt.",
+                  )}
+                </p>
               </div>
+              {pdfPreview ? (
+                <div className="pdf-preview">
+                  <a
+                    href={pdfPreview.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-link"
+                  >
+                    {tr(
+                      locale,
+                      "Open PDF in a separate tab",
+                      "فتح PDF في نافذة مستقلة",
+                      "Öppna PDF i en egen flik",
+                    )}
+                  </a>
+                  <iframe
+                    title={tr(
+                      locale,
+                      "Final book PDF",
+                      "ملف الكتاب النهائي",
+                      "Bokens slutliga PDF",
+                    )}
+                    src={pdfPreview.url}
+                  />
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => setPdfPreview(null)}
+                  >
+                    {tr(
+                      locale,
+                      "Return to reading preview",
+                      "العودة إلى معاينة القراءة",
+                      "Tillbaka till läsvyn",
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <PublicationPreview book={draft} />
+              )}
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
