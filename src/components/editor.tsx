@@ -106,6 +106,7 @@ export function Editor({
   const [read, setRead] = useState(false);
   const [toolPanel, setToolPanel] = useState<"add" | "ai">("add");
   const [selectedCount, setSelectedCount] = useState(0);
+  const [aiInstruction, setAiInstruction] = useState("");
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
   const [readerMode, setReaderMode] = useState(true);
@@ -598,7 +599,7 @@ export function Editor({
     }
   }
   async function generate(kind: JobKind, chapter?: string,
-    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"}) {
+    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom";instruction?:string}) {
     if (!draft || generatingRef.current || disabled) return;
     if (!online) {
       setError("offline");
@@ -635,6 +636,7 @@ export function Editor({
           request_id: requestId,
           ...(kind === "text_edit" && edit ? {
             text_action: edit.action, text_start: edit.start, text_end: edit.end,
+            ...(edit.action==="custom" ? {text_instruction:edit.instruction?.trim().slice(0,500)} : {}),
           } : {}),
           ...(kind === "illustration" ? {
             image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
@@ -727,8 +729,11 @@ export function Editor({
       setPending("");
     }
   }
-  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone") {
+  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom") {
     if (!draft || !active || !current || disabled || !book?.unlocked) return;
+    if (action === "custom" && aiInstruction.trim().length < 5) {
+      setImportError(tr(locale,"Write an instruction first.","اكتب تعليمات التعديل أولًا.","Skriv en instruktion först."));return;
+    }
     let start=0,end=0;
     if (visualMode && !read) {
       const selection=visualSelectedRef.current.trim();
@@ -753,7 +758,7 @@ export function Editor({
         "حدد نصًا من 4 إلى 1800 حرف.","Markera 4–1800 tecken."));return;
     }
     setImportError("");
-    void generate("text_edit",active.id,{start,end,action});
+    void generate("text_edit",active.id,{start,end,action,instruction:action==="custom"?aiInstruction.trim():undefined});
   }
   async function decideTextEdit(accept:boolean) {
     if (!book?.text_edit_candidate || disabled) return;
@@ -2166,11 +2171,24 @@ export function Editor({
                      ["expand",tr(locale,"Expand","توسيع","Utöka")],
                      ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
                      ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
+                     ["simplify",tr(locale,"Simplify","تبسيط","Förenkla")],
                    ] as const).map(([action,label])=><button type="button" key={action}
                      disabled={disabled || !!book.text_edit_candidate}
                      onClick={()=>proposeTextEdit(action)}>{label}</button>)}
                  </div>
                )}
+               {current && book.unlocked && config.ai && <div className="studio-custom-ai">
+                 <label>{tr(locale,"Special instructions","تعليمات خاصة","Egna instruktioner")}
+                   <textarea rows={3} maxLength={500} value={aiInstruction}
+                     placeholder={tr(locale,"For example: make the tone warmer without changing facts.","مثال: اجعل الأسلوب أبسط دون تغيير الحقائق.","Exempel: förenkla tonen utan att ändra fakta.")}
+                     onChange={e=>setAiInstruction(e.target.value)} disabled={disabled}/>
+                 </label>
+                 <button className="button button-outline button-small" type="button"
+                   disabled={disabled||!!book.text_edit_candidate||selectedCount<4||aiInstruction.trim().length<5}
+                   onClick={()=>proposeTextEdit("custom")}>
+                   <Sparkles size={15}/>{tr(locale,"Apply custom instruction","اقترح تعديلًا خاصًا","Föreslå egen ändring")}
+                 </button>
+               </div>}
 
             </>}
           </div>}
