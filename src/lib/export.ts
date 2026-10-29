@@ -97,6 +97,9 @@ export async function pdfHtml(
   .theme-modern h2{font-family:Inter,sans-serif;letter-spacing:-.02em}.theme-modern .chapter-number{color:#5473d2}
   .theme-literary h2{font-family:Georgia,serif;font-weight:normal}.theme-literary section.chapter>h2{text-align:center;margin:14mm 0 11mm}.theme-literary section.chapter>p:first-of-type:first-letter{font-size:1.9em}
   @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}.cover.has-artwork:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0b0f1e90 0%,#15182344 45%,#0b0f1ea8 100%);z-index:1}.cover.has-artwork h1,.cover.has-artwork p,.cover.has-artwork small{z-index:2;color:#fffdf6}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}.front-matter{break-before:page;white-space:pre-wrap}.back-cover{break-before:page;min-height:160mm;height:auto;position:relative;background:${colors.bg};color:${colors.ink};padding:14mm;overflow:visible;display:flex;flex-direction:column;justify-content:space-between}.back-cover h2{font-size:19pt;margin:9mm 0 7mm;overflow-wrap:anywhere}.back-cover .blurb{font-size:${rtl ? 12 : 10}pt;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;hyphens:auto}.back-cover .author-bio{border-top:1px solid ${colors.accent};padding-top:4mm;font-size:9pt;white-space:pre-wrap;overflow-wrap:anywhere}.back-cover small{display:block;letter-spacing:2px}.back-cover.with-artwork{color:#fffdf6}.back-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.6}.back-cover.with-artwork:before{content:"";position:absolute;inset:0;background:#10192665;z-index:1}.back-cover>div,.back-cover>small{position:relative;z-index:2}.interior-image{text-align:center;margin:7mm auto;break-inside:avoid}.interior-image img{max-width:100%;max-height:105mm;object-fit:contain}.interior-image.figure-medium{max-width:78%}.interior-image.figure-small{max-width:42%}.interior-image figcaption{font-size:8pt;color:#68728a;line-height:1.5}.scene-divider{text-align:center;margin:9mm 0;letter-spacing:4pt;break-inside:avoid}
+  .book-quote{border-inline-start:3px solid #b3a082;padding:4mm 6mm;margin:6mm 0;background:#f9f6f0;font-style:italic;break-inside:avoid}
+  .book-note{border:1px solid #c9d7e5;border-inline-start:4px solid #577a9f;padding:4mm 5mm;margin:6mm 0;background:#f4f7fa;break-inside:avoid}
+  .page-break{break-before:page;page-break-before:always;height:0;clear:both}
   </style></head><body class="theme-${layout}"><section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}${thanksPage}<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section></body></html>`;
 }
 export async function makePdf(
@@ -257,6 +260,18 @@ export async function makeDocx(
         }
         if (image.meta.caption) children.push(new Paragraph({ ...base,
           alignment: AlignmentType.CENTER, children: [text(image.meta.caption)] }));
+        continue;
+      }
+      if (block.type === "pagebreak") {
+        children.push(new Paragraph({children:[new PageBreak()]}));
+        continue;
+      }
+      if (block.type === "quote" || block.type === "note") {
+        children.push(new Paragraph({...base,
+          spacing:{before:160,after:200},
+          indent:{left:380,right:250},
+          children:[text(stripInlineMarkdown(block.text),block.type==="note")],
+        }));
         continue;
       }
       if (block.type === "divider") {
