@@ -1245,6 +1245,71 @@ export function Editor({
                   </button>
                 )}
               </div>
+              {current && (
+                <div className="illustration-toolbar">
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled || !book.unlocked}
+                    onClick={() => setShowIllustrations(value => !value)}>
+                    <ImagePlus size={17} /> {tr(locale, "Insert image", "إضافة صورة داخل الفصل", "Infoga bild")}
+                  </button>
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled} onClick={addDivider}>
+                    <SeparatorHorizontal size={17} /> {tr(locale, "Scene divider", "فاصل زخرفي صغير", "Scenavdelare")}
+                  </button>
+                </div>
+              )}
+              {current && showIllustrations && (
+                <div className="illustration-inserter" dir={locale === "ar" ? "rtl" : "ltr"}>
+                  <strong>{tr(locale, "Illustrations inside your book", "صور ورسومات داخل كتابك", "Illustrationer i din bok")}</strong>
+                  <p className="muted">{tr(locale, "Place images between paragraphs or at chapter boundaries. Pages adapt to each reader's screen.", "أدرج الصور بين الفقرات أو في بداية الفصل أو نهايته. صفحات الكتاب تتغير بحسب شاشة القارئ.", "Lägg till bilder mellan stycken eller vid kapitelgränser. Sidor anpassas efter skärmen.")}</p>
+                  <div className="illustration-fields">
+                    <label>{tr(locale, "Insert at", "موضع الصورة", "Placering")}
+                      <select value={imagePlacement} onChange={e => setImagePlacement(e.target.value as "cursor"|"start"|"end")}>
+                        <option value="cursor">{tr(locale, "Text cursor", "موضع المؤشر", "Textmarkören")}</option>
+                        <option value="start">{tr(locale, "Chapter start", "بداية الفصل", "Kapitelstart")}</option>
+                        <option value="end">{tr(locale, "Chapter end", "نهاية الفصل", "Kapitelslut")}</option>
+                      </select>
+                    </label>
+                    <label>{tr(locale, "Image size", "حجم الصورة", "Bildstorlek")}
+                      <select value={imageSize} onChange={e => setImageSize(e.target.value as "small"|"medium"|"full")}>
+                        <option value="small">{tr(locale, "Small", "صغير", "Liten")}</option>
+                        <option value="medium">{tr(locale, "Medium", "متوسط", "Mellan")}</option>
+                        <option value="full">{tr(locale, "Full width", "عرض كامل", "Full bredd")}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label>{tr(locale, "Caption (optional)", "وصف أسفل الصورة (اختياري)", "Bildtext (valfritt)")}
+                    <input maxLength={240} value={imageCaption} onChange={e => setImageCaption(e.target.value)} />
+                  </label>
+                  <strong>{tr(locale, "Built-in illustration library · free", "مكتبة الرسومات الداخلية · مجانية", "Inbyggt bildbibliotek · gratis")}</strong>
+                  <div className="illustration-library-grid">
+                    {(["mountain", "botanical", "stars", "waves"] as const).map(name => (
+                      <button type="button" key={name} disabled={disabled}
+                        onClick={() => void insertLibrary(name)}>
+                        <img src={`/illustrations/${name}.png`} alt={name} loading="lazy" />
+                        <span>{tr(locale,
+                          ({mountain:"Landscape",botanical:"Botanical",stars:"Night sky",waves:"Ocean"} as const)[name],
+                          ({mountain:"طبيعة",botanical:"نباتات",stars:"سماء ليلية",waves:"بحر"} as const)[name],
+                          ({mountain:"Landskap",botanical:"Botanik",stars:"Stjärnhimmel",waves:"Hav"} as const)[name])}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <label className="cover-upload-label">
+                    {tr(locale, "Upload an image (PNG, JPG, WebP · max 3 MB)", "ارفع صورة من جهازك (PNG أو JPG أو WebP · حتى 3 ميغابايت)", "Ladda upp bild (PNG, JPG, WebP · max 3 MB)")}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
+                      onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
+                  </label>
+                  <label>{tr(locale, "Describe the AI illustration", "صف الصورة التي تريد توليدها بالذكاء الاصطناعي", "Beskriv AI-illustrationen")}
+                    <textarea rows={3} maxLength={700} value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
+                      placeholder={tr(locale, "A scene from this chapter, a character, or a visual explanation…", "مشهد من هذا الفصل أو شخصية أو رسم يوضح فكرة...", "En scen, en karaktär eller en förklarande bild…")} />
+                  </label>
+                  <button type="button" className="button button-primary"
+                    disabled={disabled || !config.artwork || !config.ai || imagePrompt.trim().length < 10}
+                    onClick={() => void generate("illustration", active?.id)}>
+                    <Sparkles size={17} /> {tr(locale, "Generate and insert AI image", "توليد الصورة وإدراجها في الفصل", "Skapa och infoga AI-bild")}
+                  </button>
+                </div>
+              )}
               <h3
                 className="current-chapter-title"
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
@@ -1367,7 +1432,8 @@ export function Editor({
                     <BookBackCover title={draft.title} author={draft.author}
                       style={draft.cover_style} language={draft.language}
                       blurb={draft.back_blurb || draft.idea}
-                      authorBio={draft.author_bio || ""} />
+                      authorBio={draft.author_bio || ""}
+                      image={draft.back_cover_candidate_url || draft.back_cover_url} />
                   )}
                 </div>
                 <div className="stack">
@@ -1497,6 +1563,20 @@ export function Editor({
                       </div>
                     </div>
                   )}
+                  {draft.back_cover_candidate_url && (
+                    <div className="cover-confirm">
+                      <strong>{tr(locale, "AI back cover proposal", "صورة مقترحة للغلاف الخلفي", "AI-förslag för baksidan")}</strong>
+                      <div className="cover-confirm-buttons">
+                        <button type="button" className="button button-primary button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(true, "back")}><Check size={15} />{tr(locale, "Accept back cover", "اعتماد الغلاف الخلفي", "Godkänn baksidan")}</button>
+                        <button type="button" className="button button-outline button-small" disabled={disabled} onClick={() => void decideCoverSuggestion(false, "back")}>{tr(locale, "Discard", "رفض", "Avvisa")}</button>
+                      </div>
+                    </div>
+                  )}
+                  <button type="button" className="button button-outline"
+                    disabled={disabled || !config.ai || !config.artwork || !book.unlocked}
+                    onClick={() => { setCoverSide("back"); void generate("back_cover"); }}>
+                    <Sparkles size={17} />{tr(locale, "Generate AI back cover image", "توليد صورة الغلاف الخلفي بالذكاء الاصطناعي", "Generera AI-bild för baksidan")}
+                  </button>
                   <label className="cover-upload-label">
                     <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
                     <input
@@ -1669,7 +1749,8 @@ export function Editor({
                   <BookBackCover title={draft.title} author={draft.author}
                     style={draft.cover_style} language={draft.language}
                     blurb={draft.back_blurb || draft.idea}
-                    authorBio={draft.author_bio || ""} />
+                    authorBio={draft.author_bio || ""}
+                    image={draft.back_cover_url} />
                 </div>
               </div>
               <p className="review-note">{t.reviewNote}</p>
