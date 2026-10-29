@@ -4,6 +4,7 @@ import {
   createOutline,
   createChapter,
   createCover,
+  createTextEdit,
   finishJob,
   failJob,
 } from "./steps";
@@ -14,6 +15,7 @@ export async function generateBook(jobId: string) {
   try {
     const plan = await loadPlan(jobId);
     if (plan.kind === "outline") await createOutline(jobId);
+    else if (plan.kind === "text_edit") await createTextEdit(jobId);
     else if (["cover", "back_cover", "illustration"].includes(plan.kind)) await createCover(jobId);
     else {
       for (let i = 0; i < plan.chapters.length; i++) {
