@@ -128,7 +128,8 @@ export const jobRequestSchema = z.object({
   image_position: z.number().int().nonnegative().max(30000).optional(),
   image_caption: z.string().trim().max(240).optional(),
   image_size: z.enum(["small", "medium", "full"]).optional(),
-  text_action: z.enum(["improve","shorten","expand","proofread","tone"]).optional(),
+  text_action: z.enum(["improve","shorten","expand","proofread","tone","simplify","custom"]).optional(),
+  text_instruction: z.string().trim().max(500).optional(),
   text_start: z.number().int().nonnegative().max(30000).optional(),
   text_end: z.number().int().nonnegative().max(30000).optional(),
 });
@@ -151,7 +152,7 @@ export type TextEditCandidate = {
   replacement: string;
   start: number;
   end: number;
-  action: "improve" | "shorten" | "expand" | "proofread" | "tone";
+  action: "improve" | "shorten" | "expand" | "proofread" | "tone" | "simplify" | "custom";
 };
 export type Book = Brief & {
   id: string;
@@ -194,6 +195,7 @@ export type Job = {
   image_caption?: string;
   image_size?: "small" | "medium" | "full";
   text_action?: TextEditCandidate["action"];
+  text_instruction?: string;
   text_start?: number;
   text_end?: number;
   text_original?: string;
