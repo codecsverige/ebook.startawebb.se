@@ -365,7 +365,7 @@ export function Editor({
     } catch (e) { setError(e instanceof Error ? e.message : "service_error"); }
     finally { setPending(""); }
   }
-  async function changeExistingImage(imageId: string, remove = false) {
+  async function changeExistingImage(imageId: string, remove = false, override?: {caption:string;size:"small"|"medium"|"full"}) {
     const illustration = draft?.illustrations?.[imageId];
     if (!illustration || disabled) return;
     if (remove && !window.confirm(tr(locale,
@@ -376,7 +376,7 @@ export function Editor({
     if (wasDirty && !(await save())) return;
     setPending("illustration"); setError("");
     try {
-      const updated = imageEdits[imageId];
+      const updated = override || imageEdits[imageId];
       const result = await request<{ book: BookWithCover }>(
         `/api/books/${id}/illustrations/${imageId}`, {
           method: remove ? "DELETE" : "PATCH",
@@ -1667,6 +1667,8 @@ export function Editor({
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
                     onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);}}
+                    onRemoveImage={imageId=>{void changeExistingImage(imageId,true);}}
+                    onSaveImage={(imageId,size,caption)=>{void changeExistingImage(imageId,false,{size,caption});}}
                     onInsertImage={(position,canonicalContent)=>{
                       if (canonicalContent !== current.content && active)
                         change(b=>({...b,chapters:{...b.chapters,[active.id]:{
@@ -1763,7 +1765,7 @@ export function Editor({
                   </button>
                 </div>
               )}
-              {current && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
+              {current && (!visualMode || read) && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
                 <div className="illustration-manager">
                   <strong>{tr(locale, "Images in this chapter", "صور هذا الفصل", "Bilder i detta kapitel")}</strong>
                   {Object.values(draft.illustrations || {}).filter(asset => current.content.includes(`[[illustration:${asset.id}]]`)).map(asset => (
