@@ -632,7 +632,7 @@ export class FirestoreStudio {
       const dayId = Math.floor(now / day);
       const gRef = this.root.collection("rates").doc(`ai-${dayId}`);
       const imageRef = this.root.collection("rates").doc(`ai-image-${dayId}`);
-      const imageRequest = operation === "cover";
+      const imageRequest = operation === "cover" || operation.startsWith("cover:");
       const [p, b, g, imageCount] = await tx.getAll(pRef, bRef, gRef, imageRef);
       const limits = aiDailyLimits();
       const profile = this.checkedProfile(p.data() as Profile | undefined);
