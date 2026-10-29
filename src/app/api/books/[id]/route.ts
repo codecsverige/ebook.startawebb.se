@@ -32,8 +32,13 @@ export async function PATCH(request: Request, ctx: Context) {
       { user } = await requireUser();
     await takeRate(`save:${user.id}`, 1000);
     const input = await readJson(request, editBookSchema);
-    for (const chapter of Object.values(input.chapters))
-      chapter.summary = chapter.content.replace(/[#*]/g, "").slice(0, 1000);
+    // Refresh continuity summaries from the author's latest manuscript, not stale AI output.
+    // Keep both opening and ending context so later chapters know how the scene concluded.
+    for (const chapter of Object.values(input.chapters)) {
+      const plain = chapter.content.replace(/^[#*>\\- ]+/gm, "").trim();
+      chapter.summary = plain.length <= 1000 ? plain :
+        plain.slice(0, 650).trimEnd() + " … " + plain.slice(-345).trimStart();
+    }
     return json({
       book: await withCover(await studioStore().saveBook(user.id, id, input)),
     });
