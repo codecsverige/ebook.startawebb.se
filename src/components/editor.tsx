@@ -107,6 +107,9 @@ export function Editor({
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
   const [readerMode, setReaderMode] = useState(true);
+  const [selectedPassage, setSelectedPassage] = useState("");
+  const [coverWizardStep, setCoverWizardStep] = useState(0);
+  const [showRightTools, setShowRightTools] = useState(true);
   const visualSelectedRef = useRef("");
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
@@ -337,7 +340,7 @@ export function Editor({
     } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
   }
-  async function uploadIllustration(file: File) {
+  async function uploadIllustration(file: File, asLogo = false) {
     if (!draft || !active || !current || disabled) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
         file.size > 3_000_000) { setError("invalid_input"); return; }
@@ -349,7 +352,8 @@ export function Editor({
       const params = new URLSearchParams({
         revision: String(draft.revision + (wasDirty ? 1 : 0)),
         chapter_id: active.id, position: String(position),
-        size: imageSize, caption: imageCaption,
+        size: asLogo ? "small" : imageSize,
+        caption: asLogo ? (imageCaption.trim() || tr(locale, "Logo", "الشعار", "Logotyp")) : imageCaption,
       });
       const response = await fetch(`/api/books/${id}/illustrations/upload?${params}`, {
         method: "POST", headers: { "Content-Type": file.type }, body: file,
@@ -963,6 +967,14 @@ export function Editor({
   const current = active ? draft.chapters[active.id] : null;
   const complete = isComplete(book);
   const canExport = complete && book.unlocked && !busy;
+  const unwritten = draft.outline.filter(c=>!draft.chapters[c.id]?.content?.trim());
+  const readyChecks = [
+    {key:"chapters", label:tr(locale,"All chapters written","كل الفصول مكتوبة","Alla kapitel skrivna"), ok:unwritten.length===0, tab:"write" as Tab},
+    {key:"title",label:tr(locale,"Book title and author","عنوان الكتاب واسم المؤلف","Boktitel och författare"),ok:!!draft.title.trim() && !!draft.author.trim(),tab:"design" as Tab},
+    {key:"front",label:tr(locale,"Front cover selected","تم اختيار الغلاف الأمامي","Framsida vald"),ok:!!draft.cover_style,tab:"design" as Tab},
+    {key:"back",label:tr(locale,"Back-cover description","نبذة الغلاف الخلفي","Text till baksidan"),ok:!!draft.back_blurb?.trim(),tab:"design" as Tab},
+    {key:"export",label:tr(locale,"Book unlocked for export","الكتاب متاح للتصدير","Boken upplåst för export"),ok:!!book.unlocked,tab:"preview" as Tab},
+  ];
   return (
     <div className="editor-shell">
       <div className="editor-topbar">
@@ -1019,7 +1031,11 @@ export function Editor({
               {book.unlocked ? (config.ownerTrial ? tr(locale, "Ready to test", "جاهز للتجربة", "Redo att testa") : t.unlocked) : config.ownerTrial ? tr(locale, "Free trial", "تجربة مجانية", "Gratis test") : t.sampleBadge}
             </span>
           </div>
-          <nav className="editor-tabs" aria-label={t.studio}>
+          <nav className="editor-tabs guided-stages" aria-label={t.studio}>
+            <div className="guided-stage-done">
+              <span className="tab-number">01</span><Check size={17}/>
+              <span>{tr(locale,"Idea and audience","الفكرة والمحتوى","Idé och målgrupp")}</span>
+            </div>
             {(
               [
                 { id: "outline", icon: ListTree },
@@ -1035,13 +1051,24 @@ export function Editor({
                 disabled={!draft.outline.length && tabId !== "outline"}
                 aria-current={tab === tabId ? "page" : undefined}
               >
-                <span className="tab-number">0{i + 1}</span>
+                <span className="tab-number">0{i + 2}</span>
                 <Icon size={17} />
                 <span>{t[tabId]}</span>
                 <ChevronRight className="tab-chevron" size={15} />
               </button>
             ))}
           </nav>
+          {tab === "write" && draft.outline.length > 0 && (
+            <div className="guided-chapter-nav" aria-label={tr(locale,"Book chapters","فصول الكتاب","Bokens kapitel")}>
+              <strong>{tr(locale,"Chapters","الفصول","Kapitel")}</strong>
+              {draft.outline.map((c,i)=><button key={c.id} type="button"
+                className={active?.id===c.id?"is-current":""}
+                onClick={()=>{setChapterId(c.id);setSelectedPassage("");visualSelectedRef.current="";}}>
+                <span>{i+1}</span><span title={c.title}>{c.title}</span>
+                {draft.chapters[c.id]?.content?.trim() && <Check size={13}/>}
+              </button>)}
+            </div>
+          )}
           <div className="sidebar-stats">
             <BookOpen size={18} />
             <div>
@@ -1434,20 +1461,6 @@ export function Editor({
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
-               {current && book.unlocked && config.ai && (
-                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
-                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
-                   {([
-                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
-                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
-                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
-                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
-                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
-                   ] as const).map(([action,label])=><button type="button" key={action}
-                     disabled={disabled || !!book.text_edit_candidate}
-                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
-                 </div>
-               )}
                {book.text_edit_candidate && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -1565,6 +1578,12 @@ export function Editor({
                     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
                       onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
                   </label>
+                  <label className="cover-upload-label">
+                    {tr(locale,"Upload a logo (small, transparent PNG preferred)","رفع شعار (يفضّل PNG شفاف وبحجم صغير)","Ladda upp logotyp (helst transparent PNG)")}
+                    <input type="file" accept="image/png,image/jpeg,image/webp"
+                      disabled={disabled || !book.unlocked}
+                      onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void uploadIllustration(file,true);}}/>
+                  </label>
                   <label>{tr(locale, "Describe the AI illustration", "صف الصورة التي تريد توليدها بالذكاء الاصطناعي", "Beskriv AI-illustrationen")}
                     <textarea rows={3} maxLength={700} value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
                       placeholder={tr(locale, "A scene from this chapter, a character, or a visual explanation…", "مشهد من هذا الفصل أو شخصية أو رسم يوضح فكرة...", "En scen, en karaktär eller en förklarande bild…")} />
@@ -1598,7 +1617,7 @@ export function Editor({
                     onChange={content => change(b=>({...b,chapters:{
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
-                    onSelection={value=>{visualSelectedRef.current=value;}}
+                    onSelection={value=>{visualSelectedRef.current=value;setSelectedPassage(value.trim());}}
                     onInsertImage={position=>{
                       cursorRef.current=position;
                       setImagePlacement("cursor");
@@ -1625,7 +1644,9 @@ export function Editor({
                       disabled={disabled}
                       onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
                       onKeyUp={e => { cursorRef.current = e.currentTarget.selectionStart; }}
-                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart;
+                        const input=e.currentTarget;
+                        setSelectedPassage(input.value.slice(input.selectionStart,input.selectionEnd).trim()); }}
                       onChange={(e) => {
                         cursorRef.current = e.currentTarget.selectionStart;
                         if (active)
@@ -1753,6 +1774,20 @@ export function Editor({
                 <span className="eyebrow">03 / {t.design}</span>
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
+              </div>
+              <div className="cover-wizard-guide" role="group" aria-label={tr(locale,"Cover workflow","خطوات الغلاف","Omslagssteg")}>
+                {([
+                  tr(locale,"1. Concept","١. الفكرة","1. Idé"),
+                  tr(locale,"2. Visual style","٢. التصميم","2. Stil"),
+                  tr(locale,"3. Front and back","٣. الأمام والخلف","3. Fram och bak"),
+                ]).map((label,i)=><button type="button" key={i}
+                  className={coverWizardStep===i?"is-current":""}
+                  onClick={()=>setCoverWizardStep(i)}>{label}</button>)}
+                <p>{[
+                  tr(locale,"Start from the book's topic and your cover art direction. Avoid unrelated illustrations.","ابدأ من موضوع الكتاب وحدد توجيه الصورة والعناصر التي تريد تجنبها.","Utgå från bokens innehåll och ange motiv som ska undvikas."),
+                  tr(locale,"Choose from the recommended designs below. Show more only when needed.","اختر تصميمًا من المقترحات المناسبة للكتاب، واعرض المزيد فقط عند الحاجة.","Välj bland rekommenderade omslag och visa fler vid behov."),
+                  tr(locale,"Review front and back, your title and the back-cover description before exporting.","راجع الغلافين والعنوان والنبذة الخلفية قبل التصدير.","Granska fram- och baksida och baksidestext före export.")
+                ][coverWizardStep]}</p>
               </div>
               <div className="design-layout">
                 <div className="design-cover">
@@ -2026,6 +2061,18 @@ export function Editor({
                       "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.")
                   : t.exportHint}</p>
               </div>
+              <section className="readiness-checklist" aria-label={tr(locale,"Book readiness","قائمة جاهزية الكتاب","Kontroll före export")}>
+                <strong>{tr(locale,"Before downloading","قبل تنزيل الكتاب","Innan nedladdning")}</strong>
+                <p>{tr(locale,"Review the items below. Optional publishing details improve quality but never change your manuscript automatically.",
+                    "راجع العناصر التالية. بعض التفاصيل اختيارية لتحسين الجودة، ولا يُغيّر التطبيق كتابك تلقائيًا.",
+                    "Granska punkterna. Valfria uppgifter förbättrar resultatet utan att ändra manus automatiskt.")}</p>
+                {readyChecks.map(check=><button type="button" key={check.key} onClick={()=>setTab(check.tab)}
+                  className={check.ok?"is-ready":"needs-attention"}>
+                  <span>{check.ok?"✓":"○"}</span><span>{check.label}</span>
+                  <span>{check.ok ? tr(locale,"Ready","جاهز","Klar") : tr(locale,"Review","راجع","Granska")}</span>
+                </button>)}
+                {unwritten.length>0&&<small>{tr(locale,"Missing chapters","فصول غير مكتملة","Saknade kapitel")}: {unwritten.map(c=>c.title).join("، ")}</small>}
+              </section>
               <div className="export-buttons">
                 <button
                   className="button button-primary"
@@ -2126,7 +2173,69 @@ export function Editor({
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
+          <div className="guided-bottom-nav">
+            {tab !== "preview" && <button type="button" className="button button-primary"
+              disabled={!draft.outline.length}
+              onClick={()=>setTab(tab==="outline"?"write":tab==="write"?"design":"preview")}>
+              {tab==="outline"
+                ? tr(locale,"Next: Write your book","التالي: كتابة الكتاب","Nästa: Skriv boken")
+                : tab==="write"
+                ? tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Formge omslaget")
+                : tr(locale,"Next: Review and export","التالي: المراجعة والتصدير","Nästa: Granska och exportera")}
+              <ChevronRight size={17}/>
+            </button>}
+            {tab==="preview" && <button type="button" className="button button-outline"
+              onClick={()=>setTab("write")}>{tr(locale,"Back to editing","العودة للتحرير","Tillbaka till redigering")}</button>}
+          </div>
         </div>
+        {tab==="write" && <aside className="guided-right-panel" aria-label={tr(locale,"Contextual tools","الأدوات السياقية","Verktyg")}>
+          <div className="guided-right-head">
+            <strong>{tr(locale,"Editing tools","أدوات التحرير","Redigeringsverktyg")}</strong>
+            <button type="button" onClick={()=>setShowRightTools(v=>!v)}
+              aria-expanded={showRightTools}>{showRightTools?"−":"+"}</button>
+          </div>
+          {showRightTools && <>
+            <section>
+              <h3><Plus size={16}/>{tr(locale,"Insert","إضافة","Infoga")}</h3>
+              <p>{tr(locale,"Press + between paragraphs for text, title, quotation, note, list or a page break.",
+                "اضغط + بين الفقرات لإضافة نص أو عنوان أو اقتباس أو ملاحظة أو قائمة أو فاصل صفحة.",
+                "Tryck + mellan stycken för text, rubrik, citat, notering, lista eller sidbrytning.")}</p>
+              <button type="button" className="button button-outline button-small"
+                disabled={disabled || !current || !book.unlocked}
+                onClick={()=>{setShowIllustrations(true);setImagePlacement("cursor");}}>
+                <ImagePlus size={16}/>{tr(locale,"Image or logo","صورة أو شعار","Bild eller logotyp")}
+              </button>
+            </section>
+            <section>
+              <h3><Sparkles size={16}/>{tr(locale,"AI for selected passage","AI للنص المحدد","AI för markerad text")}</h3>
+              <p>{selectedPassage.length>=4
+                ? selectedPassage.slice(0,130)+(selectedPassage.length>130?"…":"")
+                : tr(locale,"Highlight 4–1,800 characters inside the manuscript, then choose one action.",
+                    "حدّد نصًا من ٤ إلى ١٨٠٠ حرف داخل الكتاب، ثم اختر إجراءً واحدًا.",
+                    "Markera 4–1 800 tecken i manus och välj en åtgärd.")}</p>
+              <div className="guided-ai-actions">
+                {([
+                  ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                  ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                  ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                  ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                  ["tone",tr(locale,"Change style","تغيير الأسلوب","Ändra tonen")],
+                ] as const).map(([action,label])=><button type="button" key={action}
+                  disabled={disabled || !config.ai || !book.unlocked || !current ||
+                    selectedPassage.length<4 || selectedPassage.length>1800 || !!book.text_edit_candidate}
+                  onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+              </div>
+              {!book.unlocked&&<small>{tr(locale,"AI edits require an unlocked book.","يلزم فتح الكتاب لاستخدام تعديل AI.","AI-redigering kräver en upplåst bok.")}</small>}
+              <small>{tr(locale,"AI suggestions are never applied before you approve them.","لا يُعتمد اقتراح AI قبل موافقتك.","AI-förslag tillämpas inte utan godkännande.")}</small>
+            </section>
+            <section>
+              <h3>{tr(locale,"Chapter progress","تقدم الفصل","Kapitelstatus")}</h3>
+              <p>{current?.content?.trim().split(/\s+/u).filter(Boolean).length || 0} {t.words}</p>
+              <button type="button" className="button button-outline button-small" disabled={disabled}
+                onClick={()=>setTab("preview")}>{tr(locale,"Preview book","معاينة الكتاب","Förhandsgranska")}</button>
+            </section>
+          </>}
+        </aside>}
       </div>
       {modal && (
         <Dialog
