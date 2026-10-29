@@ -112,13 +112,31 @@ export const jobKinds = [
   "book",
   "chapter",
   "cover",
+  "back_cover",
+  "illustration",
 ] as const;
 export type JobKind = (typeof jobKinds)[number];
 export const jobRequestSchema = z.object({
   kind: z.enum(jobKinds),
   chapter_id: z.string().uuid().optional(),
   request_id: z.string().uuid(),
+  image_prompt: z.string().trim().min(10).max(700).optional(),
+  image_position: z.number().int().nonnegative().max(30000).optional(),
+  image_caption: z.string().trim().max(240).optional(),
+  image_size: z.enum(["small", "medium", "full"]).optional(),
 });
+export const libraryIllustrations = ["mountain", "botanical", "stars", "waves"] as const;
+export type LibraryIllustration = (typeof libraryIllustrations)[number];
+export type Illustration = {
+  id: string;
+  source: "upload" | "ai" | "library";
+  path?: string;
+  preset?: LibraryIllustration;
+  alt: string;
+  caption: string;
+  size: "small" | "medium" | "full";
+};
+export const illustrationMarker = (id: string) => `[[illustration:${id}]]`;
 export type Book = Brief & {
   id: string;
   user_id: string;
@@ -128,6 +146,9 @@ export type Book = Brief & {
   chapters: Record<string, Chapter>;
   cover_style: (typeof coverStyles)[number];
   cover_path: string | null;
+  back_cover_path?: string | null;
+  back_cover_candidate_path?: string | null;
+  illustrations?: Record<string, Illustration>;
   /** Optional for existing books created before the cover studio update. */
   cover_direction?: string;
   back_blurb?: string;
@@ -147,13 +168,23 @@ export type Job = {
   user_id: string;
   kind: JobKind;
   chapter_id: string | null;
+  request_id?: string;
+  image_prompt?: string;
+  image_position?: number;
+  image_caption?: string;
+  image_size?: "small" | "medium" | "full";
   status: "queued" | "running" | "completed" | "failed";
   progress: number;
   error_code: string | null;
   run_id: string | null;
   created_at: string;
 };
-export type BookWithCover = Book & { cover_url?: string | null; cover_candidate_url?: string | null };
+export type BookWithCover = Book & {
+  cover_url?: string | null;
+  cover_candidate_url?: string | null;
+  back_cover_url?: string | null;
+  back_cover_candidate_url?: string | null;
+};
 export type BookshelfBook = Omit<BookWithCover, "chapters"> & {
   word_count: number;
   completed_chapters: number;
