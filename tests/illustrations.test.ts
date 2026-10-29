@@ -51,7 +51,7 @@ test("EPUB packages illustration bytes, manifest and caption",()=>{
 test("Word exports embedded PNG and preserves the caption",async()=>{
   const bytes=await makeDocx(book,undefined,assets);
   assert.ok(bytes.length>2000);
-  assert.match(bytes.toString("latin1"),/word\/media\/image/);
+  assert.match(bytes.toString("latin1"),/word\/media\/[a-z0-9]+\.png/i);
 });
 
 test("book editing never accepts forged illustration metadata via PATCH",()=>{
