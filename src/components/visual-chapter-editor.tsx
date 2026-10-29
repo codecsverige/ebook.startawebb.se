@@ -88,6 +88,41 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     const text = serializeVisualBlocks(modified);
     if (text.length <= 30000 && text.trim()) onChange(text);
   };
+  const move = (index: number, direction: -1 | 1) => {
+    const other = index + direction;
+    if(disabled || other < 0 || other >= blocks.length) return;
+    const reordered=[...blocks];
+    [reordered[index],reordered[other]]=[reordered[other],reordered[index]];
+    const text=serializeVisualBlocks(reordered);
+    if(text.length <= 30000){ onChange(text); setSelectedBlock(other); setMenuAt(null); }
+  };
+  const remove = (index: number) => {
+    if(disabled || blocks.length<=1) return;
+    const block=blocks[index];
+    if(block.type==="illustration") { onRemoveImage?.(block.id); setSelectedBlock(null); return; }
+    if(!window.confirm(tr(locale,
+      "Remove this element? You can restore an earlier saved version.",
+      "حذف هذا العنصر؟ يمكنك استعادة نسخة محفوظة سابقة.",
+      "Vill du ta bort objektet? Tidigare versioner kan återställas."))) return;
+    const text=serializeVisualBlocks(blocks.filter((_,i)=>i!==index));
+    if(text.trim()){onChange(text);setSelectedBlock(null);setMenuAt(null);}
+  };
+  const controls = (index: number, block: ManuscriptBlock) =>
+    <div className="visual-block-controls" role="group"
+      aria-label={tr(locale,"Element actions","إجراءات العنصر","Åtgärder för objekt")}>
+      <button type="button" disabled={disabled || index===0}
+        onClick={()=>move(index,-1)}>
+        ↑ {tr(locale,"Move earlier","نقل للأعلى","Flytta upp")}
+      </button>
+      <button type="button" disabled={disabled || index===blocks.length-1}
+        onClick={()=>move(index,1)}>
+        ↓ {tr(locale,"Move later","نقل للأسفل","Flytta ned")}
+      </button>
+      <button type="button" disabled={disabled || blocks.length<=1 || (block.type==="illustration" && !onRemoveImage)}
+        className="visual-remove-block" onClick={()=>remove(index)}>
+        {tr(locale,"Delete","حذف","Ta bort")}
+      </button>
+    </div>;
   const insert = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul", value = "") => {
     if (disabled) return;
     const clean = value.trim().slice(0, 3000);
