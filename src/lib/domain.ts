@@ -117,6 +117,7 @@ export const jobKinds = [
   "cover",
   "back_cover",
   "illustration",
+  "text_edit",
 ] as const;
 export type JobKind = (typeof jobKinds)[number];
 export const jobRequestSchema = z.object({
@@ -127,6 +128,9 @@ export const jobRequestSchema = z.object({
   image_position: z.number().int().nonnegative().max(30000).optional(),
   image_caption: z.string().trim().max(240).optional(),
   image_size: z.enum(["small", "medium", "full"]).optional(),
+  text_action: z.enum(["improve","shorten","expand","proofread","tone"]).optional(),
+  text_start: z.number().int().nonnegative().max(30000).optional(),
+  text_end: z.number().int().nonnegative().max(30000).optional(),
 });
 export const libraryIllustrations = ["mountain", "botanical", "stars", "waves"] as const;
 export type LibraryIllustration = (typeof libraryIllustrations)[number];
@@ -140,6 +144,15 @@ export type Illustration = {
   size: "small" | "medium" | "full";
 };
 export const illustrationMarker = (id: string) => `[[illustration:${id}]]`;
+export type TextEditCandidate = {
+  id: string;
+  chapter_id: string;
+  original: string;
+  replacement: string;
+  start: number;
+  end: number;
+  action: "improve" | "shorten" | "expand" | "proofread" | "tone";
+};
 export type Book = Brief & {
   id: string;
   user_id: string;
@@ -149,6 +162,7 @@ export type Book = Brief & {
   chapters: Record<string, Chapter>;
   cover_style: (typeof coverStyles)[number];
   cover_path: string | null;
+  text_edit_candidate?: TextEditCandidate | null;
   back_cover_path?: string | null;
   back_cover_candidate_path?: string | null;
   illustrations?: Record<string, Illustration>;
@@ -179,6 +193,10 @@ export type Job = {
   image_position?: number;
   image_caption?: string;
   image_size?: "small" | "medium" | "full";
+  text_action?: TextEditCandidate["action"];
+  text_start?: number;
+  text_end?: number;
+  text_original?: string;
   status: "queued" | "running" | "completed" | "failed";
   progress: number;
   error_code: string | null;
