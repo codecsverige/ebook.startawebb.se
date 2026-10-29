@@ -89,7 +89,7 @@ test("keeps one paid attempt and preserves the exact reason of model refusal", a
     globalThis.fetch = async (_url, init) => {
       calls++;
       const request = JSON.parse(String(init?.body));
-      assert.equal(request.model, "gpt-5-mini");
+      assert.equal(request.model, calls === 1 ? "gpt-5-mini" : "gpt-4.1-mini");
       return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 403 });
     };
     await assert.rejects(
