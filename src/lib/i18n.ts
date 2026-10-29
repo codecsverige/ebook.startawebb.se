@@ -625,9 +625,14 @@ export function errorMessage(code: string, l: Locale): string {
       "OpenAI API-krediterna eller budgeten är slut. Kontrollera ditt OpenAI-konto.",
     ],
     ai_auth_failed: [
-      "OpenAI API authentication failed. Check the server API connection.",
-      "فشل اتصال OpenAI API. تحقق من صلاحية المفتاح والرصيد.",
-      "OpenAI API-autentisering misslyckades. Kontrollera serveranslutningen.",
+      "OpenAI rejected the API key (HTTP 401). Check the key's status in the OpenAI project.",
+      "رفض OpenAI مفتاح API (خطأ 401). تحقق من أن المفتاح نشط ويتبع المشروع الصحيح.",
+      "OpenAI nekade API-nyckeln (HTTP 401). Kontrollera nyckeln i OpenAI-projektet.",
+    ],
+    ai_model_unavailable: [
+      "The OpenAI project cannot access the requested model (403/404). The API key is not necessarily invalid.",
+      "رفض OpenAI الوصول إلى النموذج (403/404). هذا لا يعني بالضرورة أن المفتاح أو الرصيد غير صالح.",
+      "OpenAI-projektet har inte tillgång till modellen (403/404). API-nyckeln kan vara giltig.",
     ],
     ai_provider_busy: [
       "The AI provider is temporarily busy or timed out. Retry this chapter.",

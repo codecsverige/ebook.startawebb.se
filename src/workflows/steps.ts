@@ -69,9 +69,11 @@ async function structured<T>(
     result = await generateDirectStructured(operation, schema, systemPrompt, prompt, maxOutputTokens);
   } catch (error) {
     const originalCode = error instanceof Error ? error.message : "";
-    const code = ["ai_generation_invalid", "ai_generation_incomplete", "content_not_allowed"].includes(originalCode)
-      ? originalCode
-      : classifyAiFailure(error);
+    const code = [
+      "ai_generation_invalid", "ai_generation_incomplete", "content_not_allowed",
+      "ai_auth_failed", "ai_credits_exhausted", "ai_model_unavailable", "ai_provider_busy",
+      "ai_provider_unavailable",
+    ].includes(originalCode) ? originalCode : classifyAiFailure(error);
     const failure = error as { statusCode?: number; status?: number; name?: string };
     console.warn("ai_request_failed", {
       jobId, operation, code,
@@ -290,6 +292,7 @@ export async function failJob(jobId: string, reason: string) {
     "insufficient_credits",
     "ai_credits_exhausted",
     "ai_auth_failed",
+    "ai_model_unavailable",
     "ai_provider_busy",
     "ai_provider_unavailable",
     "ai_generation_invalid",

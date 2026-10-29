@@ -3,14 +3,13 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import {
   DirectOpenAiError, directFormat, directModelFor,
-  economicalBackupModel, generateDirectStructured, generateDirectCover,
+  classifyOpenAiHttpFailure, generateDirectStructured, generateDirectCover,
 } from "../src/lib/direct-openai";
 
-test("selects the appropriate model automatically, without Vercel model variables", () => {
-  assert.equal(directModelFor("outline"), "gpt-6-luna");
-  assert.equal(directModelFor("outline_recovery"), "gpt-6-luna");
-  assert.equal(directModelFor("chapter"), "gpt-6.1-terra");
-  assert.equal(directModelFor("chapter_recovery"), "gpt-6.1-terra");
+test("uses the same proven economical model as BokaNära for planning and writing", () => {
+  for (const operation of ["outline", "outline_recovery", "chapter", "chapter_recovery"]) {
+    assert.equal(directModelFor(operation), "gpt-5-mini");
+  }
 });
 
 test("strict JSON formats match outline and chapter contracts", () => {
@@ -32,7 +31,7 @@ test("direct API parses and validates generated text without touching real API",
       const payload = JSON.parse(String(init?.body));
       assert.equal(payload.model, directModelFor("chapter"));
       assert.equal(payload.store, false);
-      assert.equal(payload.reasoning.effort, "none");
+      assert.equal(payload.reasoning, undefined);
       assert.equal(payload.text.format.type, "json_schema");
       checkedRequest = true;
       return new Response(JSON.stringify({
@@ -81,40 +80,33 @@ test("cover uses the OpenAI Images API directly, not Gateway", async () => {
 });
 
 
-test("falls back automatically only when a stronger model is unavailable", async () => {
-  const original = globalThis.fetch;
-  const keyBefore = process.env.OPENAI_API_KEY;
-  process.env.OPENAI_API_KEY = "unit-test-key";
+test("keeps one paid attempt and preserves the exact reason of model refusal", async () => {
+  const saved = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
   let calls = 0;
+  process.env.OPENAI_API_KEY = "test-only";
   try {
     globalThis.fetch = async (_url, init) => {
       calls++;
-      const body = JSON.parse(String(init?.body));
-      if (calls === 1) {
-        assert.equal(body.model, "gpt-6.1-terra");
-        return new Response(JSON.stringify({
-          error: { code: "model_not_found", message: "The model does not exist or is not available" },
-        }), { status: 404 });
-      }
-      assert.equal(body.model, economicalBackupModel());
-      return new Response(JSON.stringify({
-        status: "completed",
-        output: [{ type: "message", content: [{
-          type: "output_text", text: JSON.stringify({
-            content: "A complete story chapter.", summary: "Summary of the chapter.",
-          }),
-        }] }],
-        usage: { input_tokens: 90, output_tokens: 55 },
-      }), { status: 200 });
+      const request = JSON.parse(String(init?.body));
+      assert.equal(request.model, "gpt-5-mini");
+      return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 403 });
     };
-    const result = await generateDirectStructured("chapter",
-      z.object({ content: z.string(), summary: z.string() }),
-      "You are an editor.", "Write a chapter", 6500);
-    assert.equal(calls, 2);
-    assert.equal(result.output.summary, "Summary of the chapter.");
+    await assert.rejects(
+      generateDirectStructured("outline", z.object({ allowed: z.boolean() }), "Editor", "An outline", 1000),
+      (error: unknown) => error instanceof DirectOpenAiError && error.message === "ai_model_unavailable",
+    );
+    assert.equal(calls, 1);
   } finally {
-    globalThis.fetch = original;
-    if (keyBefore === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = keyBefore;
+    globalThis.fetch = saved;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
   }
+});
+
+test("separates invalid keys, restricted models and exhausted API quota", () => {
+  assert.equal(classifyOpenAiHttpFailure(401, { error: { code: "invalid_api_key" } }), "ai_auth_failed");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
+  assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
+  assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
 });

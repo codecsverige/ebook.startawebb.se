@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { classifyAiFailure } from "./ai-errors";
 
 export class DirectOpenAiError extends Error {
   constructor(readonly statusCode: number, readonly code: string) {
@@ -8,61 +7,31 @@ export class DirectOpenAiError extends Error {
   }
 }
 
-/** Like BokaNära, model IDs are selected automatically in server code.
- * A strong, moderately priced writer handles chapters; a cheap model plans.
+/** Confirmed, cost-conscious default already used by BokaNära.
+ * One provider request per generation. No model probing via paid requests.
  */
-export function directModelFor(operation: string): string {
-  return operation.startsWith("chapter") ? "gpt-6.1-terra" : "gpt-6-luna";
+export function directModelFor(_operation: string): string {
+  return "gpt-5-mini";
 }
 
-/** Used only if OpenAI says the preferred model is unavailable to this API key. */
-export function economicalBackupModel(): string {
-  return "gpt-5.4-mini";
-}
-
-function modelAccessError(status: number, errorBody: unknown): boolean {
-  if (status === 404) return true;
-  if (status !== 400 && status !== 403) return false;
-  if (!errorBody || typeof errorBody !== "object") return false;
-  const details = (errorBody as { error?: { code?: unknown; message?: unknown } }).error;
-  const code = typeof details?.code === "string" ? details.code.toLowerCase() : "";
-  const message = typeof details?.message === "string" ? details.message.toLowerCase() : "";
-  return /model_(not_found|unavailable|not_available)/.test(code) ||
-    (/model/.test(message) &&
-      /not found|not available|no access|don't have access|do not have access|does not exist|unsupported/.test(message));
-}
-
-async function requestTextWithAutomaticBackup(
-  token: string,
-  params: Record<string, unknown>,
-): Promise<Response> {
-  const send = (body: Record<string, unknown>) =>
-    fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + token,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120_000),
-      cache: "no-store",
-    });
-  const first = await send(params);
-  if (![400, 403, 404].includes(first.status)) return first;
-  let errorBody: unknown = null;
-  try { errorBody = await first.clone().json(); } catch { /* keep original error */ }
-  if (!modelAccessError(first.status, errorBody)) return first;
-  console.warn("ebook_primary_model_unavailable_using_automatic_backup", {
-    primary: params.model,
-    backup: economicalBackupModel(),
-    status: first.status,
-  });
-  return send({ ...params, model: economicalBackupModel(), reasoning: { effort: "none" } });
-}
-
-export function canUseGatewayFallback(error: unknown): boolean {
-  return error instanceof DirectOpenAiError &&
-    [401, 402, 403, 404, 429, 500, 502, 503, 504].includes(error.statusCode);
+/** Convert OpenAI HTTP errors to accurate, non-sensitive UI codes. */
+export function classifyOpenAiHttpFailure(
+  status: number,
+  errorBody?: unknown,
+): "ai_auth_failed" | "ai_credits_exhausted" | "ai_model_unavailable" |
+   "ai_provider_busy" | "ai_provider_unavailable" {
+  const outer = errorBody && typeof errorBody === "object" && !Array.isArray(errorBody)
+    ? errorBody as { error?: { code?: unknown; type?: unknown } } : {};
+  const data = outer.error;
+  const code = typeof data?.code === "string" ? data.code.toLowerCase() : "";
+  const type = typeof data?.type === "string" ? data.type.toLowerCase() : "";
+  if (status === 401 || code === "invalid_api_key") return "ai_auth_failed";
+  if (status === 402 || /insufficient_quota|billing_hard_limit|billing_not_active|credits_exhausted|budget_exceeded/.test(code + " " + type))
+    return "ai_credits_exhausted";
+  if (status === 403 || status === 404 || /model_not_found|model_not_available|model_unavailable|permission_denied|verification_required/.test(code + " " + type))
+    return "ai_model_unavailable";
+  if (status === 429 || status >= 500) return "ai_provider_busy";
+  return "ai_provider_unavailable";
 }
 
 export function directFormat(operation: string) {
@@ -103,18 +72,24 @@ export async function generateDirectStructured<T>(
 ): Promise<{ output: T; usage: { inputTokens: number; outputTokens: number }; finishReason: string }> {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new DirectOpenAiError(401, "ai_auth_failed");
-  const response = await requestTextWithAutomaticBackup(key, {
-    model: directModelFor(operation),
-    store: false,
-    instructions: system,
-    input: [{ role: "user", content: prompt }],
-    text: { format: directFormat(operation) },
-    reasoning: { effort: "none" },
-    max_output_tokens: maxOutputTokens,
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: directModelFor(operation),
+      store: false,
+      instructions: system,
+      input: [{ role: "user", content: prompt }],
+      text: { format: directFormat(operation) },
+      max_output_tokens: maxOutputTokens,
+    }),
+    signal: AbortSignal.timeout(120_000),
+    cache: "no-store",
   });
   if (!response.ok) {
-    // Do not expose service error bodies, credentials or manuscript in logs.
-    throw new DirectOpenAiError(response.status, classifyAiFailure({ status: response.status }));
+    let errorBody: unknown;
+    try { errorBody = await response.json(); } catch { /* no response body */ }
+    throw new DirectOpenAiError(response.status, classifyOpenAiHttpFailure(response.status, errorBody));
   }
   const data = await response.json() as {
     status?: string;
@@ -173,10 +148,11 @@ export async function generateDirectCover(prompt: string, model = "gpt-image-1-m
     signal: AbortSignal.timeout(120_000),
     cache: "no-store",
   });
-  if (!response.ok) throw new DirectOpenAiError(
-    response.status,
-    classifyAiFailure({ status: response.status }),
-  );
+  if (!response.ok) {
+    let errorBody: unknown;
+    try { errorBody = await response.json(); } catch { /* no body */ }
+    throw new DirectOpenAiError(response.status, classifyOpenAiHttpFailure(response.status, errorBody));
+  }
   const result = await response.json() as {
     data?: Array<{ b64_json?: string }>;
     usage?: { input_tokens?: number; output_tokens?: number };

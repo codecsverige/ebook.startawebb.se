@@ -2,6 +2,7 @@
 export type AiFailureCode =
   | "ai_credits_exhausted"
   | "ai_auth_failed"
+  | "ai_model_unavailable"
   | "ai_provider_busy"
   | "ai_generation_invalid"
   | "ai_provider_unavailable";
