@@ -1084,10 +1084,10 @@ export function Editor({
               className={tab===step?"active":""}
               aria-current={tab===step?"step":undefined}
               disabled={!draft.outline.length&&step!=="outline"} onClick={()=>setTab(step)}>
-              <span>{i+2}</span>{tr(locale,...({
-                outline:["Plan","التخطيط","Planera"],write:["Write","الكتابة","Skriv"],
-                design:["Design","التصميم","Design"],preview:["Review","المراجعة","Granska"],
-              } as const)[step])}
+              <span>{i+2}</span>{step==="outline"?tr(locale,"Plan","التخطيط","Planera")
+                :step==="write"?tr(locale,"Write","الكتابة","Skriv")
+                :step==="design"?tr(locale,"Design","التصميم","Design")
+                :tr(locale,"Review","المراجعة","Granska")}
             </button>)}
           </nav>
           {!online && (
