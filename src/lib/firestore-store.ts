@@ -598,7 +598,8 @@ export class FirestoreStudio {
         fail("invalid_input");
       if (kind === "illustration") {
         const draft = chapter ? book.chapters[chapter] : undefined;
-        if (!image || !draft || !book.unlocked || image.position > draft.content.length ||
+        if (!image || image.prompt.trim().length < 10 || image.prompt.length > 700 ||
+            !draft || !book.unlocked || image.position > draft.content.length ||
             Object.keys(book.illustrations || {}).length >= 24)
           fail("invalid_input");
       }
