@@ -27,6 +27,7 @@ import {
   SeparatorHorizontal,
   ArrowUp,
   ArrowDown,
+  Plus,
 } from "lucide-react";
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
@@ -101,6 +102,8 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [visualMode, setVisualMode] = useState(false);
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
@@ -379,6 +382,87 @@ export function Editor({
     } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
   }
+  function addChapter(after?: string) {
+    if (!draft || draft.outline.length >= 30 || disabled) return;
+    const item = { id: crypto.randomUUID(),
+      title: tr(draft.language, "New chapter", "فصل جديد", "Nytt kapitel"),
+      summary: tr(draft.language,
+        "Explain what happens or what the reader learns in this chapter.",
+        "اشرح ما يحدث أو ما سيتعلمه القارئ في هذا الفصل.",
+        "Beskriv vad som händer eller vad läsaren lär sig i kapitlet.") };
+    change(b => { const outline = [...b.outline];
+      const i = outline.findIndex(c => c.id === after);
+      outline.splice(i < 0 ? outline.length : i + 1, 0, item);
+      return { ...b, outline, chapter_count: outline.length };
+    });
+    setChapterId(item.id);
+  }
+  function deleteChapter(target: string) {
+    if (!draft || draft.outline.length <= 1 || disabled ||
+        !window.confirm(tr(locale,
+          "Delete this chapter? You can recover an earlier version.",
+          "حذف هذا الفصل؟ يمكنك استعادة نسخة أقدم.",
+          "Ta bort kapitlet? En äldre version kan återställas."))) return;
+    change(b => { const outline = b.outline.filter(c => c.id !== target);
+      const chapters = { ...b.chapters }; delete chapters[target];
+      return { ...b, outline, chapters, chapter_count: outline.length };
+    });
+    if (target === chapterId) setChapterId(draft.outline.find(c => c.id !== target)?.id || "");
+  }
+  function splitChapter() {
+    if (!draft || !active || !current || draft.outline.length >= 30 || disabled) return;
+    const pos = chapterEditorRef.current?.selectionStart ?? Math.floor(current.content.length / 2);
+    const boundary = current.content.lastIndexOf("\n", pos);
+    if (boundary < 120 || current.content.length - boundary < 120) { setError("invalid_input"); return; }
+    const newId = crypto.randomUUID();
+    change(b => { const chapter = b.chapters[active.id];
+      const outline = [...b.outline];
+      outline.splice(outline.findIndex(c => c.id === active.id)+1,0,{
+        id: newId, title: tr(locale,"Next section","القسم التالي","Nästa del"),
+        summary: tr(locale,"Continue the previous chapter's ideas.","تكملة أفكار الفصل السابق.","Fortsätt på föregående kapitel.") });
+      return { ...b, outline, chapter_count: outline.length,
+        chapters: { ...b.chapters,
+          [active.id]: { ...chapter, content: chapter.content.slice(0,boundary).trim() },
+          [newId]: { content: chapter.content.slice(boundary).trim(), summary: chapter.summary },
+        } };
+    });
+    setChapterId(newId);
+  }
+  function mergeNextChapter() {
+    if (!draft || !active || !current || disabled) return;
+    const next = draft.outline[draft.outline.findIndex(c => c.id === active.id)+1];
+    if (!next || !draft.chapters[next.id]) return;
+    const merged = current.content + "\n\n" + draft.chapters[next.id].content;
+    if (merged.length > 30000) { setError("too_large"); return; }
+    if (!window.confirm(tr(locale, "Merge the next chapter into this one?",
+      "هل تريد دمج الفصل التالي في هذا الفصل؟","Slå ihop nästa kapitel med detta?"))) return;
+    change(b => {const chapters = {...b.chapters}; chapters[active.id] = { ...chapters[active.id], content: merged };
+      delete chapters[next.id];const outline=b.outline.filter(c=>c.id!==next.id);
+      return {...b,chapters,outline,chapter_count:outline.length};
+    });
+  }
+  async function importManuscript(file: File) {
+    if (!draft || !active || disabled) return;
+    if (!/\.(txt|md)$/i.test(file.name) || file.size > 450000) {
+      setImportError(tr(locale,"Choose a TXT or Markdown file (max 450 KB).",
+        "اختر ملف TXT أو Markdown حتى 450 كيلوبايت.",
+        "Välj TXT eller Markdown (högst 450 kB)."));return;
+    }
+    const text=(await file.text()).replace(/\r\n?/g,"\n").replace(/\u0000/g,"").trim();
+    if (!text || text.length > 30000) {
+      setImportError(tr(locale,"File must contain 1–30,000 characters.",
+        "يجب أن يحتوي الملف على 1 إلى 30 ألف حرف.",
+        "Filen måste innehålla 1–30 000 tecken."));return;
+    }
+    setImportError("");
+    if (current?.content && !window.confirm(tr(locale,
+      "Replace this chapter with the imported text?","استبدال نص الفصل بالنص المستورد؟",
+      "Ersätt kapitlet med den importerade texten?"))) return;
+    change(b=>({...b,chapters:{...b.chapters,[active.id]:{
+      content:text,summary:b.chapters[active.id]?.summary ||
+      b.outline.find(c=>c.id===active.id)?.summary || text.slice(0,200),
+    }}}));
+  }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
     const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
@@ -438,6 +522,9 @@ export function Editor({
           author_bio: draft.author_bio || "",
           dedication: draft.dedication || "",
           preface: draft.preface || "",
+          acknowledgments: draft.acknowledgments || "",
+          copyright_notice: draft.copyright_notice || "",
+          layout_theme: draft.layout_theme || "classic",
           outline: draft.outline,
           chapters: draft.chapters,
         }),
