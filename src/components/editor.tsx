@@ -103,6 +103,7 @@ export function Editor({
   const [read, setRead] = useState(false);
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
+  const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageSize, setImageSize] = useState<"small" | "medium" | "full">("medium");
   const [imagePlacement, setImagePlacement] = useState<"cursor" | "start" | "end">("cursor");
@@ -351,6 +352,31 @@ export function Editor({
       setBook(payload.book); setDraft(payload.book);
       dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
     } catch (e) { setError(e instanceof Error ? e.message : "service_error"); }
+    finally { setPending(""); }
+  }
+  async function changeExistingImage(imageId: string, remove = false) {
+    const illustration = draft?.illustrations?.[imageId];
+    if (!illustration || disabled) return;
+    if (remove && !window.confirm(tr(locale,
+      "Remove this illustration from the current book? Previous saved versions will keep it.",
+      "حذف هذه الصورة من النسخة الحالية؟ ستبقى في الإصدارات القديمة المحفوظة.",
+      "Ta bort bilden från aktuell bok? Tidigare versioner behåller den."))) return;
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const updated = imageEdits[imageId];
+      const result = await request<{ book: BookWithCover }>(
+        `/api/books/${id}/illustrations/${imageId}`, {
+          method: remove ? "DELETE" : "PATCH",
+          body: JSON.stringify({ revision: draft!.revision + (wasDirty ? 1 : 0),
+            ...(!remove ? { caption: updated?.caption ?? illustration.caption,
+              size: updated?.size ?? illustration.size } : {}) }),
+        });
+      setBook(result.book); setDraft(result.book);
+      dirtyRef.current = false; setDirty(false);
+      setImageEdits(state => { const next = { ...state }; delete next[imageId]; return next; });
+    } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
   }
   function formatSelection(kind: "bold" | "heading" | "list") {
@@ -1387,6 +1413,47 @@ export function Editor({
                       ? t.generate
                       : t.unlock}
                   </button>
+                </div>
+              )}
+              {current && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
+                <div className="illustration-manager">
+                  <strong>{tr(locale, "Images in this chapter", "صور هذا الفصل", "Bilder i detta kapitel")}</strong>
+                  {Object.values(draft.illustrations || {}).filter(asset => current.content.includes(`[[illustration:${asset.id}]]`)).map(asset => (
+                    <div className="illustration-manager-row" key={asset.id}>
+                      <img src={asset.source === "library" && asset.preset
+                        ? `/illustrations/${asset.preset}.png`
+                        : `/api/books/${id}/illustrations/${asset.id}`}
+                        alt={asset.alt || asset.caption} loading="lazy" />
+                      <div className="illustration-manager-fields">
+                        <input aria-label={tr(locale, "Image caption", "وصف الصورة", "Bildtext")}
+                          maxLength={240} disabled={disabled}
+                          value={imageEdits[asset.id]?.caption ?? asset.caption}
+                          onChange={e => setImageEdits(prev => ({
+                            ...prev, [asset.id]: { caption: e.target.value, size: prev[asset.id]?.size ?? asset.size },
+                          }))} />
+                        <select aria-label={tr(locale, "Image size", "حجم الصورة", "Bildstorlek")}
+                          disabled={disabled} value={imageEdits[asset.id]?.size ?? asset.size}
+                          onChange={e => setImageEdits(prev => ({
+                            ...prev, [asset.id]: { caption: prev[asset.id]?.caption ?? asset.caption,
+                              size: e.target.value as "small" | "medium" | "full" },
+                          }))}>
+                          <option value="small">{tr(locale, "Small", "صغير", "Liten")}</option>
+                          <option value="medium">{tr(locale, "Medium", "متوسط", "Mellan")}</option>
+                          <option value="full">{tr(locale, "Full", "كامل", "Full")}</option>
+                        </select>
+                        <div className="cover-confirm-buttons">
+                          <button type="button" className="button button-small button-outline"
+                            disabled={disabled} onClick={() => void changeExistingImage(asset.id)}>
+                            <Save size={14}/>{tr(locale, "Apply", "تطبيق", "Spara")}
+                          </button>
+                          <button type="button" className="button button-small button-outline"
+                            disabled={disabled} onClick={() => void changeExistingImage(asset.id, true)}>
+                            <Trash2 size={14}/>{tr(locale, "Remove", "حذف", "Ta bort")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               <div className="editor-bottom-actions">
