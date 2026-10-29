@@ -192,7 +192,7 @@ export async function makeDocx(
       if (block.type === "ul" || block.type === "ol") {
         for (const item of block.items)
           children.push(new Paragraph({ ...base, children: [text("• " + stripInlineMarkdown(item))] }));
-      } else {
+      } else if (block.type === "heading" || block.type === "paragraph") {
         children.push(new Paragraph({ ...base, children: [text(stripInlineMarkdown(block.text))] }));
       }
     }
