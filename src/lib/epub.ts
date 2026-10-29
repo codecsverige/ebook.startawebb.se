@@ -96,7 +96,10 @@ export function makeEpub(
     sunrise: ["#e88967", "#442b43"],
   };
   const [bg, ink] = theme[book.cover_style] || theme.cobalt;
-  const css =
+  const layout = book.layout_theme || "classic";
+  const themeCss = layout === "literary" ? "section>h1{text-align:center;font-family:serif;font-weight:normal;margin:2em 0 1.5em;}"
+    : layout === "modern" ? "section>h1{font-family:sans-serif;border-bottom:2px solid #adb6ca;padding-bottom:.5em;}" : "";
+  const css = themeCss +
     "body{font-family:serif;line-height:1.65;color:#273142;padding:1em;}" +
     "h1,h2,h3,h4{line-height:1.35;page-break-after:avoid;}" +
     "p{margin:.4em 0 1em;}ul,ol{padding-inline-start:2em;}" +
@@ -129,12 +132,18 @@ export function makeEpub(
     (hasImage ? '<img src="images/cover.' + extension + '" alt="" />' : "") +
     '<div><h1>' + title + '</h1><p>' + subtitle + '</p></div>' +
     '<p class="author">' + author + '</p></section>'));
+  if (book.copyright_notice?.trim()) content.push(xhtml("copyright.xhtml",
+    '<section><h1>' + escapeHtml({ en: "Copyright", ar: "حقوق النشر", sv: "Upphovsrätt" }[lang]) +
+    '</h1><p>' + escapeHtml(book.copyright_notice) + '</p></section>'));
   if (book.dedication?.trim()) content.push(xhtml("dedication.xhtml",
     '<section><h1>' + escapeHtml({ en: "Dedication", ar: "الإهداء", sv: "Dedikation" }[lang]) +
     '</h1><p>' + escapeHtml(book.dedication) + '</p></section>'));
   if (book.preface?.trim()) content.push(xhtml("preface.xhtml",
     '<section><h1>' + escapeHtml({ en: "Preface", ar: "المقدمة", sv: "Förord" }[lang]) +
     '</h1>' + markdownHtml(book.preface) + '</section>'));
+  if (book.acknowledgments?.trim()) content.push(xhtml("acknowledgments.xhtml",
+    '<section><h1>' + escapeHtml({ en: "Acknowledgments", ar: "الشكر والتقدير", sv: "Tack" }[lang]) +
+    '</h1>' + markdownHtml(book.acknowledgments) + '</section>'));
   const backImageType = backArtwork?.type === "image/png" ? "png" : "jpg";
   const hasBackArtwork = Boolean(backArtwork && ["image/png", "image/jpeg"].includes(backArtwork.type));
   if (hasBackArtwork) content.push({ name: "OEBPS/images/back." + backImageType, body: backArtwork!.data });
@@ -176,6 +185,8 @@ export function makeEpub(
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>',
     '<item id="back" href="back.xhtml" media-type="application/xhtml+xml"/>',
+    ...(book.copyright_notice?.trim() ? ['<item id="copyright" href="copyright.xhtml" media-type="application/xhtml+xml"/>'] : []),
+    ...(book.acknowledgments?.trim() ? ['<item id="acknowledgments" href="acknowledgments.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...(book.dedication?.trim() ? ['<item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...(book.preface?.trim() ? ['<item id="preface" href="preface.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...book.outline.map((_, i) => '<item id="ch' + (i + 1) + '" href="chapter-' +
@@ -190,9 +201,11 @@ export function makeEpub(
       '" properties="cover-image"/>'] : []),
   ].join("");
   const spine = '<itemref idref="cover"/>' +
+    (book.copyright_notice?.trim() ? '<itemref idref="copyright"/>' : '') +
     (book.dedication?.trim() ? '<itemref idref="dedication"/>' : '') +
     (book.preface?.trim() ? '<itemref idref="preface"/>' : '') +
     book.outline.map((_, i) => '<itemref idref="ch' + (i + 1) + '"/>').join("") +
+    (book.acknowledgments?.trim() ? '<itemref idref="acknowledgments"/>' : '') +
     '<itemref idref="back"/>';
   const opf = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" ' +

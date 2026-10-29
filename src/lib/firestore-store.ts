@@ -193,11 +193,15 @@ export class FirestoreStudio {
         author_bio: "",
         dedication: "",
         preface: "",
+        acknowledgments: "",
+        copyright_notice: "",
+        layout_theme: "classic",
         cover_path: null,
         cover_candidate_path: null,
         back_cover_path: null,
         back_cover_candidate_path: null,
         illustrations: {},
+        text_edit_candidate: null,
         use_artwork: false,
         unlocked: false,
         revision: 0,
@@ -252,15 +256,20 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== input.revision) fail("conflict");
-      if (
-        input.outline.length !== book.chapter_count ||
-        input.outline.some((c) => !book.outline.some((old) => old.id === c.id))
-      )
+      // Allow original authors to insert, reorder, merge and remove chapters.
+      // Manuscript ownership is still enforced here; image paths never come from PATCH.
+      if (!book.outline.length || input.outline.length > 30 ||
+          (book.outline.length > 0 && input.outline.length < 1))
         fail("invalid_input");
       const previous = await this.versionPlan(tx, ref);
       const next = {
         ...book,
         ...input,
+        chapter_count: input.outline.length,
+        state: { ...book.state, rewrites: Object.fromEntries(
+          Object.entries(book.state.rewrites).filter(([id]) =>
+            input.outline.some((item) => item.id === id)),
+        ) },
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -331,6 +340,10 @@ export class FirestoreStudio {
         author_bio: "",
         dedication: "",
         preface: "",
+        acknowledgments: "",
+        copyright_notice: "",
+        layout_theme: "classic",
+        text_edit_candidate: null,
         outline: [],
         chapters: {},
         cover_path: null,
@@ -473,11 +486,15 @@ export class FirestoreStudio {
         author_bio: snapshot.author_bio || "",
         dedication: snapshot.dedication || "",
         preface: snapshot.preface || "",
+        acknowledgments: snapshot.acknowledgments || "",
+        copyright_notice: snapshot.copyright_notice || "",
+        layout_theme: snapshot.layout_theme || "classic",
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
         back_cover_path: snapshot.back_cover_path || null,
         back_cover_candidate_path: null,
         illustrations: structuredClone(snapshot.illustrations || {}),
+        text_edit_candidate: null,
         use_artwork: snapshot.use_artwork,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
@@ -569,6 +586,37 @@ export class FirestoreStudio {
       return bookOnly(next);
     });
   }
+  async decideTextEdit(uid: string, id: string, revision: number, accept: boolean): Promise<Book> {
+    if (!uuid(id)) fail("not_found");
+    return this.db.runTransaction(async tx => {
+      const ref = this.books().doc(id);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      const candidate = book.text_edit_candidate;
+      if (!candidate) fail("not_found");
+      const next: StoredBook = { ...book, text_edit_candidate: null,
+        revision: book.revision + 1, updated_at: new Date().toISOString() };
+      if (accept) {
+        const chapter = book.chapters[candidate.chapter_id];
+        if (!chapter || chapter.content.slice(candidate.start,candidate.end) !== candidate.original)
+          fail("conflict");
+        const content = chapter.content.slice(0,candidate.start) + candidate.replacement +
+          chapter.content.slice(candidate.end);
+        if (content.length > 30000 || !content.trim()) fail("too_large");
+        next.chapters = { ...book.chapters,
+          [candidate.chapter_id]: { ...chapter, content, summary: content.slice(0, 750) },
+        };
+      }
+      const versions = await this.versionPlan(tx, ref);
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
   async takeRate(key: string, limit: number, seconds = 3600) {
     const now = Date.now();
     const ref = this.root
@@ -589,6 +637,7 @@ export class FirestoreStudio {
     requestId: string,
     ownerTrial = false,
     image?: { prompt: string; position: number; caption: string; size: "small" | "medium" | "full" },
+    textEdit?: { action: "improve" | "shorten" | "expand" | "proofread" | "tone"; start: number; end: number },
   ): Promise<WorkerJob> {
     if (!uuid(id) || !uuid(requestId)) fail("invalid_input");
     const jobId = digest(`${uid}:${requestId}`);
@@ -644,6 +693,13 @@ export class FirestoreStudio {
             Object.keys(book.illustrations || {}).length >= 24)
           fail("invalid_input");
       }
+      if (kind === "text_edit") {
+        const content = chapter ? book.chapters[chapter]?.content : null;
+        if (!textEdit || !content || !book.unlocked || book.text_edit_candidate ||
+            textEdit.start < 0 || textEdit.end <= textEdit.start ||
+            textEdit.end > content.length || textEdit.end-textEdit.start > 1800 ||
+            !content.slice(textEdit.start, textEdit.end).trim()) fail("invalid_input");
+      }
       if (!ownerTrial && ["cover", "back_cover"].includes(kind) && book.state.covers >= 5) fail("rate_limit");
       if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
         fail("rate_limit");
@@ -678,6 +734,11 @@ export class FirestoreStudio {
           image_position: image!.position,
           image_caption: image!.caption,
           image_size: image!.size,
+        } : {}),
+        ...(kind === "text_edit" ? {
+          text_action: textEdit!.action,
+          text_start: textEdit!.start, text_end: textEdit!.end,
+          text_original: book.chapters[chapter!]!.content.slice(textEdit!.start, textEdit!.end),
         } : {}),
         status: "queued",
         progress: 0,
@@ -843,6 +904,7 @@ export class FirestoreStudio {
       cover_path?: string;
       back_cover_path?: string;
       illustration_path?: string;
+      text_replacement?: string;
     },
     progress: number,
   ) {
@@ -852,7 +914,7 @@ export class FirestoreStudio {
         job = j.data() as WorkerJob | undefined;
       if (!job || !active(job)) fail("not_found");
       const unit = patch.outline ? "outline" : job.kind === "illustration" ? "illustration" :
-        job.kind === "back_cover" ? "back_cover" : patch.chapter_id || "cover";
+        job.kind === "back_cover" ? "back_cover" : job.kind === "text_edit" ? "text_edit" : patch.chapter_id || "cover";
       if (job.result_units[unit]) return;
       const bRef = this.books().doc(job.book_id),
         pRef = this.userRef(job.user_id);
@@ -881,6 +943,18 @@ export class FirestoreStudio {
         )
           fail("invalid_input");
         next.chapters[patch.chapter_id] = patch.chapter;
+      } else if (patch.text_replacement && job.kind === "text_edit") {
+        const content = job.chapter_id ? book.chapters[job.chapter_id]?.content : undefined;
+        if (!content || !job.text_action || job.text_start === undefined || job.text_end === undefined ||
+            content.slice(job.text_start, job.text_end) !== job.text_original ||
+            patch.text_replacement.length > 6500 ||
+            content.length + patch.text_replacement.length - (job.text_end-job.text_start) > 30000)
+          fail("conflict");
+        next.text_edit_candidate = {
+          id: job.request_id, chapter_id: job.chapter_id!, original: job.text_original!,
+          replacement: patch.text_replacement, start: job.text_start, end: job.text_end,
+          action: job.text_action,
+        };
       } else if (patch.cover_path && job.kind === "cover") {
         next.cover_candidate_path = patch.cover_path;
       } else if (patch.back_cover_path && job.kind === "back_cover") {

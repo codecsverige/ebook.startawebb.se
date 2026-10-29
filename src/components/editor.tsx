@@ -27,9 +27,12 @@ import {
   SeparatorHorizontal,
   ArrowUp,
   ArrowDown,
+  Plus,
 } from "lucide-react";
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
+import { VisualChapterEditor } from "./visual-chapter-editor";
+import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
@@ -101,6 +104,10 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [visualMode, setVisualMode] = useState(true);
+  const [readerMode, setReaderMode] = useState(true);
+  const visualSelectedRef = useRef("");
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
@@ -379,6 +386,121 @@ export function Editor({
     } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
   }
+  function addChapter(after?: string) {
+    if (!draft || draft.outline.length >= 30 || disabled) return;
+    const item = { id: crypto.randomUUID(),
+      title: tr(draft.language, "New chapter", "فصل جديد", "Nytt kapitel"),
+      summary: tr(draft.language,
+        "Explain what happens or what the reader learns in this chapter.",
+        "اشرح ما يحدث أو ما سيتعلمه القارئ في هذا الفصل.",
+        "Beskriv vad som händer eller vad läsaren lär sig i kapitlet.") };
+    change(b => { const outline = [...b.outline];
+      const i = outline.findIndex(c => c.id === after);
+      outline.splice(i < 0 ? outline.length : i + 1, 0, item);
+      return { ...b, outline, chapter_count: outline.length };
+    });
+    setChapterId(item.id);
+  }
+  function deleteChapter(target: string) {
+    if (!draft || draft.outline.length <= 1 || disabled ||
+        !window.confirm(tr(locale,
+          "Delete this chapter? You can recover an earlier version.",
+          "حذف هذا الفصل؟ يمكنك استعادة نسخة أقدم.",
+          "Ta bort kapitlet? En äldre version kan återställas."))) return;
+    change(b => { const outline = b.outline.filter(c => c.id !== target);
+      const chapters = { ...b.chapters }; delete chapters[target];
+      return { ...b, outline, chapters, chapter_count: outline.length };
+    });
+    if (target === chapterId) setChapterId(draft.outline.find(c => c.id !== target)?.id || "");
+  }
+  function splitChapter() {
+    if (!draft || !active || !current || draft.outline.length >= 30 || disabled) return;
+    const pos = chapterEditorRef.current?.selectionStart ?? Math.floor(current.content.length / 2);
+    const boundary = current.content.lastIndexOf("\n", pos);
+    if (boundary < 120 || current.content.length - boundary < 120) { setError("invalid_input"); return; }
+    const newId = crypto.randomUUID();
+    change(b => { const chapter = b.chapters[active.id];
+      const outline = [...b.outline];
+      outline.splice(outline.findIndex(c => c.id === active.id)+1,0,{
+        id: newId, title: tr(locale,"Next section","القسم التالي","Nästa del"),
+        summary: tr(locale,"Continue the previous chapter's ideas.","تكملة أفكار الفصل السابق.","Fortsätt på föregående kapitel.") });
+      return { ...b, outline, chapter_count: outline.length,
+        chapters: { ...b.chapters,
+          [active.id]: { ...chapter, content: chapter.content.slice(0,boundary).trim() },
+          [newId]: { content: chapter.content.slice(boundary).trim(), summary: chapter.summary },
+        } };
+    });
+    setChapterId(newId);
+  }
+  function mergeNextChapter() {
+    if (!draft || !active || !current || disabled) return;
+    const next = draft.outline[draft.outline.findIndex(c => c.id === active.id)+1];
+    if (!next || !draft.chapters[next.id]) return;
+    const merged = current.content + "\n\n" + draft.chapters[next.id].content;
+    if (merged.length > 30000) { setError("too_large"); return; }
+    if (!window.confirm(tr(locale, "Merge the next chapter into this one?",
+      "هل تريد دمج الفصل التالي في هذا الفصل؟","Slå ihop nästa kapitel med detta?"))) return;
+    change(b => {const chapters = {...b.chapters}; chapters[active.id] = { ...chapters[active.id], content: merged };
+      delete chapters[next.id];const outline=b.outline.filter(c=>c.id!==next.id);
+      return {...b,chapters,outline,chapter_count:outline.length};
+    });
+  }
+  async function importManuscript(file: File, mode: "chapter" | "book" = "chapter") {
+    if (!draft || disabled || (mode === "chapter" && !active)) return;
+    const docx=/\.docx$/i.test(file.name);
+    const text=/\.(txt|md)$/i.test(file.name);
+    if ((!docx && !text) || file.size > (docx ? 4_000_000 : 450_000)) {
+      setImportError(tr(locale, "Choose a TXT, MD or Word DOCX file under the size limit.",
+        "اختر TXT أو MD أو Word DOCX ضمن الحجم المسموح.",
+        "Välj TXT, MD eller DOCX inom storleksgränsen."));return;
+    }
+    setImportError("");setPending("import");
+    try {
+      const contentType=docx
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "text/plain";
+      const res=await fetch(`/api/books/${id}/import`, {
+        method:"POST",headers:{"Content-Type":contentType},body:file,
+      });
+      const data=await res.json().catch(()=>({error:"invalid_input"}));
+      if(!res.ok)throw new Error(data.error || "invalid_input");
+      const sections=(data.sections||[]) as {title:string;content:string}[];
+      if(!sections.length || sections.length>30)throw new Error("invalid_input");
+      if(mode==="book") {
+        if(!window.confirm(tr(locale,
+          "Replace the book outline and chapters with this imported manuscript? A saved earlier version remains available.",
+          "استبدال فصول الكتاب الحالي بالمخطوط المستورد؟ يمكن استعادة النسخة القديمة.",
+          "Ersätta bokens kapitel med den importerade texten? En äldre version kan återställas.")))return;
+        const outline=sections.map(section=>({
+          id:crypto.randomUUID(),title:section.title.slice(0,160) || tr(locale,"Chapter","الفصل","Kapitel"),
+          summary:(section.content.trim().slice(0,550)||tr(locale,"Imported chapter.","فصل مستورد.","Importerat kapitel.")),
+        }));
+        const chapters=Object.fromEntries(outline.map((item,i)=>[item.id,{
+          content:sections[i].content,
+          summary:sections[i].content.trim().slice(0,750),
+        }]));
+        change(b=>({...b,outline,chapters,chapter_count:outline.length}));
+        setChapterId(outline[0].id);
+        setTab("write");
+      } else {
+        const whole=sections.map(x=>x.content).join("\n\n");
+        if(whole.length>30000)throw new Error("too_large");
+        const target=active!;
+        if(draft.chapters[target.id]?.content && !window.confirm(tr(locale,
+          "Replace the current chapter with imported content?",
+          "استبدال محتوى الفصل الحالي بالنص المستورد؟",
+          "Ersätta det här kapitlet med importerad text?")))return;
+        change(b=>({...b,chapters:{...b.chapters,[target.id]:{
+          content:whole,summary:whole.slice(0,750),
+        }}}));
+      }
+    } catch(e) {
+      setImportError(tr(locale,"Could not import this file. Check its contents and size.",
+        "تعذّر استيراد الملف، تحقق من المحتوى والحجم.",
+        "Kunde inte importera filen. Kontrollera innehåll och storlek."));
+      setError(codeOf(e));
+    } finally{setPending("");}
+  }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
     const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
@@ -438,6 +560,9 @@ export function Editor({
           author_bio: draft.author_bio || "",
           dedication: draft.dedication || "",
           preface: draft.preface || "",
+          acknowledgments: draft.acknowledgments || "",
+          copyright_notice: draft.copyright_notice || "",
+          layout_theme: draft.layout_theme || "classic",
           outline: draft.outline,
           chapters: draft.chapters,
         }),
@@ -470,7 +595,8 @@ export function Editor({
       setPending("");
     }
   }
-  async function generate(kind: JobKind, chapter?: string) {
+  async function generate(kind: JobKind, chapter?: string,
+    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"}) {
     if (!draft || generatingRef.current || disabled) return;
     if (!online) {
       setError("offline");
@@ -505,6 +631,9 @@ export function Editor({
           kind,
           chapter_id: chapter,
           request_id: requestId,
+          ...(kind === "text_edit" && edit ? {
+            text_action: edit.action, text_start: edit.start, text_end: edit.end,
+          } : {}),
           ...(kind === "illustration" ? {
             image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
             image_position: imageInsertPosition, image_size: imageSize,
@@ -595,6 +724,47 @@ export function Editor({
     } finally {
       setPending("");
     }
+  }
+  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone") {
+    if (!draft || !active || !current || disabled || !book?.unlocked) return;
+    let start=0,end=0;
+    if (visualMode && !read) {
+      const selection=visualSelectedRef.current.trim();
+      if (selection.length < 4) {
+        setImportError(tr(locale,"Select a passage in the visual editor first.",
+          "حدد فقرة في المحرر البصري أولًا.","Markera en text i den visuella redigeraren."));return;
+      }
+      start=current.content.indexOf(selection);
+      end=start+selection.length;
+      if(start<0 || current.content.indexOf(selection,start+1)!==-1) {
+        setImportError(tr(locale,"Select a unique passage, or use Markdown mode for precise selection.",
+          "اختر نصًا غير متكرر أو استخدم وضع النص الأصلي للتحديد بدقة.",
+          "Markera unik text eller använd källtextläget."));return;
+      }
+    } else {
+      const el=chapterEditorRef.current;
+      if (!el) return;
+      start=el.selectionStart;end=el.selectionEnd;
+    }
+    if (end-start<4 || end-start>1800) {
+      setImportError(tr(locale,"Select 4 to 1,800 characters.",
+        "حدد نصًا من 4 إلى 1800 حرف.","Markera 4–1800 tecken."));return;
+    }
+    setImportError("");
+    void generate("text_edit",active.id,{start,end,action});
+  }
+  async function decideTextEdit(accept:boolean) {
+    if (!book?.text_edit_candidate || disabled) return;
+    let revision=book.revision;
+    if(dirtyRef.current) {if(!(await save()))return;revision++;}
+    setPending(accept?"apply-ai-edit":"reject-ai-edit");setError("");
+    try {
+      const d=await request<{book:BookWithCover}>(`/api/books/${id}/text-edit`,{
+        method:"POST",body:JSON.stringify({revision,accept}),
+      });
+      setBook(d.book);setDraft(d.book);dirtyRef.current=false;setDirty(false);
+    } catch(e){setError(codeOf(e));}
+    finally{setPending("");}
   }
   async function decideCoverSuggestion(accept: boolean, side: "front" | "back" = "front") {
     if (!(side === "back" ? book?.back_cover_candidate_path : book?.cover_candidate_path) || disabled) return;
@@ -1173,12 +1343,27 @@ export function Editor({
                               [outline[i], outline[i + 1]] = [outline[i + 1], outline[i]];
                               return { ...b, outline };
                             })}><ArrowDown size={16} /></button>
-                          {draft.chapters[c.id] && <Check className="chapter-check" size={17} />}
+                          <button type="button" disabled={disabled || draft.outline.length >= 30}
+  title={tr(locale,"Add chapter after","إضافة فصل بعده","Lägg till efter")}
+  onClick={() => addChapter(c.id)}><Plus size={16}/></button>
+<button type="button" disabled={disabled || draft.outline.length <= 1}
+  title={tr(locale,"Delete chapter","حذف الفصل","Ta bort kapitel")}
+  onClick={() => deleteChapter(c.id)}><Trash2 size={16}/></button>
+{draft.chapters[c.id] && <Check className="chapter-check" size={17} />}
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="editor-bottom-actions">
+                    <label className="button button-outline">
+                      {tr(locale,"Import entire manuscript (Word/TXT/MD)","استيراد كتاب كامل (Word/TXT/MD)","Importera helt manus (Word/TXT/MD)")}
+                      <input type="file" accept=".txt,.md,.docx" hidden disabled={disabled}
+                        onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file,"book");}}/>
+                    </label>
+                    <button type="button" className="button button-outline" disabled={disabled || draft.outline.length >= 30}
+                      onClick={() => addChapter()}>
+                      <Plus size={17}/>{tr(locale,"Add chapter","إضافة فصل جديد","Lägg till kapitel")}
+                    </button>
                     {!draft.chapters[draft.outline[0].id] && (
                       <button
                         className="button button-outline"
@@ -1231,7 +1416,54 @@ export function Editor({
                   ))}
                 </select>
               </label>
-              <div className="chapter-toolbar">
+              <div className="chapter-author-actions">
+                 <button type="button" className="button button-outline button-small"
+                   disabled={disabled || draft.outline.length >= 30} onClick={() => addChapter(active?.id)}>
+                   <Plus size={15}/>{tr(locale,"New chapter","فصل جديد","Nytt kapitel")}
+                 </button>
+                 {current && <button type="button" className="button button-outline button-small"
+                   disabled={disabled || visualMode || draft.outline.length >= 30} onClick={splitChapter}>
+                   {tr(locale,"Split at cursor","تقسيم عند المؤشر","Dela vid markören")}</button>}
+                 {current && <button type="button" className="button button-outline button-small"
+                   disabled={disabled || !draft.chapters[draft.outline[draft.outline.findIndex(c => c.id === active?.id)+1]?.id]}
+                   onClick={mergeNextChapter}>{tr(locale,"Merge next","دمج مع التالي","Slå ihop nästa")}</button>}
+                 <label className="button button-outline button-small">
+                   {tr(locale,"Import Word / TXT / MD","استيراد Word / TXT / MD","Importera Word / TXT / MD")}
+                   <input type="file" accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden disabled={disabled || !active}
+                     onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void importManuscript(file,"chapter");}}/>
+                 </label>
+                 {importError && <p className="error-message" role="alert">{importError}</p>}
+               </div>
+               {current && book.unlocked && config.ai && (
+                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
+                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
+                   {([
+                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
+                   ] as const).map(([action,label])=><button type="button" key={action}
+                     disabled={disabled || !!book.text_edit_candidate}
+                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+                 </div>
+               )}
+               {book.text_edit_candidate && (
+                 <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
+                   <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
+                   <div className="ai-edit-compare">
+                     <div><b>{tr(locale,"Original","الأصل","Original")}</b><p>{book.text_edit_candidate.original}</p></div>
+                     <div><b>{tr(locale,"Suggestion","الاقتراح","Förslag")}</b><p>{book.text_edit_candidate.replacement}</p></div>
+                   </div>
+                   <div className="cover-confirm-buttons">
+                     <button type="button" className="button button-primary button-small" disabled={disabled}
+                       onClick={()=>void decideTextEdit(true)}><Check size={16}/>{tr(locale,"Apply","اعتماد التعديل","Använd")}</button>
+                     <button type="button" className="button button-outline button-small" disabled={disabled}
+                       onClick={()=>void decideTextEdit(false)}>{tr(locale,"Keep original","الاحتفاظ بالأصل","Behåll original")}</button>
+                   </div>
+                 </section>
+               )}
+               <div className="chapter-toolbar">
                 <div className="segmented">
                   <button
                     className={!read ? "selected" : ""}
@@ -1245,6 +1477,14 @@ export function Editor({
                   >
                     {t.reading}
                   </button>
+                  {!read && <button type="button" className={visualMode ? "selected" : ""}
+                    onClick={()=>setVisualMode(true)}>
+                    {tr(locale,"Visual","محرر بصري","Visuell")}
+                  </button>}
+                  {!read && <button type="button" className={!visualMode ? "selected" : ""}
+                    onClick={()=>setVisualMode(false)}>
+                    {tr(locale,"Markdown","النص الأصلي","Källtext")}
+                  </button>}
                 </div>
                 {active && (
                   <button
@@ -1351,6 +1591,19 @@ export function Editor({
                   >
                     <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
+                ) : visualMode && active ? (
+                  <VisualChapterEditor key={active.id} chapterId={active.id}
+                    content={current.content} bookId={id} illustrations={draft.illustrations}
+                    disabled={disabled}
+                    onChange={content => change(b=>({...b,chapters:{
+                      ...b.chapters,[active.id]:{...b.chapters[active.id],content}
+                    }}))}
+                    onSelection={value=>{visualSelectedRef.current=value;}}
+                    onInsertImage={position=>{
+                      cursorRef.current=position;
+                      setImagePlacement("cursor");
+                      setShowIllustrations(true);
+                    }} />
                 ) : (
                   <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
                     <span className="sr-only">{t.content}</span>
@@ -1598,6 +1851,24 @@ export function Editor({
                       <textarea rows={5} maxLength={5000} disabled={disabled} value={draft.preface || ""}
                         onChange={(e) => change((b) => ({ ...b, preface: e.target.value }))} />
                     </label>
+                    <label>{tr(locale, "Copyright page", "صفحة حقوق النشر", "Upphovsrätt")}
+                      <textarea rows={3} maxLength={1000} disabled={disabled}
+                        value={draft.copyright_notice || ""}
+                        placeholder={tr(locale,"© Author. All rights reserved.","© المؤلف. جميع الحقوق محفوظة.","© Författaren. Alla rättigheter förbehållna.")}
+                        onChange={e=>change(b=>({...b,copyright_notice:e.target.value}))}/>
+                    </label>
+                    <label>{tr(locale, "Acknowledgments", "الشكر والتقدير", "Tack")}
+                      <textarea rows={3} maxLength={5000} disabled={disabled} value={draft.acknowledgments || ""}
+                        onChange={e=>change(b=>({...b,acknowledgments:e.target.value}))}/>
+                    </label>
+                    <label>{tr(locale, "Interior layout style", "نمط صفحات الكتاب", "Inlagans stil")}
+                      <select disabled={disabled} value={draft.layout_theme || "classic"}
+                        onChange={e=>change(b=>({...b,layout_theme:e.target.value as "classic"|"modern"|"literary"}))}>
+                        <option value="classic">{tr(locale,"Classic","كلاسيكي","Klassisk")}</option>
+                        <option value="modern">{tr(locale,"Modern","حديث","Modern")}</option>
+                        <option value="literary">{tr(locale,"Literary","أدبي","Litterär")}</option>
+                      </select>
+                    </label>
                   </div>
                   <button
                     className="button button-outline"
@@ -1774,8 +2045,17 @@ export function Editor({
                   <Eye size={16} /> {tr(locale, "View the real exported PDF", "معاينة ملف PDF النهائي الحقيقي", "Förhandsgranska den riktiga PDF-filen")}
                 </a>
               )}
-              <div
-                className="book-preview"
+              <div className="preview-mode-toggle" role="group" aria-label={tr(locale,"Reader mode","وضع القراءة","Läsläge")}>
+                <button type="button" className={readerMode ? "active" : ""} onClick={()=>setReaderMode(true)}>
+                  {tr(locale,"Section reader","قارئ تفاعلي","Avsnittsläsare")}
+                </button>
+                <button type="button" className={!readerMode ? "active" : ""} onClick={()=>setReaderMode(false)}>
+                  {tr(locale,"Full book","الكتاب كاملًا","Hela boken")}
+                </button>
+              </div>
+              {readerMode && <BookSectionReader book={draft} bookId={id}/>}
+              {!readerMode && <div
+                className={`book-preview theme-${draft.layout_theme || "classic"}`}
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
               >
@@ -1786,6 +2066,7 @@ export function Editor({
                     image={draft.use_artwork ? draft.cover_url : null}
                   />
                 </div>
+                {draft.copyright_notice && <section className="preview-toc"><h2>{tr(draft.language,"Copyright","حقوق النشر","Upphovsrätt")}</h2><p>{draft.copyright_notice}</p></section>}
                 {draft.dedication && <section className="preview-toc"><h2>{tr(draft.language, "Dedication", "الإهداء", "Dedikation")}</h2><p>{draft.dedication}</p></section>}
                 {draft.preface && <section className="preview-toc"><h2>{tr(draft.language, "Preface", "المقدمة", "Förord")}</h2><Markdown text={draft.preface} /></section>}
                 <section className="preview-toc">
@@ -1812,6 +2093,7 @@ export function Editor({
                     )}
                   </article>
                 ))}
+                {draft.acknowledgments && <section className="preview-toc"><h2>{tr(draft.language,"Acknowledgments","الشكر والتقدير","Tack")}</h2><Markdown text={draft.acknowledgments}/></section>}
                 <div className="preview-cover">
                   <BookBackCover title={draft.title} author={draft.author}
                     style={draft.cover_style} language={draft.language}
@@ -1819,7 +2101,7 @@ export function Editor({
                     authorBio={draft.author_bio || ""}
                     image={draft.back_cover_url} />
                 </div>
-              </div>
+              </div>}
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
