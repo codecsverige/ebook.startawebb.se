@@ -16,6 +16,7 @@ type Props = {
   onInsertImage: (position: number, canonicalContent: string) => void;
   onSelection?: (text: string) => void;
   onRemoveImage?: (id: string) => void;
+  onClearChapter?: () => void;
   onSaveImage?: (id: string, size: "small" | "medium" | "full", caption: string) => void;
 };
 
@@ -76,7 +77,7 @@ function InlineImageSettings({id, asset, locale, disabled, onSave}: {
   </div>;
 }
 export function VisualChapterEditor({content, chapterId, illustrations, bookId, locale="en", disabled=false,
-  onChange, onInsertImage, onSelection, onRemoveImage, onSaveImage}: Props) {
+  onChange, onInsertImage, onSelection, onRemoveImage, onSaveImage, onClearChapter}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
   const [selectedBlock,setSelectedBlock] = useState<number | null>(null);
@@ -97,13 +98,14 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     if(text.length <= 30000){ onChange(text); setSelectedBlock(other); setMenuAt(null); }
   };
   const remove = (index: number) => {
-    if(disabled || blocks.length<=1) return;
+    if(disabled) return;
     const block=blocks[index];
     if(block.type==="illustration") { onRemoveImage?.(block.id); setSelectedBlock(null); return; }
     if(!window.confirm(tr(locale,
       "Remove this element? You can restore an earlier saved version.",
       "حذف هذا العنصر؟ يمكنك استعادة نسخة محفوظة سابقة.",
       "Vill du ta bort objektet? Tidigare versioner kan återställas."))) return;
+    if(blocks.length===1) {onClearChapter?.();setSelectedBlock(null);return;}
     const text=serializeVisualBlocks(blocks.filter((_,i)=>i!==index));
     if(text.trim()){onChange(text);setSelectedBlock(null);setMenuAt(null);}
   };
@@ -118,7 +120,7 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
         onClick={()=>move(index,1)}>
         ↓ {tr(locale,"Move later","نقل للأسفل","Flytta ned")}
       </button>
-      <button type="button" disabled={disabled || blocks.length<=1 || (block.type==="illustration" && !onRemoveImage)}
+      <button type="button" disabled={disabled || (blocks.length<=1 && block.type!=="illustration" && !onClearChapter) || (block.type==="illustration" && !onRemoveImage)}
         className="visual-remove-block" onClick={()=>remove(index)}>
         {tr(locale,"Delete","حذف","Ta bort")}
       </button>
