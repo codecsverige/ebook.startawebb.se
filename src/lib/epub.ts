@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { Book } from "./domain";
 import { escapeHtml, markdownHtml } from "./export-text";
+import type { ExportIllustration } from "./illustration-export";
 
 type Asset = { name: string; body: string | Uint8Array };
 
@@ -58,6 +59,8 @@ function zip(entries: Asset[]): Buffer {
 export function makeEpub(
   book: Book,
   artwork?: { data: Uint8Array; type: string },
+  images: Record<string, ExportIllustration> = {},
+  backArtwork?: { data: Uint8Array; type: string },
 ): Buffer {
   const lang = book.language;
   const rtl = lang === "ar";
@@ -102,7 +105,12 @@ export function makeEpub(
     ".author{font-size:.85em}.chapter-num{opacity:.6;font-size:.8em;}" +
     ".back-cover{background:" + bg + ";color:" + ink + ";padding:2em;min-height:75vh;display:flex;flex-direction:column;justify-content:space-between;}" +
     ".back-cover .blurb,.back-cover .bio{white-space:pre-wrap;overflow-wrap:anywhere;}" +
-    ".back-cover .bio{border-top:1px solid currentColor;padding-top:1em;margin-top:2em;}";
+    ".back-cover .bio{border-top:1px solid currentColor;padding-top:1em;margin-top:2em;}" +
+    ".interior-image{text-align:center;margin:1.2em auto;page-break-inside:avoid;}" +
+    ".interior-image img{max-width:100%;height:auto;}" +
+    ".figure-medium{max-width:78%;}.figure-small{max-width:42%;}" +
+    ".interior-image figcaption{font-size:.8em;opacity:.7;}.scene-divider{text-align:center;margin:2em 0;}" +
+    ".back-illustration{width:100%;max-height:25vh;object-fit:cover;opacity:.82;}";
   content.push({ name: "OEBPS/style.css", body: css });
   const xhtml = (name: string, body: string): Asset => ({
     name: "OEBPS/" + name,
@@ -127,8 +135,20 @@ export function makeEpub(
   if (book.preface?.trim()) content.push(xhtml("preface.xhtml",
     '<section><h1>' + escapeHtml({ en: "Preface", ar: "المقدمة", sv: "Förord" }[lang]) +
     '</h1>' + markdownHtml(book.preface) + '</section>'));
+  const backImageType = backArtwork?.type === "image/png" ? "png" : "jpg";
+  const hasBackArtwork = Boolean(backArtwork && ["image/png", "image/jpeg"].includes(backArtwork.type));
+  if (hasBackArtwork) content.push({ name: "OEBPS/images/back." + backImageType, body: backArtwork!.data });
+  const imageMarkup = Object.fromEntries(Object.entries(images)
+    .filter(([, asset]) => ["image/png", "image/jpeg"].includes(asset.type))
+    .map(([id, asset]) => {
+      const ext = asset.type === "image/png" ? "png" : "jpg";
+      content.push({ name: "OEBPS/images/" + id + "." + ext, body: asset.data });
+      return [id, '<figure class="interior-image figure-' + asset.meta.size + '">' +
+        '<img src="images/' + id + '.' + ext + '" alt="' + escapeHtml(asset.meta.alt) +
+        '"/>' + (asset.meta.caption ? '<figcaption>' + escapeHtml(asset.meta.caption) + '</figcaption>' : '') + '</figure>'];
+    }));
   content.push(xhtml("back.xhtml",
-    '<section class="back-cover"><div><h1>' + title + '</h1><p class="blurb">' +
+    '<section class="back-cover">' + (hasBackArtwork ? '<img class="back-illustration" src="images/back.' + backImageType + '" alt=""/>' : '') + '<div><h1>' + title + '</h1><p class="blurb">' +
     escapeHtml(book.back_blurb?.trim() || book.idea) + '</p></div>' +
     (book.author_bio?.trim() ? '<div class="bio"><strong>' + author + '</strong><p>' +
       escapeHtml(book.author_bio) + '</p></div>' : '') +
@@ -149,7 +169,7 @@ export function makeEpub(
     content.push(xhtml("chapter-" + (i + 1) + ".xhtml",
       '<section><p class="chapter-num">' + (i + 1) + '</p><h1>' +
       escapeHtml(chapter.title) + '</h1>' +
-      markdownHtml(book.chapters[chapter.id]?.content || "") + '</section>'));
+      markdownHtml(book.chapters[chapter.id]?.content || "", imageMarkup) + '</section>'));
   });
   const manifest = [
     '<item id="style" href="style.css" media-type="text/css"/>',
@@ -160,6 +180,11 @@ export function makeEpub(
     ...(book.preface?.trim() ? ['<item id="preface" href="preface.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...book.outline.map((_, i) => '<item id="ch' + (i + 1) + '" href="chapter-' +
       (i + 1) + '.xhtml" media-type="application/xhtml+xml"/>'),
+    ...(hasBackArtwork ? ['<item id="back-img" href="images/back.' + backImageType +
+      '" media-type="image/' + (backImageType === "jpg" ? "jpeg" : "png") + '"/>'] : []),
+    ...Object.entries(images).filter(([,asset]) => ["image/png","image/jpeg"].includes(asset.type)).map(([id,asset]) =>
+      '<item id="img-' + id + '" href="images/' + id + '.' + (asset.type === "image/png" ? "png" : "jpg") +
+      '" media-type="' + asset.type + '"/>'),
     ...(hasImage ? ['<item id="cover-img" href="images/cover.' + extension +
       '" media-type="image/' + (extension === "jpg" ? "jpeg" : "png") +
       '" properties="cover-image"/>'] : []),
