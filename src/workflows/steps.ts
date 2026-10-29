@@ -286,7 +286,7 @@ export async function createCover(jobId: string) {
         prompt,
         size: "1024x1536",
         maxRetries: 0,
-        timeout: 110_000,
+        abortSignal: AbortSignal.timeout(110_000),
       });
       const usage = generated.usage as {
         inputTokens?: number;
