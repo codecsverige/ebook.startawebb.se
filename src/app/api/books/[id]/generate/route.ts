@@ -40,6 +40,10 @@ export async function POST(
         caption: input.image_caption || "",
         size: input.image_size || "medium",
       } : undefined,
+      input.kind === "text_edit" && input.text_action &&
+        input.text_start !== undefined && input.text_end !== undefined ? {
+        action: input.text_action, start: input.text_start, end: input.text_end,
+      } : undefined,
     );
     if (job.run_id || job.status !== "queued") return json({ job });
     try {
