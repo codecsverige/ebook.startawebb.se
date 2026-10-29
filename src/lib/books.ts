@@ -47,9 +47,27 @@ export async function coverArtwork(book: Book, candidate = false, side: "front" 
   const [data] = await file.download();
   return { data: new Uint8Array(data), type: metadata.contentType! };
 }
+export const illustrationPrefix = (uid: string, bookId: string) =>
+  `${STUDIO_PATH}/illustrations/${createHash("sha256").update(uid).digest("hex")}/${bookId}/`;
+export async function illustrationArtwork(book: Book, assetId: string) {
+  const asset = book.illustrations?.[assetId];
+  if (!asset || asset.source === "library" || !asset.path ||
+      !asset.path.startsWith(illustrationPrefix(book.user_id, book.id)))
+    throw new AppError("not_found", 404);
+  const file = studioBucket().file(asset.path);
+  const [meta] = await file.getMetadata();
+  if (Number(meta.size) > 8_000_000 ||
+      !["image/png", "image/jpeg", "image/webp"].includes(meta.contentType || ""))
+    throw new AppError("service_error", 503);
+  const [data] = await file.download();
+  return { data: new Uint8Array(data), type: meta.contentType! };
+}
 export async function deleteBookArtwork(uid: string, id: string) {
   try {
-    await studioBucket().deleteFiles({ prefix: coverPrefix(uid, id) });
+    await Promise.all([
+      studioBucket().deleteFiles({ prefix: coverPrefix(uid, id) }),
+      studioBucket().deleteFiles({ prefix: illustrationPrefix(uid, id) }),
+    ]);
   } catch (e) {
     if (Number((e as { code?: number }).code) !== 404) throw e;
   }
