@@ -1668,6 +1668,7 @@ export function Editor({
                     }}))}
                     onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);}}
                     onRemoveImage={imageId=>{void changeExistingImage(imageId,true);}}
+                    onClearChapter={()=>change(b=>{const chapters={...b.chapters};delete chapters[active.id];return {...b,chapters};})}
                     onSaveImage={(imageId,size,caption)=>{void changeExistingImage(imageId,false,{size,caption});}}
                     onInsertImage={(position,canonicalContent)=>{
                       if (canonicalContent !== current.content && active)
