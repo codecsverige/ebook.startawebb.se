@@ -1420,7 +1420,7 @@ export function Editor({
                    <Plus size={15}/>{tr(locale,"New chapter","فصل جديد","Nytt kapitel")}
                  </button>
                  {current && <button type="button" className="button button-outline button-small"
-                   disabled={disabled || draft.outline.length >= 30} onClick={splitChapter}>
+                   disabled={disabled || visualMode || draft.outline.length >= 30} onClick={splitChapter}>
                    {tr(locale,"Split at cursor","تقسيم عند المؤشر","Dela vid markören")}</button>}
                  {current && <button type="button" className="button button-outline button-small"
                    disabled={disabled || !draft.chapters[draft.outline[draft.outline.findIndex(c => c.id === active?.id)+1]?.id]}
@@ -2044,7 +2044,7 @@ export function Editor({
                 </a>
               )}
               <div
-                className="book-preview"
+                className={`book-preview theme-${draft.layout_theme || "classic"}`}
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
               >
@@ -2055,6 +2055,7 @@ export function Editor({
                     image={draft.use_artwork ? draft.cover_url : null}
                   />
                 </div>
+                {draft.copyright_notice && <section className="preview-toc"><h2>{tr(draft.language,"Copyright","حقوق النشر","Upphovsrätt")}</h2><p>{draft.copyright_notice}</p></section>}
                 {draft.dedication && <section className="preview-toc"><h2>{tr(draft.language, "Dedication", "الإهداء", "Dedikation")}</h2><p>{draft.dedication}</p></section>}
                 {draft.preface && <section className="preview-toc"><h2>{tr(draft.language, "Preface", "المقدمة", "Förord")}</h2><Markdown text={draft.preface} /></section>}
                 <section className="preview-toc">
@@ -2081,6 +2082,7 @@ export function Editor({
                     )}
                   </article>
                 ))}
+                {draft.acknowledgments && <section className="preview-toc"><h2>{tr(draft.language,"Acknowledgments","الشكر والتقدير","Tack")}</h2><Markdown text={draft.acknowledgments}/></section>}
                 <div className="preview-cover">
                   <BookBackCover title={draft.title} author={draft.author}
                     style={draft.cover_style} language={draft.language}
