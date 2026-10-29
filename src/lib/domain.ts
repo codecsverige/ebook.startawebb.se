@@ -24,24 +24,87 @@ export function matchesBookLanguage(value: string, language: Locale): boolean {
   return language === "ar" ? arabic / letters >= 0.52 : arabic / letters < 0.45;
 }
 
-export const kinds = ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const;
-export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
+export const kinds = [
+  "guide",
+  "ebook",
+  "workbook",
+  "novel",
+  "short_story",
+  "children_story",
+] as const;
+export const tones = [
+  "clear",
+  "friendly",
+  "professional",
+  "literary",
+  "dramatic",
+  "playful",
+] as const;
 export const coverStyles = [
-  "cobalt", "sage", "clay", "midnight", "plum", "ivory",
-  "forest", "ember", "lagoon", "rose", "noir", "sky",
-  "gold", "teal", "berry", "sand", "ink", "sunrise",
+  "cobalt",
+  "sage",
+  "clay",
+  "midnight",
+  "plum",
+  "ivory",
+  "forest",
+  "ember",
+  "lagoon",
+  "rose",
+  "noir",
+  "sky",
+  "gold",
+  "teal",
+  "berry",
+  "sand",
+  "ink",
+  "sunrise",
 ] as const;
 export type CoverStyle = (typeof coverStyles)[number];
+export const coverLayouts = [
+  "editorial",
+  "cinematic",
+  "minimal",
+  "frame",
+  "split",
+] as const;
+export const chapterLengths = ["short", "standard", "long"] as const;
+export const bookSettingsSchema = z.object({
+  cover_layout: z.enum(coverLayouts).default("editorial"),
+  cover_brief: z.string().trim().max(1600).default(""),
+  back_cover: z.boolean().default(false),
+  back_cover_text: z.string().trim().max(2500).default(""),
+  author_bio: z.string().trim().max(2000).default(""),
+  copyright: z.string().trim().max(2000).default(""),
+  dedication: z.string().trim().max(2000).default(""),
+  page_size: z.enum(["A5", "A4", "trade"]).default("A5"),
+  font: z.enum(["serif", "sans"]).default("serif"),
+  font_size: z.enum(["small", "medium", "large"]).default("medium"),
+});
+export type BookSettings = z.infer<typeof bookSettingsSchema>;
+export function bookSettings(book: {
+  settings?: Partial<BookSettings>;
+}): BookSettings {
+  return bookSettingsSchema.parse(book.settings || {});
+}
 
 /** Genre-aware suggestions use real templates, without spending AI credits. */
-export function recommendedCoverStyles(kind: (typeof kinds)[number]): CoverStyle[] {
+export function recommendedCoverStyles(
+  kind: (typeof kinds)[number],
+): CoverStyle[] {
   switch (kind) {
-    case "novel": return ["noir", "midnight", "berry", "forest", "plum"];
-    case "short_story": return ["ember", "rose", "ink", "forest", "sky"];
-    case "children_story": return ["sky", "sunrise", "berry", "rose", "lagoon"];
-    case "workbook": return ["sage", "sand", "teal", "ivory", "cobalt"];
-    case "guide": return ["cobalt", "teal", "ivory", "ink", "lagoon"];
-    default: return ["ivory", "lagoon", "gold", "plum", "sand"];
+    case "novel":
+      return ["noir", "midnight", "berry", "forest", "plum"];
+    case "short_story":
+      return ["ember", "rose", "ink", "forest", "sky"];
+    case "children_story":
+      return ["sky", "sunrise", "berry", "rose", "lagoon"];
+    case "workbook":
+      return ["sage", "sand", "teal", "ivory", "cobalt"];
+    case "guide":
+      return ["cobalt", "teal", "ivory", "ink", "lagoon"];
+    default:
+      return ["ivory", "lagoon", "gold", "plum", "sand"];
   }
 }
 
@@ -54,7 +117,8 @@ export const briefSchema = z.object({
   language: z.enum(locales),
   tone: z.enum(tones),
   author: z.string().trim().max(100).default(""),
-  chapter_count: z.number().int().min(3).max(10),
+  chapter_count: z.number().int().min(1).max(30),
+  chapter_length: z.enum(chapterLengths).optional(),
 });
 export type Brief = z.infer<typeof briefSchema>;
 export const outlineItemSchema = z.object({
@@ -67,8 +131,8 @@ export const outlineSchema = z.object({
   subtitle: z.string().trim().max(240),
   chapters: z
     .array(z.object({ title: cleanText(1, 160), summary: cleanText(1, 600) }))
-    .min(3)
-    .max(10),
+    .min(1)
+    .max(30),
 });
 export type OutlineItem = z.infer<typeof outlineItemSchema>;
 export const chapterSchema = z.object({
@@ -84,7 +148,9 @@ export const editBookSchema = z
     author: z.string().trim().max(100),
     cover_style: z.enum(coverStyles),
     use_artwork: z.boolean(),
-    outline: z.array(outlineItemSchema).min(3).max(10),
+    settings: bookSettingsSchema.optional(),
+    chapter_length: z.enum(chapterLengths).optional(),
+    outline: z.array(outlineItemSchema).min(1).max(30),
     chapters: z.record(
       z.string().uuid(),
       z.object({
@@ -107,13 +173,83 @@ export const jobKinds = [
   "book",
   "chapter",
   "cover",
+  "assist",
+  "cover_ideas",
+  "review",
 ] as const;
 export type JobKind = (typeof jobKinds)[number];
-export const jobRequestSchema = z.object({
-  kind: z.enum(jobKinds),
-  chapter_id: z.string().uuid().optional(),
-  request_id: z.string().uuid(),
+export const assistantInputSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  instruction: z.string().trim().max(2000).default(""),
+  selection: z
+    .object({
+      start: z.number().int().min(0).max(30000),
+      end: z.number().int().min(0).max(30000),
+    })
+    .optional(),
 });
+export type AssistantInput = z.infer<typeof assistantInputSchema>;
+export const jobRequestSchema = z
+  .object({
+    kind: z.enum(jobKinds),
+    chapter_id: z.string().uuid().optional(),
+    request_id: z.string().uuid(),
+    assistant: assistantInputSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      ["assist", "cover_ideas", "review"].includes(value.kind) &&
+      !value.assistant
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Assistant context is required",
+      });
+    if (
+      value.kind === "assist" &&
+      (!value.chapter_id || !value.assistant?.instruction)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Choose a chapter and describe the edit",
+      });
+  });
+export type CoverConcept = {
+  title: string;
+  description: string;
+  prompt: string;
+  layout: (typeof coverLayouts)[number];
+};
+export type AssistantResult =
+  | {
+      type: "edit";
+      revision: number;
+      chapter_id: string;
+      start: number;
+      end: number;
+      original: string;
+      content: string;
+      summary: string;
+      note: string;
+    }
+  | {
+      type: "cover_ideas";
+      revision: number;
+      concepts: CoverConcept[];
+      back_cover_text: string;
+    }
+  | {
+      type: "review";
+      revision: number;
+      overview: string;
+      issues: {
+        severity: "warning" | "suggestion";
+        chapter_id: string;
+        title: string;
+        detail: string;
+      }[];
+      strengths: string[];
+    };
 export type Book = Brief & {
   id: string;
   user_id: string;
@@ -129,6 +265,7 @@ export type Book = Brief & {
   revision: number;
   created_at: string;
   updated_at: string;
+  settings?: BookSettings;
 };
 export type Job = {
   id: string;
@@ -141,8 +278,12 @@ export type Job = {
   error_code: string | null;
   run_id: string | null;
   created_at: string;
+  result?: AssistantResult;
 };
-export type BookWithCover = Book & { cover_url?: string | null; cover_candidate_url?: string | null };
+export type BookWithCover = Book & {
+  cover_url?: string | null;
+  cover_candidate_url?: string | null;
+};
 export type BookshelfBook = Omit<BookWithCover, "chapters"> & {
   word_count: number;
   completed_chapters: number;

@@ -12,38 +12,22 @@ import {
   Footer,
   PageNumber,
 } from "docx";
-import type { Book } from "./domain";
-import { escapeHtml as esc, markdownHtml } from "./export-text";
+import { bookSettings, type Book } from "./domain";
+import { escapeHtml as esc } from "./export-text";
 import { parseManuscript, stripInlineMarkdown } from "./manuscript";
+import {
+  BOOK_DESIGN_CSS,
+  publicationBody,
+  publicationFontSize,
+  pageSizes,
+  coverMarkup,
+  publicationLabels,
+} from "./book-design";
 
-const palettes: Record<
-  Book["cover_style"],
-  { bg: string; ink: string; accent: string }
-> = {
-  cobalt: { bg: "#3159df", ink: "#fffdf6", accent: "#a7bcff" },
-  sage: { bg: "#d8decd", ink: "#293e34", accent: "#879978" },
-  clay: { bg: "#e6bba1", ink: "#5b342a", accent: "#c17b58" },
-  midnight: { bg: "#17243f", ink: "#fff8eb", accent: "#9cbbef" },
-  plum: { bg: "#603b68", ink: "#fff7ef", accent: "#cda7d4" },
-  ivory: { bg: "#f5eddf", ink: "#322b29", accent: "#b99573" },
-  forest: { bg: "#123d35", ink: "#f5ecda", accent: "#b8d2ac" },
-  ember: { bg: "#613123", ink: "#fff0db", accent: "#eaa36c" },
-  lagoon: { bg: "#076c75", ink: "#eaf8f4", accent: "#8bd4c6" },
-  rose: { bg: "#f4dce3", ink: "#552b40", accent: "#c57c95" },
-  noir: { bg: "#10141e", ink: "#f9f1e6", accent: "#c5a78a" },
-  sky: { bg: "#8dc9e7", ink: "#16354f", accent: "#f9e1a0" },
-  gold: { bg: "#d5b76c", ink: "#302619", accent: "#f9eed1" },
-  teal: { bg: "#134e57", ink: "#eaf8f2", accent: "#72c4b8" },
-  berry: { bg: "#592548", ink: "#fff1e9", accent: "#e6a1b1" },
-  sand: { bg: "#e3d0b2", ink: "#3f3026", accent: "#b18c65" },
-  ink: { bg: "#272a49", ink: "#f7f1de", accent: "#aba8d2" },
-  sunrise: { bg: "#e88967", ink: "#442b43", accent: "#fcd8a3" },
-};
-export async function pdfHtml(
-  book: Book,
-  artwork?: { data: Uint8Array; type: string },
-) {
-  const [latin, arabic] = await Promise.all([
+type Artwork = { data: Uint8Array; type: string };
+let fonts: Promise<string> | undefined;
+function fontStyles() {
+  return (fonts ||= Promise.all([
     readFile(
       path.join(
         process.cwd(),
@@ -56,26 +40,24 @@ export async function pdfHtml(
         "node_modules/@fontsource/noto-naskh-arabic/files/noto-naskh-arabic-arabic-400-normal.woff2",
       ),
     ),
-  ]);
-  const colors = palettes[book.cover_style];
-  const titleSize = book.title.length > 90 ? 20 : book.title.length > 60 ? 24 :
-    book.title.length > 38 ? 27 : (book.language === "ar" ? 32 : 29);
-  const rtl = book.language === "ar";
-  const toc = { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language];
-  const image =
-    artwork && book.use_artwork
-      ? `<img class="cover-image" src="data:${esc(artwork.type)};base64,${Buffer.from(artwork.data).toString("base64")}" alt="">`
-      : "";
-  return `<!doctype html><html lang="${book.language}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>
-  @font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}
-  @font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}
-  @page{size:A5;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0;color:#242a35;font-family:${rtl ? "Naskh" : "Inter"},sans-serif;font-size:${rtl ? "13" : "10"}pt;line-height:1.8}h1,h2,h3{line-height:1.35;break-after:avoid}h2{font-size:23pt;margin:8mm 0}h3{font-size:${rtl ? "16" : "12"}pt;margin-top:7mm}p{white-space:pre-line;margin:0 0 4mm;orphans:3;widows:3}li{margin-bottom:2mm}ul,ol{padding-inline-start:7mm}section.chapter{break-before:page}.chapter-number{font-size:10pt;letter-spacing:2px;color:#68728a}.cover{height:160mm;position:relative;background:${colors.bg};color:${colors.ink};padding:12mm;overflow:hidden;break-after:page;display:flex;flex-direction:column;justify-content:space-between}.cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4}.cover h1{font-size:${titleSize}pt;margin:7mm 0;position:relative;overflow-wrap:anywhere}.cover p,.cover small{position:relative}.cover .cover-subtitle{font-size:13pt;line-height:1.7}.cover .cover-author{font-size:11pt;border-top:1px solid ${colors.accent};padding-top:5mm}.cover:after{content:'';position:absolute;width:125mm;height:125mm;border:1px solid ${colors.accent};border-radius:50%;bottom:-80mm;left:-50mm}.toc{break-before:auto}.toc p{border-bottom:1px solid #e2e2df;padding:3mm 0;display:flex;gap:5mm}.toc span{color:#69738b}.author-note{margin-top:7mm;font-size:9pt;color:#69738b}
-  </style></head><body><section class="cover">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section><section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "")}</section>`).join("")}</body></html>`;
+  ]).then(
+    ([latin, arabic]) =>
+      `@font-face{font-family:Inter;src:url(data:font/woff2;base64,${latin.toString("base64")}) format('woff2');font-weight:100 900}@font-face{font-family:Naskh;src:url(data:font/woff2;base64,${arabic.toString("base64")}) format('woff2')}`,
+  ));
 }
-export async function makePdf(
-  book: Book,
-  artwork?: { data: Uint8Array; type: string },
-) {
+function imageData(book: Book, artwork?: Artwork) {
+  return artwork && book.use_artwork
+    ? `data:${artwork.type};base64,${Buffer.from(artwork.data).toString("base64")}`
+    : undefined;
+}
+export async function pdfHtml(book: Book, artwork?: Artwork) {
+  const settings = bookSettings(book),
+    size = pageSizes[settings.page_size];
+  return `<!doctype html><html lang="${book.language}" dir="${book.language === "ar" ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(book.title)}</title><style>${await fontStyles()}${BOOK_DESIGN_CSS}
+  @page{size:${size.width}mm ${size.height}mm;margin:17mm 14mm}*{box-sizing:border-box}body{margin:0}.publication-document{font-size:${publicationFontSize(book)}pt}.pub-cover{height:${size.height - 34}mm;aspect-ratio:auto}.pub-front-page{break-after:page}.pub-matter,.pub-toc,.pub-chapter{padding:0}.pub-toc{break-before:auto}.pub-matter+.pub-toc{break-before:page}.pub-front-page+.pub-matter{break-before:auto}a{color:inherit;text-decoration:none}
+  </style></head><body class="publication-document pub-font-${settings.font}" lang="${book.language}">${publicationBody(book, imageData(book, artwork))}</body></html>`;
+}
+async function renderer() {
   const [{ default: chromium }, { default: puppeteer }] = await Promise.all([
     import("@sparticuz/chromium"),
     import("puppeteer-core"),
@@ -90,18 +72,26 @@ export async function makePdf(
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
     await page.setRequestInterception(true);
-    page.on("request", (r) => {
-      if (r.url().startsWith("data:") || r.url() === "about:blank")
-        void r.continue();
-      else void r.abort();
+    page.on("request", (request) => {
+      if (request.url().startsWith("data:") || request.url() === "about:blank")
+        void request.continue();
+      else void request.abort();
     });
+    return { browser, page };
+  } catch (error) {
+    await browser.close();
+    throw error;
+  }
+}
+export async function makePdf(book: Book, artwork?: Artwork) {
+  const { browser, page } = await renderer();
+  try {
     await page.setContent(await pdfHtml(book, artwork), {
       waitUntil: "load",
-      timeout: 30_000,
+      timeout: 30000,
     });
     await page.evaluate("document.fonts.ready");
     return await page.pdf({
-      format: "A5",
       printBackground: true,
       preferCSSPageSize: true,
       displayHeaderFooter: true,
@@ -114,101 +104,146 @@ export async function makePdf(
     await browser.close();
   }
 }
-export async function makeDocx(
-  book: Book,
-  artwork?: { data: Uint8Array; type: string },
-) {
-  const rtl = book.language === "ar";
-  const font = rtl ? "Arial" : "Calibri";
+/** Rasterize only cover artwork, preserving the exact chosen layout in Word.
+ * The manuscript remains native, accessible, editable Word text. */
+export async function makeCoverImages(book: Book, artwork?: Artwork) {
+  const settings = bookSettings(book),
+    size = pageSizes[settings.page_size];
+  const { browser, page } = await renderer();
+  const width = 1600,
+    height = Math.round((width * (size.height - 34)) / (size.width - 28));
+  const images: Uint8Array[] = [];
+  try {
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    for (const back of settings.back_cover ? [false, true] : [false]) {
+      const markup = coverMarkup({
+        title: book.title,
+        subtitle: book.subtitle,
+        author: book.author,
+        style: book.cover_style,
+        language: book.language,
+        layout: settings.cover_layout,
+        image: imageData(book, artwork),
+        back,
+        blurb: settings.back_cover_text,
+      });
+      await page.setContent(
+        `<!doctype html><html><head><meta charset="utf-8"><style>${await fontStyles()}${BOOK_DESIGN_CSS}html,body{margin:0}.pub-cover{width:${width}px;height:${height}px;aspect-ratio:auto}</style></head><body>${markup}</body></html>`,
+        { waitUntil: "load", timeout: 30000 },
+      );
+      await page.evaluate("document.fonts.ready");
+      images.push(await page.screenshot({ type: "png" }));
+    }
+    return images;
+  } finally {
+    await browser.close();
+  }
+}
+export async function makeDocx(book: Book, artwork?: Artwork) {
+  const rtl = book.language === "ar",
+    s = bookSettings(book),
+    size = pageSizes[s.page_size],
+    l = publicationLabels[book.language];
+  const font = rtl ? "Arial" : s.font === "serif" ? "Georgia" : "Calibri",
+    pointSize = Math.round(publicationFontSize(book) * 2);
   const base = {
     bidirectional: rtl,
     alignment: rtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
   };
   const text = (value: string, bold = false) =>
-    new TextRun({
-      text: value,
-      bold,
-      font,
-      rightToLeft: rtl,
-      size: rtl ? 26 : 22,
-    });
-  const children: Paragraph[] = [
+    new TextRun({ text: value, bold, font, rightToLeft: rtl, size: pointSize });
+  const covers = await makeCoverImages(book, artwork);
+  const coverParagraph = (data: Uint8Array) =>
     new Paragraph({
-      ...base,
-      heading: HeadingLevel.TITLE,
-      children: [text(book.title, true)],
-    }),
-    new Paragraph({ ...base, children: [text(book.subtitle)] }),
-    new Paragraph({ ...base, children: [text(book.author)] }),
-  ];
-  if (
-    artwork &&
-    book.use_artwork &&
-    ["image/png", "image/jpeg"].includes(artwork.type)
-  ) {
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 0, before: 0 },
+      children: [
+        new ImageRun({
+          data,
+          type: "png",
+          transformation: {
+            width: Math.floor((size.width - 28) * 3.6),
+            height: Math.floor((size.height - 34) * 3.6),
+          },
+          altText: { title: book.title, description: l.back, name: book.title },
+        }),
+      ],
+    });
+  const children: Paragraph[] = [coverParagraph(covers[0])];
+  const newPage = () =>
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+  const heading = (title: string) =>
     children.push(
       new Paragraph({
-        children: [
-          new ImageRun({
-            data: artwork.data,
-            type: artwork.type === "image/png" ? "png" : "jpg",
-            transformation: { width: 340, height: 440 },
-          }),
-        ],
+        ...base,
+        heading: HeadingLevel.HEADING_1,
+        children: [text(title, true)],
       }),
     );
+  function matter(title: string, value: string) {
+    if (value) {
+      newPage();
+      heading(title);
+      value
+        .split(/\n\s*\n/)
+        .forEach((p) =>
+          children.push(new Paragraph({ ...base, children: [text(p)] })),
+        );
+    }
   }
-  children.push(
-    new Paragraph({ children: [new PageBreak()] }),
-    new Paragraph({
-      ...base,
-      heading: HeadingLevel.HEADING_1,
-      children: [
-        text(
-          { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language],
-          true,
-        ),
-      ],
-    }),
-  );
+  matter(l.rights, s.copyright);
+  matter(l.dedication, s.dedication);
+  newPage();
+  heading(l.contents);
   book.outline.forEach((c, i) =>
     children.push(
       new Paragraph({ ...base, children: [text(`${i + 1}. ${c.title}`)] }),
     ),
   );
   for (const c of book.outline) {
-    children.push(
-      new Paragraph({ children: [new PageBreak()] }),
-      new Paragraph({
-        ...base,
-        heading: HeadingLevel.HEADING_1,
-        children: [text(c.title, true)],
-      }),
-    );
+    newPage();
+    heading(c.title);
     for (const block of parseManuscript(book.chapters[c.id]?.content || "")) {
-      if (block.type === "heading") {
-        children.push(new Paragraph({
-          ...base,
-          heading: block.level >= 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_2,
-          spacing: { before: 260, after: 100 },
-          children: [text(stripInlineMarkdown(block.text), true)],
-        }));
-      } else if (block.type === "ul" || block.type === "ol") {
-        block.items.forEach((item, index) =>
-          children.push(new Paragraph({
+      if (block.type === "heading")
+        children.push(
+          new Paragraph({
             ...base,
-            spacing: { after: 90 },
-            children: [text(`${block.type === "ul" ? "•" : `${index + 1}.`}  ${stripInlineMarkdown(item)}`)],
-          })),
+            heading:
+              block.level >= 3
+                ? HeadingLevel.HEADING_3
+                : HeadingLevel.HEADING_2,
+            spacing: { before: 260, after: 100 },
+            children: [text(stripInlineMarkdown(block.text), true)],
+          }),
         );
-      } else {
-        children.push(new Paragraph({
-          ...base,
-          spacing: { after: 170 },
-          children: [text(stripInlineMarkdown(block.text))],
-        }));
-      }
+      else if (block.type === "ul" || block.type === "ol")
+        block.items.forEach((item, i) =>
+          children.push(
+            new Paragraph({
+              ...base,
+              spacing: { after: 90 },
+              children: [
+                text(
+                  `${block.type === "ul" ? "•" : `${i + 1}.`}  ${stripInlineMarkdown(item)}`,
+                ),
+              ],
+            }),
+          ),
+        );
+      else
+        children.push(
+          new Paragraph({
+            ...base,
+            spacing: { after: 170 },
+            children: [text(stripInlineMarkdown(block.text))],
+          }),
+        );
     }
+  }
+  matter(l.about, s.author_bio);
+  if (s.back_cover && covers[1]) {
+    newPage();
+    children.push(coverParagraph(covers[1]));
   }
   return Packer.toBuffer(
     new Document({
@@ -216,14 +251,25 @@ export async function makeDocx(
       title: book.title,
       description: book.subtitle,
       styles: {
-        default: { document: { run: { font, size: 22 }, paragraph: base } },
+        default: {
+          document: {
+            run: { font, size: pointSize },
+            paragraph: {
+              ...base,
+              spacing: { line: Math.round(pointSize * 15) },
+            },
+          },
+        },
       },
       sections: [
         {
           properties: {
             page: {
-              size: { width: 8391, height: 11906 },
-              margin: { top: 800, bottom: 800, left: 800, right: 800 },
+              size: {
+                width: Math.round(size.width * 56.6929),
+                height: Math.round(size.height * 56.6929),
+              },
+              margin: { top: 964, bottom: 964, left: 794, right: 794 },
             },
           },
           footers: {

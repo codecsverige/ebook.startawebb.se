@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import type { Book } from "./domain";
+import { bookSettings, type Book } from "./domain";
+import { coverMarkup, BOOK_DESIGN_CSS, publicationLabels } from "./book-design";
 import { escapeHtml, markdownHtml } from "./export-text";
 
 type Asset = { name: string; body: string | Uint8Array };
@@ -8,8 +9,7 @@ function crc32(bytes: Buffer): number {
   let crc = 0xffffffff;
   for (const byte of bytes) {
     crc ^= byte;
-    for (let i = 0; i < 8; i++)
-      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
@@ -20,7 +20,10 @@ function zip(entries: Asset[]): Buffer {
   let offset = 0;
   for (const asset of entries) {
     const name = Buffer.from(asset.name, "utf8");
-    const data = typeof asset.body === "string" ? Buffer.from(asset.body, "utf8") : Buffer.from(asset.body);
+    const data =
+      typeof asset.body === "string"
+        ? Buffer.from(asset.body, "utf8")
+        : Buffer.from(asset.body);
     const checksum = crc32(data);
     const head = Buffer.alloc(30);
     head.writeUInt32LE(0x04034b50, 0);
@@ -58,108 +61,217 @@ function zip(entries: Asset[]): Buffer {
 export function makeEpub(
   book: Book,
   artwork?: { data: Uint8Array; type: string },
+  renderedCovers?: Uint8Array[],
 ): Buffer {
-  const lang = book.language;
-  const rtl = lang === "ar";
-  const dir = rtl ? "rtl" : "ltr";
-  const title = escapeHtml(book.title);
-  const subtitle = escapeHtml(book.subtitle);
-  const author = escapeHtml(book.author || "");
+  const lang = book.language,
+    rtl = lang === "ar",
+    dir = rtl ? "rtl" : "ltr",
+    s = bookSettings(book),
+    l = publicationLabels[lang];
+  const title = escapeHtml(book.title),
+    author = escapeHtml(book.author || "");
   const content: Asset[] = [
     { name: "mimetype", body: "application/epub+zip" },
-    { name: "META-INF/container.xml", body:
-      '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">' +
-      '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml" /></rootfiles></container>' },
+    {
+      name: "META-INF/container.xml",
+      body: '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml" /></rootfiles></container>',
+    },
   ];
-  const theme: Record<string, [string, string]> = {
-    cobalt: ["#3159df", "#fffdf6"],
-    sage: ["#d8decd", "#293e34"],
-    clay: ["#e6bba1", "#593329"],
-    midnight: ["#17243f", "#fff8eb"],
-    plum: ["#603b68", "#fff7ef"],
-    ivory: ["#f5eddf", "#322b29"],
-    forest: ["#123d35", "#f5ecda"],
-    ember: ["#613123", "#fff0db"],
-    lagoon: ["#076c75", "#eaf8f4"],
-    rose: ["#f4dce3", "#552b40"],
-    noir: ["#10141e", "#f9f1e6"],
-    sky: ["#8dc9e7", "#16354f"],
-    gold: ["#d5b76c", "#302619"],
-    teal: ["#134e57", "#eaf8f2"],
-    berry: ["#592548", "#fff1e9"],
-    sand: ["#e3d0b2", "#3f3026"],
-    ink: ["#272a49", "#f7f1de"],
-    sunrise: ["#e88967", "#442b43"],
-  };
-  const [bg, ink] = theme[book.cover_style] || theme.cobalt;
   const css =
-    "body{font-family:serif;line-height:1.65;color:#273142;padding:1em;}" +
-    "h1,h2,h3,h4{line-height:1.35;page-break-after:avoid;}" +
-    "p{margin:.4em 0 1em;}ul,ol{padding-inline-start:2em;}" +
-    ".cover{background:" + bg + ";color:" + ink + ";padding:2em;min-height:78vh;display:flex;flex-direction:column;justify-content:space-between;}" +
-    ".cover img{max-width:100%;max-height:48vh;object-fit:cover;}" +
-    ".author{font-size:.85em}.chapter-num{opacity:.6;font-size:.8em;}";
+    BOOK_DESIGN_CSS +
+    `body{font-family:${s.font === "serif" ? "serif" : "sans-serif"};line-height:1.75;padding:1em;color:#242a35;font-size:${s.font_size === "large" ? "1.15" : s.font_size === "small" ? ".9" : "1"}em}h1,h2,h3{line-height:1.4}p{margin:0 0 1em}a{color:inherit}.epub-cover{padding:0;margin:0;text-align:center}.epub-cover img{max-width:100%;height:auto}.matter{white-space:pre-line}`;
   content.push({ name: "OEBPS/style.css", body: css });
   const xhtml = (name: string, body: string): Asset => ({
     name: "OEBPS/" + name,
-    body: '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="' + lang +
-      '" lang="' + lang + '" dir="' + dir + '"><head><meta charset="utf-8" />' +
-      '<link rel="stylesheet" type="text/css" href="style.css" /><title>' + title +
-      '</title></head><body>' + body + '</body></html>',
+    body:
+      '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="' +
+      lang +
+      '" lang="' +
+      lang +
+      '" dir="' +
+      dir +
+      '"><head><meta charset="utf-8"/><title>' +
+      title +
+      '</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body>' +
+      body +
+      "</body></html>",
   });
-  const hasImage = Boolean(artwork && book.use_artwork &&
-    ["image/png", "image/jpeg"].includes(artwork.type));
-  const extension = artwork?.type === "image/png" ? "png" : "jpg";
-  if (hasImage) content.push({ name: "OEBPS/images/cover." + extension, body: artwork!.data });
-  content.push(xhtml("cover.xhtml",
-    '<section class="cover">' +
-    (hasImage ? '<img src="images/cover.' + extension + '" alt="" />' : "") +
-    '<div><h1>' + title + '</h1><p>' + subtitle + '</p></div>' +
-    '<p class="author">' + author + '</p></section>'));
-  const contentsLabel = { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[lang];
-  const toc = book.outline.map((c, i) =>
-    '<li><a href="chapter-' + (i + 1) + '.xhtml">' +
-    escapeHtml(c.title) + '</a></li>').join("");
-  const nav = '<?xml version="1.0" encoding="UTF-8"?>' +
-    '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" ' +
-    'xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="' + lang +
-    '" lang="' + lang + '" dir="' + dir + '"><head><meta charset="utf-8" />' +
-    '<title>' + escapeHtml(contentsLabel) + '</title></head><body>' +
-    '<nav epub:type="toc" id="toc"><h1>' + escapeHtml(contentsLabel) +
-    '</h1><ol>' + toc + '</ol></nav></body></html>';
-  content.push({ name: "OEBPS/nav.xhtml", body: nav });
-  book.outline.forEach((chapter, i) => {
-    content.push(xhtml("chapter-" + (i + 1) + ".xhtml",
-      '<section><p class="chapter-num">' + (i + 1) + '</p><h1>' +
-      escapeHtml(chapter.title) + '</h1>' +
-      markdownHtml(book.chapters[chapter.id]?.content || "") + '</section>'));
+  const coverImage =
+    renderedCovers?.[0] ||
+    (artwork &&
+    book.use_artwork &&
+    ["image/png", "image/jpeg"].includes(artwork.type)
+      ? artwork.data
+      : undefined);
+  const ext =
+    renderedCovers?.[0] || artwork?.type === "image/png" ? "png" : "jpg";
+  if (coverImage)
+    content.push({ name: "OEBPS/images/cover." + ext, body: coverImage });
+  const cover = {
+    title: book.title,
+    subtitle: book.subtitle,
+    author: book.author,
+    style: book.cover_style,
+    language: lang,
+    layout: s.cover_layout,
+  };
+  content.push(
+    xhtml(
+      "cover.xhtml",
+      renderedCovers?.[0]
+        ? '<section class="epub-cover"><img src="images/cover.png" alt="' +
+            title +
+            '"/></section>'
+        : coverMarkup({
+            ...cover,
+            image: coverImage ? "images/cover." + ext : undefined,
+          }),
+    ),
+  );
+  const matters = [
+    { id: "copyright", title: l.rights, text: s.copyright },
+    { id: "dedication", title: l.dedication, text: s.dedication },
+    { id: "about-author", title: l.about, text: s.author_bio },
+  ].filter((m) => m.text);
+  for (const m of matters)
+    content.push(
+      xhtml(
+        m.id + ".xhtml",
+        '<section class="matter"><h1>' +
+          escapeHtml(m.title) +
+          "</h1><p>" +
+          escapeHtml(m.text) +
+          "</p></section>",
+      ),
+    );
+  const toc = book.outline
+    .map(
+      (c, i) =>
+        '<li><a href="chapter-' +
+        (i + 1) +
+        '.xhtml">' +
+        escapeHtml(c.title) +
+        "</a></li>",
+    )
+    .join("");
+  content.push({
+    name: "OEBPS/nav.xhtml",
+    body:
+      '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="' +
+      lang +
+      '" dir="' +
+      dir +
+      '"><head><meta charset="utf-8"/><title>' +
+      escapeHtml(l.contents) +
+      '</title></head><body><nav epub:type="toc" id="toc"><h1>' +
+      escapeHtml(l.contents) +
+      "</h1><ol>" +
+      toc +
+      "</ol></nav></body></html>",
   });
+  book.outline.forEach((c, i) =>
+    content.push(
+      xhtml(
+        "chapter-" + (i + 1) + ".xhtml",
+        "<section><h1>" +
+          escapeHtml(c.title) +
+          "</h1>" +
+          markdownHtml(book.chapters[c.id]?.content || "") +
+          "</section>",
+      ),
+    ),
+  );
+  if (s.back_cover) {
+    if (renderedCovers?.[1])
+      content.push({
+        name: "OEBPS/images/back-cover.png",
+        body: renderedCovers[1],
+      });
+    content.push(
+      xhtml(
+        "back-cover.xhtml",
+        renderedCovers?.[1]
+          ? '<section class="epub-cover"><img src="images/back-cover.png" alt="' +
+              escapeHtml(l.back) +
+              '"/></section>'
+          : coverMarkup({ ...cover, back: true, blurb: s.back_cover_text }),
+      ),
+    );
+  }
   const manifest = [
     '<item id="style" href="style.css" media-type="text/css"/>',
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>',
-    ...book.outline.map((_, i) => '<item id="ch' + (i + 1) + '" href="chapter-' +
-      (i + 1) + '.xhtml" media-type="application/xhtml+xml"/>'),
-    ...(hasImage ? ['<item id="cover-img" href="images/cover.' + extension +
-      '" media-type="image/' + (extension === "jpg" ? "jpeg" : "png") +
-      '" properties="cover-image"/>'] : []),
+    ...matters.map(
+      (m) =>
+        '<item id="' +
+        m.id +
+        '" href="' +
+        m.id +
+        '.xhtml" media-type="application/xhtml+xml"/>',
+    ),
+    ...book.outline.map(
+      (_, i) =>
+        '<item id="ch' +
+        (i + 1) +
+        '" href="chapter-' +
+        (i + 1) +
+        '.xhtml" media-type="application/xhtml+xml"/>',
+    ),
+    ...(coverImage
+      ? [
+          '<item id="cover-img" href="images/cover.' +
+            ext +
+            '" media-type="image/' +
+            (ext === "jpg" ? "jpeg" : "png") +
+            '" properties="cover-image"/>',
+        ]
+      : []),
+    ...(s.back_cover
+      ? [
+          '<item id="back-cover" href="back-cover.xhtml" media-type="application/xhtml+xml"/>',
+        ]
+      : []),
+    ...(s.back_cover && renderedCovers?.[1]
+      ? [
+          '<item id="back-img" href="images/back-cover.png" media-type="image/png"/>',
+        ]
+      : []),
   ].join("");
-  const spine = '<itemref idref="cover"/>' +
-    book.outline.map((_, i) => '<itemref idref="ch' + (i + 1) + '"/>').join("");
-  const opf = '<?xml version="1.0" encoding="UTF-8"?>' +
-    '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" ' +
-    'unique-identifier="pub-id" xml:lang="' + lang + '">' +
-    '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
-    '<dc:identifier id="pub-id">urn:uuid:' + book.id + '</dc:identifier>' +
-    '<dc:title>' + title + '</dc:title><dc:language>' + lang +
-    '</dc:language>' + (book.author ? '<dc:creator>' + author + '</dc:creator>' : '') +
-    '<meta property="dcterms:modified">' +
-    new Date().toISOString().replace(/\.\d{3}Z$/, "Z") +
-    '</meta></metadata><manifest>' + manifest +
-    '</manifest><spine page-progression-direction="' + (rtl ? "rtl" : "ltr") +
-    '">' + spine + '</spine></package>';
-  content.push({ name: "OEBPS/content.opf", body: opf });
+  const spine =
+    '<itemref idref="cover"/>' +
+    matters
+      .filter((m) => m.id !== "about-author")
+      .map((m) => '<itemref idref="' + m.id + '"/>')
+      .join("") +
+    '<itemref idref="nav"/>' +
+    book.outline
+      .map((_, i) => '<itemref idref="ch' + (i + 1) + '"/>')
+      .join("") +
+    (s.author_bio ? '<itemref idref="about-author"/>' : "") +
+    (s.back_cover ? '<itemref idref="back-cover"/>' : "");
+  content.push({
+    name: "OEBPS/content.opf",
+    body:
+      '<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="' +
+      lang +
+      '"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="pub-id">urn:uuid:' +
+      book.id +
+      "</dc:identifier><dc:title>" +
+      title +
+      "</dc:title><dc:language>" +
+      lang +
+      "</dc:language>" +
+      (book.author ? "<dc:creator>" + author + "</dc:creator>" : "") +
+      '<meta property="dcterms:modified">' +
+      new Date().toISOString().replace(/\.\d{3}Z$/, "Z") +
+      "</meta></metadata><manifest>" +
+      manifest +
+      '</manifest><spine page-progression-direction="' +
+      dir +
+      '">' +
+      spine +
+      "</spine></package>",
+  });
   return zip(content);
 }

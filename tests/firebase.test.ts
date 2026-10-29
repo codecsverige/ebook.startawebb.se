@@ -159,43 +159,85 @@ test(
       assert.equal("state" in (await store.ownedBook(book, uid)), false);
       await store.finishJob(resumed.id);
       // A generated cover is a suggestion, not automatically published artwork.
-      const coverJob = await store.prepareJob(uid, book, "cover", null, randomUUID());
+      const coverJob = await store.prepareJob(
+        uid,
+        book,
+        "cover",
+        null,
+        randomUUID(),
+      );
       const candidatePath = "test/covers/" + randomUUID() + ".png";
-      await store.commitGenerated(coverJob.id, { cover_path: candidatePath }, 95);
+      await store.commitGenerated(
+        coverJob.id,
+        { cover_path: candidatePath },
+        95,
+      );
       await store.finishJob(coverJob.id);
       let currentBook = await store.ownedBook(book, uid);
       assert.equal(currentBook.cover_path, null);
       assert.equal(currentBook.cover_candidate_path, candidatePath);
-      currentBook = await store.decideCoverCandidate(uid, book, currentBook.revision, true);
+      currentBook = await store.decideCoverCandidate(
+        uid,
+        book,
+        currentBook.revision,
+        true,
+      );
       assert.equal(currentBook.cover_path, candidatePath);
       assert.equal(currentBook.cover_candidate_path, null);
-      const restarted = await store.restartBook(uid, book, "ar", currentBook.revision);
+      const restarted = await store.restartBook(
+        uid,
+        book,
+        "ar",
+        currentBook.revision,
+      );
       assert.equal(restarted.language, "ar");
       assert.equal(restarted.outline.length, 0);
       assert.equal(Object.keys(restarted.chapters).length, 0);
       const versionsAfterRestart = await store.versions(uid, book);
-      const restored = await store.restoreBookVersion(uid, book, versionsAfterRestart[0].id, restarted.revision);
+      const restored = await store.restoreBookVersion(
+        uid,
+        book,
+        versionsAfterRestart[0].id,
+        restarted.revision,
+      );
       assert.equal(restored.language, "en");
       assert.equal(restored.outline.length, 3);
       assert.equal(restored.chapters[outline[0].id].content, chapter.content);
-      await assert.rejects(store.restoreBookVersion(other, book, versionsAfterRestart[0].id, restored.revision), /not_found/);
+      await assert.rejects(
+        store.restoreBookVersion(
+          other,
+          book,
+          versionsAfterRestart[0].id,
+          restored.revision,
+        ),
+        /not_found/,
+      );
       // Even with the AI provider offline, users can prepare an editable
       // structure without making any billable model request.
       const manualBookId = await store.createBook(uid, brief);
       const originalManual = await store.ownedBook(manualBookId, uid);
       const manuallyPlanned = await store.createManualOutline(
-        uid, manualBookId, originalManual.revision,
+        uid,
+        manualBookId,
+        originalManual.revision,
       );
       assert.equal(manuallyPlanned.outline.length, 3);
       assert.equal(Object.keys(manuallyPlanned.chapters).length, 0);
       assert.equal(manuallyPlanned.title, "Your book title");
-      assert.equal((await store.ownedBook(manualBookId, uid)).outline.length, 3);
+      assert.equal(
+        (await store.ownedBook(manualBookId, uid)).outline.length,
+        3,
+      );
       await assert.rejects(
         store.createManualOutline(uid, manualBookId, originalManual.revision),
         /conflict/,
       );
       await assert.rejects(
-        store.createManualOutline(other, manualBookId, manuallyPlanned.revision),
+        store.createManualOutline(
+          other,
+          manualBookId,
+          manuallyPlanned.revision,
+        ),
         /not_found/,
       );
       for (let n = 0; n < 22; n++) {
@@ -268,19 +310,33 @@ test(
       await store.ensureProfile(artist);
       const artworkBook = await store.createBook(artist, brief);
       const outlineJob = await store.prepareJob(
-        artist, artworkBook, "outline", null, randomUUID(),
+        artist,
+        artworkBook,
+        "outline",
+        null,
+        randomUUID(),
       );
-      await store.commitGenerated(outlineJob.id, {
-        title: "Test protected cover",
-        subtitle: "",
-        outline: [1, 2, 3].map((number) => ({
-          id: randomUUID(), title: `Chapter ${number}`, summary: "Details",
-        })),
-      }, 95);
+      await store.commitGenerated(
+        outlineJob.id,
+        {
+          title: "Test protected cover",
+          subtitle: "",
+          outline: [1, 2, 3].map((number) => ({
+            id: randomUUID(),
+            title: `Chapter ${number}`,
+            summary: "Details",
+          })),
+        },
+        95,
+      );
       await store.finishJob(outlineJob.id);
       await store.applyOrder(`trial-test:${artist}`, artist, 1, false, false);
       const protectedCover = await store.prepareJob(
-        artist, artworkBook, "cover", null, randomUUID(),
+        artist,
+        artworkBook,
+        "cover",
+        null,
+        randomUUID(),
       );
       for (let i = 0; i < 3; i++)
         await store.reserveAi(protectedCover.id, "cover", "test/model");
@@ -290,7 +346,10 @@ test(
       );
       assert.equal((await store.profile(artist))?.image_times?.length, 3);
       await store.finishJob(protectedCover.id, "generation_failed");
-      assert.equal((await store.ownedBook(artworkBook, artist)).cover_path, null);
+      assert.equal(
+        (await store.ownedBook(artworkBook, artist)).cover_path,
+        null,
+      );
       // Fail before starting a new workflow, instead of silently burning
       // another job request and presenting a generic failure to the author.
       await assert.rejects(
@@ -315,11 +374,23 @@ test(
       try {
         for (const key of quotaKeys) process.env[key] = "1";
         const ownerJob = await store.prepareJob(
-          ownerId, ownerBookId, "outline", null, randomUUID(), true,
+          ownerId,
+          ownerBookId,
+          "outline",
+          null,
+          randomUUID(),
+          true,
         );
         assert.equal(ownerJob.owner_trial, true);
         await assert.rejects(
-          store.prepareJob(ownerId, ownerBookId, "outline", null, randomUUID(), true),
+          store.prepareJob(
+            ownerId,
+            ownerBookId,
+            "outline",
+            null,
+            randomUUID(),
+            true,
+          ),
           /busy/,
         );
         for (let i = 0; i < 9; i++)
@@ -327,11 +398,18 @@ test(
         assert.equal((await store.profile(ownerId))?.ai_times.length, 0);
         await store.finishJob(ownerJob.id, "generation_failed");
         const manual = await store.createManualOutline(
-          ownerId, ownerBookId, (await store.ownedBook(ownerBookId, ownerId)).revision,
+          ownerId,
+          ownerBookId,
+          (await store.ownedBook(ownerBookId, ownerId)).revision,
         );
         assert.equal(manual.outline.length, 3);
         const ownerCover = await store.prepareJob(
-          ownerId, ownerBookId, "cover", null, randomUUID(), true,
+          ownerId,
+          ownerBookId,
+          "cover",
+          null,
+          randomUUID(),
+          true,
         );
         for (let i = 0; i < 5; i++)
           await store.reserveAi(ownerCover.id, "cover", "test/model");
@@ -350,6 +428,188 @@ test(
           else process.env[quotaKeys[i]] = old;
         }
       }
+
+      // The editorial workflow uses the SAME ownership, lock, idempotency,
+      // accounting and revision protection as chapter generation.
+      let editorialBook = await store.ownedBook(ownerBookId, ownerId);
+      const editorialChapter = editorialBook.outline[0].id;
+      const content = "A practical passage about useful habits. ".repeat(40);
+      const chapterJob = await store.prepareJob(
+        ownerId,
+        ownerBookId,
+        "chapter",
+        editorialChapter,
+        randomUUID(),
+        true,
+      );
+      await store.commitGenerated(
+        chapterJob.id,
+        {
+          chapter_id: editorialChapter,
+          chapter: {
+            content,
+            summary:
+              "A meaningful factual summary which must survive a cover-only save.",
+          },
+        },
+        95,
+      );
+      await store.finishJob(chapterJob.id);
+      editorialBook = await store.ownedBook(ownerBookId, ownerId);
+      const generatedSummary = editorialBook.chapters[editorialChapter].summary;
+      editorialBook = await store.saveBook(ownerId, ownerBookId, {
+        ...editorialBook,
+        title: "A changed title",
+      });
+      assert.equal(
+        editorialBook.chapters[editorialChapter].summary,
+        generatedSummary,
+      );
+      editorialBook = await store.saveBook(ownerId, ownerBookId, {
+        ...editorialBook,
+        chapters: {
+          ...editorialBook.chapters,
+          [editorialChapter]: {
+            content: content + "The final decision was made by Nora.",
+            summary: "Untrusted stale client summary",
+          },
+        },
+      });
+      assert.match(editorialBook.chapters[editorialChapter].summary, /Nora\.$/);
+      assert.doesNotMatch(
+        editorialBook.chapters[editorialChapter].summary,
+        /Untrusted/,
+      );
+      const savedBeforeResize = editorialBook;
+      editorialBook = await store.saveBook(ownerId, ownerBookId, {
+        ...editorialBook,
+        outline: [...editorialBook.outline]
+          .reverse()
+          .concat({
+            id: randomUUID(),
+            title: "New ending",
+            summary: "Resolve the remaining questions.",
+          }),
+      });
+      assert.equal(editorialBook.chapter_count, 4);
+      const resizedVersions = await store.versions(ownerId, ownerBookId);
+      editorialBook = await store.restoreBookVersion(
+        ownerId,
+        ownerBookId,
+        resizedVersions[0].id,
+        editorialBook.revision,
+      );
+      assert.equal(
+        editorialBook.chapter_count,
+        savedBeforeResize.chapter_count,
+      );
+      assert.deepEqual(editorialBook.outline, savedBeforeResize.outline);
+      const assistantInput = {
+        revision: editorialBook.revision,
+        instruction: "Improve the wording",
+        selection: { start: 0, end: 11 },
+      };
+      await assert.rejects(
+        store.prepareJob(
+          other,
+          ownerBookId,
+          "assist",
+          editorialChapter,
+          randomUUID(),
+          true,
+          assistantInput,
+        ),
+        /not_found/,
+      );
+      await assert.rejects(
+        store.prepareJob(
+          ownerId,
+          ownerBookId,
+          "assist",
+          editorialChapter,
+          randomUUID(),
+          true,
+          { ...assistantInput, revision: editorialBook.revision - 1 },
+        ),
+        /conflict/,
+      );
+      const assistantRequest = randomUUID();
+      const assistantJob = await store.prepareJob(
+        ownerId,
+        ownerBookId,
+        "assist",
+        editorialChapter,
+        assistantRequest,
+        true,
+        assistantInput,
+      );
+      assert.equal(
+        (
+          await store.prepareJob(
+            ownerId,
+            ownerBookId,
+            "assist",
+            editorialChapter,
+            assistantRequest,
+            true,
+            assistantInput,
+          )
+        ).id,
+        assistantJob.id,
+      );
+      await assert.rejects(
+        store.prepareJob(
+          ownerId,
+          ownerBookId,
+          "assist",
+          editorialChapter,
+          assistantRequest,
+          true,
+          { ...assistantInput, instruction: "Different request" },
+        ),
+        /invalid_input/,
+      );
+      await assert.rejects(
+        store.saveBook(ownerId, ownerBookId, editorialBook),
+        /busy/,
+      );
+      await store.reserveAi(
+        assistantJob.id,
+        "assist:gateway",
+        "test/no-live-provider",
+      );
+      const suggestion = {
+        type: "edit" as const,
+        revision: editorialBook.revision,
+        chapter_id: editorialChapter,
+        start: 0,
+        end: 11,
+        original: editorialBook.chapters[editorialChapter].content.slice(0, 11),
+        content: "A useful",
+        summary: "A revised factual summary of this particular chapter.",
+        note: "The opening is clearer.",
+      };
+      await assert.rejects(
+        store.commitAssistantResult(assistantJob.id, {
+          ...suggestion,
+          revision: editorialBook.revision - 1,
+        }),
+        /conflict/,
+      );
+      await store.commitAssistantResult(assistantJob.id, suggestion);
+      await store.commitAssistantResult(assistantJob.id, {
+        ...suggestion,
+        content: "Should not overwrite the first result",
+      });
+      await store.finishJob(assistantJob.id);
+      assert.equal((await store.job(assistantJob.id))?.result?.type, "edit");
+      assert.equal(
+        (await store.ownedBook(ownerBookId, ownerId)).chapters[editorialChapter]
+          .content,
+        editorialBook.chapters[editorialChapter].content,
+        "Suggestions must never silently overwrite the manuscript",
+      );
+      assert.deepEqual((await store.job(assistantJob.id))?.result, suggestion);
 
       // Load the actual HyrNära rules when available; do not modify/deploy them.
       const rules = await readFile(

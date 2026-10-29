@@ -6,6 +6,7 @@ import type {
 } from "firebase-admin/firestore";
 import {
   briefSchema,
+  bookSettings,
   recommendedCoverStyles,
   editBookSchema,
   type Book,
@@ -14,7 +15,10 @@ import {
   type JobKind,
   type Chapter,
   type OutlineItem,
+  type AssistantInput,
+  type AssistantResult,
 } from "./domain";
+import { continuityExcerpt } from "./editorial";
 import { AppError } from "./http";
 import { STUDIO_PATH } from "./firebase-config";
 
@@ -40,6 +44,7 @@ type BookState = {
 };
 type StoredBook = Book & { state: BookState };
 export type WorkerJob = Job & {
+  assistant_input?: AssistantInput;
   owner_trial?: boolean;
   request_id: string;
   result_units: Record<string, boolean>;
@@ -79,7 +84,12 @@ function fail(code: string): never {
     code,
     ["busy", "conflict"].includes(code)
       ? 409
-      : ["rate_limit", "ai_book_limit", "ai_daily_limit", "ai_image_daily_limit"].includes(code)
+      : [
+            "rate_limit",
+            "ai_book_limit",
+            "ai_daily_limit",
+            "ai_image_daily_limit",
+          ].includes(code)
         ? 429
         : code === "not_found"
           ? 404
@@ -242,15 +252,20 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== input.revision) fail("conflict");
-      if (
-        input.outline.length !== book.chapter_count ||
-        input.outline.some((c) => !book.outline.some((old) => old.id === c.id))
-      )
-        fail("invalid_input");
+      for (const [chapterId, chapter] of Object.entries(input.chapters)) {
+        const previous = book.chapters[chapterId];
+        // Preserve the model's factual summary on an unrelated title/design save.
+        // Never trust a client-supplied summary after a manuscript edit.
+        chapter.summary =
+          previous?.content === chapter.content
+            ? previous.summary
+            : continuityExcerpt(chapter.content);
+      }
       const previous = await this.versionPlan(tx, ref);
       const next = {
         ...book,
         ...input,
+        chapter_count: input.outline.length,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -263,7 +278,11 @@ export class FirestoreStudio {
   /** A zero-AI fallback when the external model is offline.
    * The author receives editable placeholder chapters, never fake generated text.
    */
-  async createManualOutline(uid: string, id: string, revision: number): Promise<Book> {
+  async createManualOutline(
+    uid: string,
+    id: string,
+    revision: number,
+  ): Promise<Book> {
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -288,8 +307,13 @@ export class FirestoreStudio {
         ...book,
         outline,
         state: { ...book.state, latest_job: null },
-        title: book.title || (book.language === "ar"
-          ? "عنوان كتابك" : book.language === "sv" ? "Din boktitel" : "Your book title"),
+        title:
+          book.title ||
+          (book.language === "ar"
+            ? "عنوان كتابك"
+            : book.language === "sv"
+              ? "Din boktitel"
+              : "Your book title"),
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -301,7 +325,12 @@ export class FirestoreStudio {
   }
 
   /** Restart a manuscript in the selected language without deleting the original snapshot. */
-  async restartBook(uid: string, id: string, language: Book["language"], revision: number): Promise<Book> {
+  async restartBook(
+    uid: string,
+    id: string,
+    language: Book["language"],
+    revision: number,
+  ): Promise<Book> {
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -344,8 +373,12 @@ export class FirestoreStudio {
       if (!book.cover_path && !book.cover_candidate_path) return bookOnly(book);
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
-        ...book, cover_path: null, cover_candidate_path: null, use_artwork: false,
-        revision: book.revision + 1, updated_at: new Date().toISOString(),
+        ...book,
+        cover_path: null,
+        cover_candidate_path: null,
+        use_artwork: false,
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
       };
       this.writeVersion(tx, ref, book, versions);
       tx.set(ref, next);
@@ -354,7 +387,12 @@ export class FirestoreStudio {
   }
 
   /** Approve or discard an AI cover suggestion without touching saved chapters. */
-  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean): Promise<Book> {
+  async decideCoverCandidate(
+    uid: string,
+    id: string,
+    revision: number,
+    accept: boolean,
+  ): Promise<Book> {
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -379,8 +417,13 @@ export class FirestoreStudio {
     });
   }
 
-  async setUploadedCover(uid: string, id: string, coverPath: string): Promise<Book> {
-    if (!uuid(id) || !coverPath.startsWith(STUDIO_PATH + "/covers/")) fail("invalid_input");
+  async setUploadedCover(
+    uid: string,
+    id: string,
+    coverPath: string,
+  ): Promise<Book> {
+    if (!uuid(id) || !coverPath.startsWith(STUDIO_PATH + "/covers/"))
+      fail("invalid_input");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
       const [p, b] = await tx.getAll(this.userRef(uid), ref);
@@ -390,8 +433,12 @@ export class FirestoreStudio {
       if (book.state.active_job) fail("busy");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
-        ...book, cover_path: coverPath, cover_candidate_path: null, use_artwork: true,
-        revision: book.revision + 1, updated_at: new Date().toISOString(),
+        ...book,
+        cover_path: coverPath,
+        cover_candidate_path: null,
+        use_artwork: true,
+        revision: book.revision + 1,
+        updated_at: new Date().toISOString(),
       };
       this.writeVersion(tx, ref, book, versions);
       tx.set(ref, next);
@@ -423,7 +470,12 @@ export class FirestoreStudio {
     return result.get("snapshot") as Book;
   }
   /** Restore a previous manuscript atomically, including after a language restart. */
-  async restoreBookVersion(uid: string, id: string, versionId: string, revision: number): Promise<Book> {
+  async restoreBookVersion(
+    uid: string,
+    id: string,
+    versionId: string,
+    revision: number,
+  ): Promise<Book> {
     if (!uuid(id) || !uuid(versionId)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -435,8 +487,13 @@ export class FirestoreStudio {
       if (book.revision !== revision) fail("conflict");
       if (!saved.exists) fail("not_found");
       const snapshot = saved.get("snapshot") as Book | undefined;
-      if (!snapshot || snapshot.id !== id || snapshot.user_id !== uid ||
-          snapshot.chapter_count !== book.chapter_count)
+      if (
+        !snapshot ||
+        snapshot.id !== id ||
+        snapshot.user_id !== uid ||
+        snapshot.chapter_count < 1 ||
+        snapshot.chapter_count > 30
+      )
         fail("invalid_input");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
@@ -447,6 +504,11 @@ export class FirestoreStudio {
         language: snapshot.language,
         outline: structuredClone(snapshot.outline),
         chapters: structuredClone(snapshot.chapters),
+        chapter_count: snapshot.chapter_count,
+        ...(snapshot.chapter_length
+          ? { chapter_length: snapshot.chapter_length }
+          : {}),
+        settings: bookSettings(snapshot),
         cover_style: snapshot.cover_style,
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
@@ -481,6 +543,7 @@ export class FirestoreStudio {
     chapter: string | null,
     requestId: string,
     ownerTrial = false,
+    assistantInput?: AssistantInput,
   ): Promise<WorkerJob> {
     if (!uuid(id) || !uuid(requestId)) fail("invalid_input");
     const jobId = digest(`${uid}:${requestId}`);
@@ -490,9 +553,15 @@ export class FirestoreStudio {
         jRef = this.jobs().doc(jobId);
       const currentDay = Math.floor(Date.now() / day);
       const gRef = this.root.collection("rates").doc(`ai-${currentDay}`);
-      const imageRef = this.root.collection("rates").doc(`ai-image-${currentDay}`);
+      const imageRef = this.root
+        .collection("rates")
+        .doc(`ai-image-${currentDay}`);
       const [p, b, j, global, images] = await tx.getAll(
-        pRef, bRef, jRef, gRef, imageRef,
+        pRef,
+        bRef,
+        jRef,
+        gRef,
+        imageRef,
       );
       // Private owner trial is authorized by the verified session in the API.
       // No credit is charged while payments are explicitly disabled.
@@ -503,39 +572,74 @@ export class FirestoreStudio {
         if (
           old.book_id !== id ||
           old.kind !== kind ||
-          old.chapter_id !== chapter
+          old.chapter_id !== chapter ||
+          JSON.stringify(old.assistant_input || null) !==
+            JSON.stringify(assistantInput || null)
         )
           fail("invalid_input");
         return old;
       }
       if (book.state.active_job) fail("busy");
+      if (["assist", "cover_ideas", "review"].includes(kind)) {
+        if (!assistantInput || assistantInput.revision !== book.revision)
+          fail("conflict");
+        if (kind === "assist") {
+          const content = chapter ? book.chapters[chapter]?.content : null;
+          const range = assistantInput.selection;
+          if (
+            !content ||
+            !assistantInput.instruction ||
+            (range && (range.end <= range.start || range.end > content.length))
+          )
+            fail("invalid_input");
+        }
+      }
       const now = Date.now(),
         times = recent(profile.job_times, now);
       // Surface known budget exhaustion BEFORE queueing a workflow or taking
       // credits. The per-call reserveAi transaction remains the final guard.
       const limits = aiDailyLimits();
-      if (!ownerTrial && (recent(profile.ai_times || [], now).length >= limits.user ||
-          (global.get("hits") || 0) >= limits.global))
+      if (
+        !ownerTrial &&
+        (recent(profile.ai_times || [], now).length >= limits.user ||
+          (global.get("hits") || 0) >= limits.global)
+      )
         fail("ai_daily_limit");
-      if (!ownerTrial && kind === "cover" &&
-          (recent(profile.image_times || [], now).length >= limits.imagesUser ||
-          (images.get("hits") || 0) >= limits.imagesGlobal))
+      if (
+        !ownerTrial &&
+        kind === "cover" &&
+        (recent(profile.image_times || [], now).length >= limits.imagesUser ||
+          (images.get("hits") || 0) >= limits.imagesGlobal)
+      )
         fail("ai_image_daily_limit");
-      if (!ownerTrial && (times.length >= 30 || book.state.jobs >= 50)) fail("rate_limit");
+      if (!ownerTrial && (times.length >= 30 || book.state.jobs >= 50))
+        fail("rate_limit");
       if (kind === "outline" && book.outline.length) fail("invalid_input");
       if (kind !== "outline" && !book.outline.length) fail("no_outline");
       if (kind === "sample" && book.chapters[book.outline[0].id])
         fail("invalid_input");
       if (kind === "chapter" && !book.outline.some((c) => c.id === chapter))
         fail("invalid_input");
-      if (!ownerTrial && kind === "cover" && book.state.covers >= 5) fail("rate_limit");
-      if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
+      if (!ownerTrial && kind === "cover" && book.state.covers >= 5)
+        fail("rate_limit");
+      if (
+        !ownerTrial &&
+        kind === "chapter" &&
+        (book.state.rewrites[chapter!] || 0) >= 3
+      )
         fail("rate_limit");
       let credits = profile.credits,
         free = profile.free_book_id;
       if (!book.unlocked) {
         if (
-          ["book", "chapter", "cover"].includes(kind) ||
+          [
+            "book",
+            "chapter",
+            "cover",
+            "assist",
+            "cover_ideas",
+            "review",
+          ].includes(kind) ||
           book.state.ai_calls >= 8 ||
           (kind === "outline" && free && free !== id)
         ) {
@@ -556,6 +660,7 @@ export class FirestoreStudio {
         book_id: id,
         user_id: uid,
         kind,
+        ...(assistantInput ? { assistant_input: assistantInput } : {}),
         chapter_id: chapter,
         status: "queued",
         progress: 0,
@@ -632,7 +737,8 @@ export class FirestoreStudio {
       const dayId = Math.floor(now / day);
       const gRef = this.root.collection("rates").doc(`ai-${dayId}`);
       const imageRef = this.root.collection("rates").doc(`ai-image-${dayId}`);
-      const imageRequest = operation === "cover" || operation.startsWith("cover:");
+      const imageRequest =
+        operation === "cover" || operation.startsWith("cover:");
       const [p, b, g, imageCount] = await tx.getAll(pRef, bRef, gRef, imageRef);
       const limits = aiDailyLimits();
       const profile = this.checkedProfile(p.data() as Profile | undefined);
@@ -651,17 +757,22 @@ export class FirestoreStudio {
           fail("ai_book_limit");
         if (times.length >= limits.user || global >= limits.global)
           fail("ai_daily_limit");
-        if (imageRequest && (imageTimes.length >= limits.imagesUser ||
-            globalImages >= limits.imagesGlobal))
+        if (
+          imageRequest &&
+          (imageTimes.length >= limits.imagesUser ||
+            globalImages >= limits.imagesGlobal)
+        )
           fail("ai_image_daily_limit");
         tx.update(pRef, {
           ai_times: [...times, now],
           ...(imageRequest ? { image_times: [...imageTimes, now] } : {}),
         });
         tx.set(gRef, { hits: global + 1, expires_at: new Date(now + day) });
-        if (imageRequest) tx.set(imageRef, {
-          hits: globalImages + 1, expires_at: new Date(now + day),
-        });
+        if (imageRequest)
+          tx.set(imageRef, {
+            hits: globalImages + 1,
+            expires_at: new Date(now + day),
+          });
       }
       // Keep usage accounting during tests without consuming public quota.
       tx.update(bRef, { "state.ai_calls": book.state.ai_calls + 1 });
@@ -702,6 +813,26 @@ export class FirestoreStudio {
       .collection("aiUsage")
       .doc(id)
       .update({ input_tokens: input, output_tokens: output });
+  }
+  async commitAssistantResult(id: string, result: AssistantResult) {
+    await this.db.runTransaction(async (tx) => {
+      const ref = this.jobs().doc(id);
+      const job = (await tx.get(ref)).data() as WorkerJob | undefined;
+      if (!job || !active(job)) fail("not_found");
+      const book = this.checkedBook(
+        (await tx.get(this.books().doc(job.book_id))).data() as
+          StoredBook | undefined,
+        job.user_id,
+      );
+      if (book.state.active_job !== id || book.revision !== result.revision)
+        fail("conflict");
+      if (job.result) return;
+      tx.update(ref, {
+        result,
+        progress: 95,
+        updated_at: new Date().toISOString(),
+      });
+    });
   }
   async context(id: string) {
     const job = await this.job(id);
@@ -800,9 +931,10 @@ export class FirestoreStudio {
             active_jobs: Math.max(0, profile.active_jobs - 1),
           });
       }
-      const finalError = error === "generation_failed" && job.error_code
-        ? job.error_code
-        : error;
+      const finalError =
+        error === "generation_failed" && job.error_code
+          ? job.error_code
+          : error;
       const next = {
         ...job,
         status: finalError ? ("failed" as const) : ("completed" as const),

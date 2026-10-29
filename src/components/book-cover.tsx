@@ -1,4 +1,5 @@
-import { BookOpen } from "lucide-react";
+import { coverMarkup, type CoverData } from "@/lib/book-design";
+import { coverStyles, type CoverStyle } from "@/lib/domain";
 export function BookCover({
   title,
   subtitle = "",
@@ -7,39 +8,43 @@ export function BookCover({
   language = "en",
   image,
   small = false,
+  layout,
+  back,
+  blurb,
+  bio,
 }: {
   title: string;
   subtitle?: string;
   author?: string;
   style?: string;
-  language?: string;
+  language?: CoverData["language"];
   image?: string | null;
   small?: boolean;
+  layout?: CoverData["layout"];
+  back?: boolean;
+  blurb?: string;
+  bio?: string;
 }) {
+  const palette = coverStyles.includes(style as CoverStyle)
+    ? (style as CoverStyle)
+    : "cobalt";
   return (
     <div
-      className={`book-cover cover-${style} ${small ? "cover-small" : ""}`}
-      dir={language === "ar" ? "rtl" : "ltr"}
-      lang={language}
-    >
-      {image && <img className="cover-art" src={image} alt="" />}
-      <div className="cover-grain" />
-      <div className="cover-orbit orbit-one" />
-      <div className="cover-orbit orbit-two" />
-      <div className="cover-top" aria-hidden="true">
-        <BookOpen size={18} />
-        <span>✦</span>
-      </div>
-      <div className="cover-copy">
-        <h2>{title}</h2>
-        {subtitle && <p>{subtitle}</p>}
-      </div>
-      <div className="cover-bottom">
-        <span>{author || "\u00a0"}</span>
-        <span className="cover-star" aria-hidden="true">
-          ✳
-        </span>
-      </div>
-    </div>
+      className={`book-cover-v2${small ? " cover-small-v2" : ""}`}
+      dangerouslySetInnerHTML={{
+        __html: coverMarkup({
+          title,
+          subtitle,
+          author,
+          style: palette,
+          language,
+          image,
+          layout,
+          back,
+          blurb,
+          bio,
+        }),
+      }}
+    />
   );
 }

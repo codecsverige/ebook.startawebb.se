@@ -17,7 +17,7 @@ export async function POST(
     const { user } = await requireUser(),
       { id } = await ctx.params;
     await ownedBook(id, user.id);
-    const input = await readJson(request, jobRequestSchema, 2000),
+    const input = await readJson(request, jobRequestSchema, 14000),
       config = configuration();
     if (!config.ai || (input.kind === "cover" && !config.artwork))
       throw new AppError("not_configured", 503);
@@ -34,6 +34,7 @@ export async function POST(
         !!process.env.EBOOK_TEST_ACCOUNT_EMAIL &&
         user.email.toLowerCase() ===
           process.env.EBOOK_TEST_ACCOUNT_EMAIL.trim().toLowerCase(),
+      input.assistant,
     );
     if (job.run_id || job.status !== "queued") return json({ job });
     try {
