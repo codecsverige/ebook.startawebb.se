@@ -3406,3 +3406,75 @@ html[dir="rtl"] .muted {
   outline: 2px solid #5484ca;
   outline-offset: 2px;
 }
+
+/* Book Studio: calm guided workflow, chapter rail and contextual tools. */
+.editor-layout:has(.guided-right-panel) {
+  grid-template-columns: 240px minmax(0, 1fr) 255px;
+}
+.guided-stages .guided-stage-done {
+  display:flex; gap:13px; align-items:center; padding:13px 11px;
+  color:#62718a; font-size:13px; border-radius:10px;
+}
+.guided-stages .guided-stage-done svg { color:#427e63; }
+.guided-chapter-nav { margin:14px 2px; padding:14px 0; border-top:1px solid #e4e8ef; display:grid; gap:5px; }
+.guided-chapter-nav>strong { font-size:12px; color:#53657b; padding:0 8px 6px; }
+.guided-chapter-nav button {
+  display:flex; align-items:center; text-align:start; gap:8px;
+  width:100%; min-width:0; padding:10px 8px; border:0; border-radius:9px;
+  background:transparent; color:#536179; font:inherit; font-size:12px; cursor:pointer;
+}
+.guided-chapter-nav button span:nth-child(2) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.guided-chapter-nav button span:first-child { font-variant-numeric:tabular-nums; color:#7e91a5; }
+.guided-chapter-nav button.is-current,.guided-chapter-nav button:hover { background:#edf2fb; color:#23437a; }
+.guided-right-panel {
+  align-self:stretch; border-inline-start:1px solid #e5e8ef;
+  padding:22px 17px; background:#fcfdff; display:grid; align-content:start; gap:14px;
+}
+.guided-right-head { display:flex; justify-content:space-between; align-items:center; gap:7px; }
+.guided-right-head strong { font-size:14px; }
+.guided-right-head button { border:1px solid #d6dfeb; border-radius:8px; background:#fff; width:31px;height:31px; cursor:pointer; }
+.guided-right-panel section { border:1px solid #e1e7ef; border-radius:12px; padding:12px; background:#fff; display:grid; gap:10px; min-width:0; }
+.guided-right-panel h3 { display:flex; align-items:center; gap:7px; font-size:13px; margin:0; color:#283b57; }
+.guided-right-panel p { font-size:12px; line-height:1.65; color:#687687; margin:0; overflow-wrap:anywhere; }
+.guided-right-panel small { font-size:11px; line-height:1.6; color:#63718a; }
+.guided-right-panel .button { justify-content:center; width:100%; }
+.guided-ai-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.guided-ai-actions button { font:inherit; font-size:12px; border:1px solid #cfdaee; border-radius:8px; padding:8px 10px; background:#f6f8fe; color:#34517e; cursor:pointer; }
+.guided-ai-actions button:hover:not(:disabled) { background:#e8efff; }
+.guided-ai-actions button:disabled { opacity:.4; cursor:not-allowed; }
+.guided-bottom-nav { display:flex; justify-content:flex-end; margin:24px 0; }
+.cover-wizard-guide { display:flex; gap:6px; flex-wrap:wrap; background:#f8f9fd; border:1px solid #e2e7f0; border-radius:13px; padding:10px; margin:0 0 18px; }
+.cover-wizard-guide button { border:1px solid transparent; border-radius:8px; padding:8px 10px; background:transparent; font:inherit; font-size:12px; cursor:pointer; color:#67758c; }
+.cover-wizard-guide button.is-current { background:#fff; border-color:#cad8ef; color:#274775; font-weight:650; }
+.cover-wizard-guide p { width:100%; margin:4px 5px; font-size:12px; color:#61718a; line-height:1.6; }
+.readiness-checklist { margin:18px 0 22px; display:grid; gap:8px; padding:18px; border-radius:15px; border:1px solid #d9e3ef; background:#fafcff; }
+.readiness-checklist strong { font-size:16px; }
+.readiness-checklist p { color:#64728a; font-size:12px; line-height:1.7; margin:0 0 6px; }
+.readiness-checklist button { display:flex; align-items:center; gap:10px; padding:10px 12px; min-width:0; border:1px solid #e0e5ed; border-radius:9px; background:#fff; color:#34445d; font:inherit; text-align:start; font-size:13px; cursor:pointer; }
+.readiness-checklist button>span:nth-child(2) { flex:1; }
+.readiness-checklist button>span:last-child { font-size:11px; color:#64748b; }
+.readiness-checklist button.is-ready>span:first-child { color:#31775d; font-weight:800; }
+.readiness-checklist button.needs-attention>span:first-child { color:#bb7636; font-weight:800; }
+.readiness-checklist small { color:#815c3d; font-size:12px; }
+.visual-insert-area { display:grid; justify-items:start; gap:7px; margin:5px 0; }
+.visual-add-toggle { font:inherit; font-size:11px; border:1px solid transparent; border-radius:999px; background:transparent; color:#6883ac; padding:4px 9px; cursor:pointer; }
+.visual-add-toggle:hover,.visual-add-toggle[aria-expanded="true"]{background:#edf2fd;border-color:#c8d7ed;}
+.visual-insert-menu { display:flex; flex-wrap:wrap; gap:5px; padding:8px; background:#f3f7ff; border:1px solid #dce5f1; border-radius:11px; }
+.visual-insert-menu button { font:inherit; background:#fff; border:1px solid #d8dfe9; color:#354767; border-radius:8px; font-size:12px; padding:8px 10px; cursor:pointer; }
+.visual-insert-menu button:hover { background:#eaf0fc; }
+.visual-block-quote { border-inline-start:3px solid #95a4c5; padding-inline-start:13px; background:#f8f8fb; border-radius:7px; }
+.visual-block-note { border:1px solid #cdd8eb; padding:10px 15px; background:#f3f6fc; border-radius:10px; }
+.manuscript-quote { border-inline-start:3px solid #a4aec2; margin:16px 0; padding:12px 20px; font-style:italic; background:#f8f9fc; border-radius:5px; }
+.manuscript-note { margin:18px 0; padding:15px 18px; background:#f1f5fc; border:1px solid #d0d9e8; border-radius:9px; line-height:1.7; }
+.manuscript-pagebreak { border-top:1px dashed #b2c2d5; margin:20px 0; text-align:center; color:#7385a1; font-size:12px; padding:6px; }
+@media(max-width:1260px) {
+  .editor-layout:has(.guided-right-panel) {grid-template-columns:220px minmax(0,1fr);}
+  .guided-right-panel {grid-column:2; border-top:1px solid #e1e6f0; border-inline-start:0;}
+  .guided-right-panel section {display:inline-grid;}
+}
+@media(max-width:800px) {
+  .editor-layout:has(.guided-right-panel) {grid-template-columns:minmax(0,1fr);}
+  .guided-right-panel {grid-column:1; padding:15px;}
+  .guided-chapter-nav {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .guided-chapter-nav>strong {grid-column:1/-1;}
+}
