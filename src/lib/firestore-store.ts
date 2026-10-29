@@ -257,7 +257,7 @@ export class FirestoreStudio {
         // Preserve the model's factual summary on an unrelated title/design save.
         // Never trust a client-supplied summary after a manuscript edit.
         chapter.summary =
-          previous?.content === chapter.content
+          previous?.content.trim() === chapter.content.trim()
             ? previous.summary
             : continuityExcerpt(chapter.content);
       }
