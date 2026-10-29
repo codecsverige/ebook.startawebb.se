@@ -3301,3 +3301,16 @@ html[dir="rtl"] .muted {
  .manuscript-figure.figure-small { width:65%; }
  .manuscript-figure.figure-medium { width:95%; }
 }
+
+
+.illustration-manager { margin-top:22px; background:#f7f8fb; border:1px solid #e0e4ec;
+  padding:16px; border-radius:14px; display:grid; gap:12px; }
+.illustration-manager-row { display:grid; grid-template-columns:110px minmax(0,1fr); gap:15px;
+  padding:12px; background:white; border-radius:10px; border:1px solid #e9edf2; align-items:start; }
+.illustration-manager-row>img {width:110px; aspect-ratio:4/3; object-fit:cover; border-radius:6px;}
+.illustration-manager-fields {display:grid; gap:9px; min-width:0;}
+.illustration-manager-fields input,.illustration-manager-fields select {
+  border:1px solid #d8dfeb; border-radius:8px; width:100%; min-width:0;
+  padding:9px; background:white; color:var(--ink); }
+@media(max-width:440px){.illustration-manager-row{grid-template-columns:70px minmax(0,1fr); gap:9px;}
+.illustration-manager-row>img{width:70px;}}
