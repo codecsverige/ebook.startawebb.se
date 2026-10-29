@@ -229,11 +229,13 @@ export async function makeDocx(
         const image = images[block.id];
         if (!image) continue;
         if (["image/png", "image/jpeg"].includes(image.type)) {
-          const width = image.meta.size === "small" ? 145 : image.meta.size === "medium" ? 275 : 390;
+          const maximum = image.meta.size === "small" ? 145 : image.meta.size === "medium" ? 275 : 390;
+          const ratio = (image.dimensions?.height || 408) / (image.dimensions?.width || 720);
+          const width = Math.min(maximum, 500 / Math.max(0.2, ratio));
           children.push(new Paragraph({ alignment: AlignmentType.CENTER,
             children: [new ImageRun({ data: image.data,
               type: image.type === "image/png" ? "png" : "jpg",
-              transformation: { width, height: Math.round(width * 0.567) },
+              transformation: { width: Math.round(width), height: Math.round(width * ratio) },
             })] }));
         }
         if (image.meta.caption) children.push(new Paragraph({ ...base,
