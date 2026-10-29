@@ -1,5 +1,6 @@
 import "server-only";
 import path from "node:path";
+import sharp from "sharp";
 import { readFile } from "node:fs/promises";
 import type { Book, Illustration } from "./domain";
 import { parseManuscript } from "./manuscript";
@@ -23,6 +24,13 @@ export async function exportIllustrations(book: Book): Promise<Record<string, Ex
       return [id, { data: new Uint8Array(data), type: "image/png", meta }] as const;
     }
     const image = await illustrationArtwork(book, id);
+    if (image.type === "image/webp") {
+      // Word/EPUB cannot reliably embed WebP. Convert once on the server.
+      const png = await sharp(image.data, { limitInputPixels: 24_000_000 })
+        .resize({ width: 1800, withoutEnlargement: true })
+        .png({ compressionLevel: 8 }).toBuffer();
+      return [id, { data: new Uint8Array(png), type: "image/png", meta }] as const;
+    }
     return [id, { ...image, meta }] as const;
   }));
   return Object.fromEntries(entries.filter((item): item is NonNullable<typeof item> => item !== null));
