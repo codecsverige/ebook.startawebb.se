@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
+import { VisualChapterEditor } from "./visual-chapter-editor";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
@@ -103,7 +104,7 @@ export function Editor({
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
   const [importError, setImportError] = useState("");
-  const [visualMode, setVisualMode] = useState(false);
+  const [visualMode, setVisualMode] = useState(true);
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
@@ -1360,6 +1361,14 @@ export function Editor({
                   >
                     {t.reading}
                   </button>
+                  {!read && <button type="button" className={visualMode ? "selected" : ""}
+                    onClick={()=>setVisualMode(true)}>
+                    {tr(locale,"Visual","محرر بصري","Visuell")}
+                  </button>}
+                  {!read && <button type="button" className={!visualMode ? "selected" : ""}
+                    onClick={()=>setVisualMode(false)}>
+                    {tr(locale,"Markdown","النص الأصلي","Källtext")}
+                  </button>}
                 </div>
                 {active && (
                   <button
@@ -1466,6 +1475,18 @@ export function Editor({
                   >
                     <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
+                ) : visualMode && active ? (
+                  <VisualChapterEditor key={active.id} chapterId={active.id}
+                    content={current.content} bookId={id} illustrations={draft.illustrations}
+                    disabled={disabled}
+                    onChange={content => change(b=>({...b,chapters:{
+                      ...b.chapters,[active.id]:{...b.chapters[active.id],content}
+                    }}))}
+                    onInsertImage={position=>{
+                      cursorRef.current=position;
+                      setImagePlacement("cursor");
+                      setShowIllustrations(true);
+                    }} />
                 ) : (
                   <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
                     <span className="sr-only">{t.content}</span>
