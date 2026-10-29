@@ -12,6 +12,7 @@ type Props = {
   disabled?: boolean;
   onChange: (value: string) => void;
   onInsertImage: (position: number) => void;
+  onSelection?: (text: string) => void;
 };
 
 function encodeBlock(block: ManuscriptBlock): string {
@@ -47,7 +48,7 @@ function inlineNodes(value: string): ReactNode {
         ? <em key={i}>{part.slice(1,-1)}</em> : part);
 }
 export function VisualChapterEditor({content, chapterId, illustrations, bookId, disabled=false,
-  onChange, onInsertImage}: Props) {
+  onChange, onInsertImage, onSelection}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
   const apply = (index: number, next: ManuscriptBlock[]) => {
@@ -58,7 +59,7 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   const insert = (index: number, type: "paragraph" | "heading" | "divider") => {
     if (disabled) return;
     const newBlock: ManuscriptBlock = type === "paragraph"
-      ? {type:"paragraph",text:" "}
+      ? {type:"paragraph",text:"New paragraph"}
       : type === "heading" ? {type:"heading",level:2,text:"New heading"} : {type:"divider"};
     const newBlocks = [...blocks.slice(0,index),newBlock,...blocks.slice(index)];
     const text = serializeVisualBlocks(newBlocks);
@@ -72,7 +73,9 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))} title="Insert image">+ ◩</button>
     <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")} title="Add divider">+ ✦</button>
   </div>;
-  return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}>
+  return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
+    onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
+    onKeyUp={()=>onSelection?.(window.getSelection()?.toString() || "")}>
     <p className="visual-hint">✦ Select and edit each paragraph directly. Changes save when leaving a block. Use + to insert content between paragraphs.</p>
     {menu(0)}
     {blocks.map((block,index) => {
