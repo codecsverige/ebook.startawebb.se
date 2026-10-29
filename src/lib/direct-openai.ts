@@ -36,13 +36,14 @@ export function classifyOpenAiHttpFailure(
 
 export function directFormat(operation: string) {
   const isChapter = operation.startsWith("chapter");
+  const isEdit = operation === "text_edit";
   const item = {
     type: "object",
     properties: { title: { type: "string" }, summary: { type: "string" } },
     required: ["title", "summary"],
     additionalProperties: false,
   };
-  const properties = isChapter
+  const properties = isEdit ? { replacement: { type: "string" } } : isChapter
     ? { content: { type: "string" }, summary: { type: "string" } }
     : {
         allowed: { type: "boolean" },
@@ -52,7 +53,7 @@ export function directFormat(operation: string) {
       };
   return {
     type: "json_schema",
-    name: isChapter ? "ebook_chapter" : "ebook_outline",
+    name: isEdit ? "ebook_text_edit" : isChapter ? "ebook_chapter" : "ebook_outline",
     strict: true,
     schema: {
       type: "object",
