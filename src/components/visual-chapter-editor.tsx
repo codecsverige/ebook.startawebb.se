@@ -193,12 +193,20 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
     onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
     onKeyUp={()=>onSelection?.(window.getSelection()?.toString() || "")}>
-    <p className="visual-hint">✦ {tr(locale,"Edit paragraphs directly. Use + between paragraphs to add elements.","عدّل الفقرات مباشرة، واضغط + بين الفقرات لإضافة العناصر.","Redigera direkt. Använd + mellan stycken för att lägga till innehåll.")}</p>
+    <p className="visual-hint">{tr(locale,"Tap an element to move or delete it. Use + to insert between elements.","المس أي عنصر لتحريكه أو حذفه. استخدم + للإضافة في الموضع المحدد.","Tryck på objekt för att flytta eller ta bort. Använd + för att infoga.")}</p>
     {menu(0)}
     {blocks.map((block,index) => {
       if (block.type === "illustration" || block.type === "divider" || block.type === "pagebreak")
-        return <div key={chapterId+"-"+index} className="visual-block-static">
-          <Markdown text={encodeBlock(block)} illustrations={illustrations} bookId={bookId}/>
+        return <div key={chapterId+"-"+index}
+          className={"visual-block-static visual-edit-block"+(selectedBlock===index?" is-selected":"")}
+          onClick={()=>setSelectedBlock(index)}>
+          <div className="visual-block-content"><Markdown text={encodeBlock(block)} illustrations={illustrations} bookId={bookId}/></div>
+          {controls(index,block)}
+          {block.type==="illustration" && illustrations?.[block.id] && onSaveImage && <details className="visual-image-details">
+            <summary>{tr(locale,"Image size and caption","حجم الصورة ووصفها","Bildstorlek och bildtext")}</summary>
+            <InlineImageSettings key={block.id+":"+illustrations[block.id].size+":"+illustrations[block.id].caption}
+              id={block.id} asset={illustrations[block.id]} locale={locale} disabled={disabled} onSave={onSaveImage}/>
+          </details>}
           {menu(index+1)}
         </div>;
       const editable = (tag: "h3" | "p" | "div", body: ReactNode, save: (text:string)=>void) => {
