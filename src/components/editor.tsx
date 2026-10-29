@@ -1604,7 +1604,7 @@ export function Editor({
                     <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
                 ) : visualMode && active ? (
-                  <VisualChapterEditor key={active.id} chapterId={active.id}
+                  <VisualChapterEditor key={active.id} chapterId={active.id} locale={locale}
                     content={current.content} bookId={id} illustrations={draft.illustrations}
                     disabled={disabled}
                     onChange={content => change(b=>({...b,chapters:{
