@@ -469,7 +469,7 @@ export class FirestoreStudio {
       if (!saved.exists) fail("not_found");
       const snapshot = saved.get("snapshot") as Book | undefined;
       if (!snapshot || snapshot.id !== id || snapshot.user_id !== uid ||
-          snapshot.chapter_count !== book.chapter_count)
+          !snapshot.outline?.length || snapshot.outline.length > 30)
         fail("invalid_input");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
@@ -479,6 +479,7 @@ export class FirestoreStudio {
         author: snapshot.author,
         language: snapshot.language,
         outline: structuredClone(snapshot.outline),
+        chapter_count: snapshot.outline.length,
         chapters: structuredClone(snapshot.chapters),
         cover_style: snapshot.cover_style,
         cover_direction: snapshot.cover_direction || "",
