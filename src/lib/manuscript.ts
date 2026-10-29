@@ -6,7 +6,9 @@ export type ManuscriptBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
   | { type: "ul"; items: string[] }
-  | { type: "ol"; items: string[] };
+  | { type: "ol"; items: string[] }
+  | { type: "illustration"; id: string }
+  | { type: "divider" };
 
 const heading = /^\s{0,3}(#{1,4})[ \t]+(.+)$/;
 const bullet = /^\s*[-*+][ \t]+(.+)$/;
@@ -18,6 +20,15 @@ export function parseManuscript(input: string): ManuscriptBlock[] {
   while (i < lines.length) {
     const value = lines[i].trim();
     if (!value) { i++; continue; }
+    const illustration = /^\[\[illustration:([0-9a-f-]{36})\]\]$/i.exec(value);
+    if (illustration) {
+      result.push({ type: "illustration", id: illustration[1].toLowerCase() });
+      i++; continue;
+    }
+    if (value === "***" || value === "⁂") {
+      result.push({ type: "divider" });
+      i++; continue;
+    }
     const h = heading.exec(lines[i]);
     if (h) {
       result.push({ type: "heading", level: h[1].length, text: h[2].trim() });
@@ -39,7 +50,9 @@ export function parseManuscript(input: string): ManuscriptBlock[] {
     }
     const paragraph: string[] = [];
     while (i < lines.length && lines[i].trim() &&
-      !heading.test(lines[i]) && !bullet.test(lines[i]) && !number.test(lines[i])) {
+      !heading.test(lines[i]) && !bullet.test(lines[i]) && !number.test(lines[i]) &&
+      !/^\[\[illustration:[0-9a-f-]{36}\]\]$/i.test(lines[i].trim()) &&
+      !["***", "⁂"].includes(lines[i].trim())) {
       paragraph.push(lines[i].trim());
       i++;
     }
