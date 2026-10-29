@@ -8,7 +8,10 @@ export type ManuscriptBlock =
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] }
   | { type: "illustration"; id: string }
-  | { type: "divider" };
+  | { type: "divider" }
+  | { type: "pagebreak" }
+  | { type: "quote"; text: string }
+  | { type: "note"; text: string };
 
 const heading = /^\s{0,3}(#{1,4})[ \t]+(.+)$/;
 const bullet = /^\s*[-*+][ \t]+(.+)$/;
@@ -23,6 +26,18 @@ export function parseManuscript(input: string): ManuscriptBlock[] {
     const illustration = /^\[\[illustration:([0-9a-f-]{36})\]\]$/i.exec(value);
     if (illustration) {
       result.push({ type: "illustration", id: illustration[1].toLowerCase() });
+      i++; continue;
+    }
+    if (value === "[[pagebreak]]") {
+      result.push({ type: "pagebreak" });
+      i++; continue;
+    }
+    if (value.startsWith("> [!NOTE] ")) {
+      result.push({ type: "note", text: value.slice(10) });
+      i++; continue;
+    }
+    if (value.startsWith("> ")) {
+      result.push({ type: "quote", text: value.slice(2) });
       i++; continue;
     }
     if (value === "***" || value === "⁂") {
@@ -52,7 +67,8 @@ export function parseManuscript(input: string): ManuscriptBlock[] {
     while (i < lines.length && lines[i].trim() &&
       !heading.test(lines[i]) && !bullet.test(lines[i]) && !number.test(lines[i]) &&
       !/^\[\[illustration:[0-9a-f-]{36}\]\]$/i.test(lines[i].trim()) &&
-      !["***", "⁂"].includes(lines[i].trim())) {
+      !["***", "⁂", "[[pagebreak]]"].includes(lines[i].trim()) &&
+      !lines[i].trim().startsWith("> ")) {
       paragraph.push(lines[i].trim());
       i++;
     }
