@@ -528,6 +528,47 @@ export class FirestoreStudio {
       return bookOnly(next);
     });
   }
+  async editIllustration(
+    uid: string, bookId: string, revision: number, assetId: string,
+    change: { size?: "small" | "medium" | "full"; caption?: string } | null,
+  ): Promise<Book> {
+    if (!uuid(bookId) || !uuid(assetId)) fail("invalid_input");
+    return this.db.runTransaction(async tx => {
+      const ref = this.books().doc(bookId);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      const old = book.illustrations?.[assetId];
+      if (!old) fail("not_found");
+      const versions = await this.versionPlan(tx, ref);
+      const next = structuredClone(book);
+      if (change) {
+        next.illustrations = { ...next.illustrations, [assetId]: {
+          ...old, size: change.size || old.size,
+          caption: change.caption ?? old.caption,
+        }};
+      } else {
+        // Only remove a reference from the current book; the image file
+        // remains for previous revisions, until the entire book is deleted.
+        const illustrations = { ...next.illustrations };
+        delete illustrations[assetId];
+        next.illustrations = illustrations;
+        const token = illustrationMarker(assetId);
+        for (const chapter of Object.values(next.chapters)) {
+          chapter.content = chapter.content.split(token).join("")
+            .replace(/\n{3,}/g, "\n\n").trim();
+        }
+      }
+      next.revision++;
+      next.updated_at = new Date().toISOString();
+      assertBookSize(bookOnly(next));
+      this.writeVersion(tx, ref, book, versions);
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
   async takeRate(key: string, limit: number, seconds = 3600) {
     const now = Date.now();
     const ref = this.root
