@@ -13,7 +13,7 @@ type Props = {
   bookId: string;
   disabled?: boolean;
   onChange: (value: string) => void;
-  onInsertImage: (position: number) => void;
+  onInsertImage: (position: number, canonicalContent: string) => void;
   onSelection?: (text: string) => void;
 };
 
@@ -56,6 +56,7 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   onChange, onInsertImage, onSelection}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
+  const [openInsert, setOpenInsert] = useState<number | null>(null);
   const apply = (index: number, next: ManuscriptBlock[]) => {
     const modified = [...blocks.slice(0,index), ...next, ...blocks.slice(index+1)];
     const text = serializeVisualBlocks(modified);
@@ -78,19 +79,27 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   const at = (index: number) => serializeVisualBlocks(blocks.slice(0,index)).length +
     (index > 0 ? 2 : 0);
   const menu = (index: number) => <div className="visual-insert-bar" key={"plus-"+index}>
-    <details className="visual-add-menu">
-      <summary>+ {tr(locale,"Add","إضافة","Lägg till")}</summary>
-      <div className="visual-add-options">
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"paragraph")}>{tr(locale,"Text","نص","Text")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"heading")}>{tr(locale,"Heading","عنوان","Rubrik")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"quote")}>{tr(locale,"Quote","اقتباس","Citat")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"note")}>{tr(locale,"Note box","مربع ملاحظة","Anteckningsruta")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"ul")}>{tr(locale,"List","قائمة","Lista")}</button>
-        <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))}>{tr(locale,"Image / logo","صورة / شعار","Bild / logotyp")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")}>{tr(locale,"Divider","فاصل","Avdelare")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"pagebreak")}>{tr(locale,"Print page break","فاصل صفحة للطباعة","Sidbrytning")}</button>
-      </div>
-    </details>
+    <button type="button" className="visual-add-trigger" aria-expanded={openInsert===index}
+      disabled={disabled} onClick={()=>setOpenInsert(openInsert===index?null:index)}>
+      + {tr(locale,"Add","إضافة","Lägg till")}
+    </button>
+    {openInsert===index && <div className="visual-add-options" role="group"
+      aria-label={tr(locale,"Insert in this exact position","إضافة في هذا المكان تحديدًا","Infoga på vald plats")}>
+      {([
+        ["paragraph",tr(locale,"Text","نص","Text")],
+        ["heading",tr(locale,"Heading","عنوان","Rubrik")],
+        ["ul",tr(locale,"List","قائمة","Lista")],
+        ["quote",tr(locale,"Quote","اقتباس","Citat")],
+        ["note",tr(locale,"Note","ملاحظة","Anteckning")],
+        ["divider",tr(locale,"Divider","فاصل زخرفي","Avdelare")],
+        ["pagebreak",tr(locale,"Page break","فاصل صفحة","Sidbrytning")]
+      ] as const).map(([kind,label])=><button key={kind} type="button"
+        disabled={disabled} onClick={()=>{insert(index,kind);setOpenInsert(null)}}>{label}</button>)}
+      <button type="button" disabled={disabled} onClick={()=>{
+        onInsertImage(at(index),serializeVisualBlocks(blocks));
+        setOpenInsert(null);
+      }}>{tr(locale,"Image or logo","صورة أو شعار","Bild eller logotyp")}</button>
+    </div>}
   </div>;
   return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
     onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
