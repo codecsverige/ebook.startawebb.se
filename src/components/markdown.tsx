@@ -17,6 +17,12 @@ export function Markdown({ text, illustrations, bookId }: {
   return (
     <div className="manuscript">
       {parseManuscript(text).map((block, i) => {
+        if (block.type === "pagebreak")
+          return <div key={i} className="page-break" aria-label="Page break"><span>✂</span></div>;
+        if (block.type === "quote")
+          return <blockquote key={i} className="book-quote">{inline(block.text)}</blockquote>;
+        if (block.type === "note")
+          return <aside key={i} className="book-note" role="note">{inline(block.text)}</aside>;
         if (block.type === "divider")
           return <div key={i} className="scene-divider" aria-hidden="true">✦ &nbsp; ✦ &nbsp; ✦</div>;
         if (block.type === "illustration") {
