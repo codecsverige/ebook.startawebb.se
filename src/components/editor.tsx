@@ -23,6 +23,8 @@ import {
   List as ListIcon,
   Maximize2,
   Minimize2,
+  ImagePlus,
+  SeparatorHorizontal,
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
@@ -99,6 +101,12 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [showIllustrations, setShowIllustrations] = useState(false);
+  const [imageCaption, setImageCaption] = useState("");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageSize, setImageSize] = useState<"small" | "medium" | "full">("medium");
+  const [imagePlacement, setImagePlacement] = useState<"cursor" | "start" | "end">("cursor");
+  const cursorRef = useRef(0);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [pending, setPending] = useState("");
@@ -289,6 +297,62 @@ export function Editor({
     dirtyRef.current = true;
     setDirty(true);
   }
+  const imagePosition = (text: string) => imagePlacement === "start" ? 0 :
+    imagePlacement === "end" ? text.length : Math.min(cursorRef.current, text.length);
+  function addDivider() {
+    if (!active || !current || disabled) return;
+    const pos = imagePosition(current.content);
+    change(b => {
+      const ch = b.chapters[active.id];
+      const content = ch.content.slice(0, pos) + "\n\n***\n\n" + ch.content.slice(pos);
+      return content.length <= 30000 ? { ...b, chapters: {
+        ...b.chapters, [active.id]: { ...ch, content },
+      }} : b;
+    });
+  }
+  async function insertLibrary(preset: "mountain" | "botanical" | "stars" | "waves") {
+    if (!draft || !active || !current || disabled) return;
+    const position = imagePosition(current.content);
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const d = await request<{ book: BookWithCover }>(`/api/books/${id}/illustrations`, {
+        method: "POST", body: JSON.stringify({
+          revision: draft.revision + (wasDirty ? 1 : 0),
+          chapter_id: active.id, position, preset,
+          size: imageSize, caption: imageCaption,
+        }),
+      });
+      setBook(d.book); setDraft(d.book);
+      dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
+    } catch (e) { setError(codeOf(e)); }
+    finally { setPending(""); }
+  }
+  async function uploadIllustration(file: File) {
+    if (!draft || !active || !current || disabled) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+        file.size > 3_000_000) { setError("invalid_input"); return; }
+    const position = imagePosition(current.content);
+    const wasDirty = dirtyRef.current;
+    if (wasDirty && !(await save())) return;
+    setPending("illustration"); setError("");
+    try {
+      const params = new URLSearchParams({
+        revision: String(draft.revision + (wasDirty ? 1 : 0)),
+        chapter_id: active.id, position: String(position),
+        size: imageSize, caption: imageCaption,
+      });
+      const response = await fetch(`/api/books/${id}/illustrations/upload?${params}`, {
+        method: "POST", headers: { "Content-Type": file.type }, body: file,
+      });
+      const payload = await response.json().catch(() => ({ error: "service_error" }));
+      if (!response.ok) throw new Error(payload.error || "service_error");
+      setBook(payload.book); setDraft(payload.book);
+      dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
+    } catch (e) { setError(e instanceof Error ? e.message : "service_error"); }
+    finally { setPending(""); }
+  }
   function formatSelection(kind: "bold" | "heading" | "list") {
     const editor = chapterEditorRef.current;
     const selectedChapter = draft?.outline.find((item) => item.id === chapterId)
@@ -392,6 +456,11 @@ export function Editor({
       !window.confirm(t.regenerateConfirm)
     )
       return;
+    if (kind === "illustration" && (!chapter || !draft.chapters[chapter] || imagePrompt.trim().length < 10)) {
+      setError("invalid_input"); return;
+    }
+    const imageInsertPosition = kind === "illustration" && chapter ?
+      imagePosition(draft.chapters[chapter].content) : 0;
     if (dirtyRef.current && !(await save())) return;
     // A lost HTTP response must not trigger a second (billable) AI job.
     // Reuse the same request ID on uncertain network errors, even after reload.
@@ -410,6 +479,10 @@ export function Editor({
           kind,
           chapter_id: chapter,
           request_id: requestId,
+          ...(kind === "illustration" ? {
+            image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
+            image_position: imageInsertPosition, image_size: imageSize,
+          } : {}),
         }),
       });
       try { sessionStorage.removeItem(requestKey); } catch {}
@@ -497,8 +570,8 @@ export function Editor({
       setPending("");
     }
   }
-  async function decideCoverSuggestion(accept: boolean) {
-    if (!book?.cover_candidate_path || disabled) return;
+  async function decideCoverSuggestion(accept: boolean, side: "front" | "back" = "front") {
+    if (!(side === "back" ? book?.back_cover_candidate_path : book?.cover_candidate_path) || disabled) return;
     let revision = book.revision;
     if (dirtyRef.current) {
       if (!(await save())) return;
@@ -509,7 +582,7 @@ export function Editor({
     try {
       const { book: updated } = await request<{ book: BookWithCover }>(
         `/api/books/${id}/cover`,
-        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision }) },
+        { method: "POST", body: JSON.stringify({ action: accept ? "accept" : "reject", revision, side }) },
       );
       setBook(updated);
       setDraft(updated);
@@ -1185,7 +1258,7 @@ export function Editor({
                     dir={draft.language === "ar" ? "rtl" : "ltr"}
                     lang={draft.language}
                   >
-                    <Markdown text={current.content} />
+                    <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
                   </div>
                 ) : (
                   <label className={fullscreenEditor ? "chapter-edit-wrap is-fullscreen" : "chapter-edit-wrap"}>
@@ -1206,7 +1279,11 @@ export function Editor({
                       value={current.content}
                       maxLength={30000}
                       disabled={disabled}
+                      onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onKeyUp={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart; }}
                       onChange={(e) => {
+                        cursorRef.current = e.currentTarget.selectionStart;
                         if (active)
                           change((b) => ({
                             ...b,
@@ -1582,7 +1659,7 @@ export function Editor({
                     </span>
                     <h2>{c.title}</h2>
                     {draft.chapters[c.id] ? (
-                      <Markdown text={draft.chapters[c.id].content} />
+                      <Markdown text={draft.chapters[c.id].content} illustrations={draft.illustrations} bookId={id} />
                     ) : (
                       <p className="muted">{t.chapterEmpty}</p>
                     )}
