@@ -27,9 +27,9 @@ const base={
 };
 test("one to thirty authored chapters are valid, but never 31",()=>{
   assert.equal(editBookSchema.safeParse(base).success,true);
-  const many=Array.from({length:30},(_,i)=>({...sample.outline[0],id:(
+  const many=[sample.outline[0],...Array.from({length:29},(_,i)=>({...sample.outline[0],id:(
     (i+1).toString(16).padStart(8,"0")+"-3333-4333-8333-333333333333"
-  )}));
+  )}))];
   assert.equal(editBookSchema.safeParse({...base,outline:many}).success,true);
   assert.equal(editBookSchema.safeParse({...base,outline:[...many,many[0]]}).success,false);
 });
