@@ -104,6 +104,8 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
+  const [toolPanel, setToolPanel] = useState<"add" | "ai">("add");
+  const [selectedCount, setSelectedCount] = useState(0);
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
   const [readerMode, setReaderMode] = useState(true);
@@ -1020,6 +1022,7 @@ export function Editor({
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
+            <div className="studio-journey-first"><span className="tab-number">01</span><Check size={15}/>{tr(locale, "Idea and audience", "الفكرة والجمهور", "Idé och målgrupp")}</div>
             {(
               [
                 { id: "outline", icon: ListTree },
@@ -1035,13 +1038,21 @@ export function Editor({
                 disabled={!draft.outline.length && tabId !== "outline"}
                 aria-current={tab === tabId ? "page" : undefined}
               >
-                <span className="tab-number">0{i + 1}</span>
+                <span className="tab-number">0{i + 2}</span>
                 <Icon size={17} />
                 <span>{t[tabId]}</span>
                 <ChevronRight className="tab-chevron" size={15} />
               </button>
             ))}
           </nav>
+          {draft.outline.length > 0 && <div className="studio-chapter-nav">
+            <strong>{tr(locale,"Chapters","الفصول","Kapitel")}</strong>
+            <div className="studio-chapter-links">{draft.outline.map((c,i)=><button type="button" key={c.id}
+              className={tab==="write" && active?.id===c.id?"active":""}
+              onClick={()=>{setChapterId(c.id);setTab("write");}}>
+              <span>{i+1}</span><span className="studio-chapter-label">{c.title}</span>{draft.chapters[c.id]&&<Check size={14}/>}
+            </button>)}</div>
+          </div>}
           <div className="sidebar-stats">
             <BookOpen size={18} />
             <div>
@@ -1068,6 +1079,17 @@ export function Editor({
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
+          <nav className="studio-progress-steps" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
+            {(["outline","write","design","preview"] as const).map((step,i)=><button type="button" key={step}
+              className={tab===step?"active":""}
+              aria-current={tab===step?"step":undefined}
+              disabled={!draft.outline.length&&step!=="outline"} onClick={()=>setTab(step)}>
+              <span>{i+2}</span>{tr(locale,...({
+                outline:["Plan","التخطيط","Planera"],write:["Write","الكتابة","Skriv"],
+                design:["Design","التصميم","Design"],preview:["Review","المراجعة","Granska"],
+              } as const)[step])}
+            </button>)}
+          </nav>
           {!online && (
             <div className="notice offline-warning" role="status">
               {tr(locale,
@@ -1416,6 +1438,10 @@ export function Editor({
                   ))}
                 </select>
               </label>
+              <p className="studio-writing-hint">{tr(locale,
+                "Write directly in your book. Select text for AI; use + to insert images, logos and blocks.",
+                "اكتب مباشرة داخل كتابك. حدّد النص ليظهر تصحيح AI، واستعمل + لإضافة الصور والشعارات والعناصر.",
+                "Skriv direkt i boken. Markera text för AI och använd + för bilder, logotyper och block.")}</p>
               <div className="chapter-author-actions">
                  <button type="button" className="button button-outline button-small"
                    disabled={disabled || draft.outline.length >= 30} onClick={() => addChapter(active?.id)}>
@@ -1434,20 +1460,6 @@ export function Editor({
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
-               {current && book.unlocked && config.ai && (
-                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
-                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
-                   {([
-                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
-                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
-                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
-                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
-                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
-                   ] as const).map(([action,label])=><button type="button" key={action}
-                     disabled={disabled || !!book.text_edit_candidate}
-                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
-                 </div>
-               )}
                {book.text_edit_candidate && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -1598,7 +1610,7 @@ export function Editor({
                     onChange={content => change(b=>({...b,chapters:{
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
-                    onSelection={value=>{visualSelectedRef.current=value;}}
+                    onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);if(value.trim().length>=4)setToolPanel("ai");}}
                     onInsertImage={position=>{
                       cursorRef.current=position;
                       setImagePlacement("cursor");
@@ -1625,7 +1637,7 @@ export function Editor({
                       disabled={disabled}
                       onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
                       onKeyUp={e => { cursorRef.current = e.currentTarget.selectionStart; }}
-                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart; }}
+                      onSelect={e => { cursorRef.current = e.currentTarget.selectionStart;setSelectedCount(e.currentTarget.selectionEnd-e.currentTarget.selectionStart); }}
                       onChange={(e) => {
                         cursorRef.current = e.currentTarget.selectionStart;
                         if (active)
@@ -2127,6 +2139,42 @@ export function Editor({
             </section>
           )}
         </div>
+        {tab==="write" && draft.outline.length>0 && <aside className="studio-tool-rail" aria-label={tr(locale,"Book tools","أدوات الكتاب","Bokverktyg")}>
+          <div className="studio-rail-heading"><Sparkles size={18}/><h3>{tr(locale,"Your tools","أدواتك","Verktyg")}</h3></div>
+          <p className="muted">{tr(locale,"Only the tools you need, when you need them.","تظهر الأدوات المناسبة وقت الحاجة فقط.","Bara verktygen du behöver, när du behöver dem.")}</p>
+          <div className="studio-rail-switch">
+            <button type="button" className={toolPanel==="add"?"active":""} onClick={()=>setToolPanel("add")}><Plus size={16}/>{tr(locale,"Add","إضافة","Lägg till")}</button>
+            <button type="button" className={toolPanel==="ai"?"active":""} onClick={()=>setToolPanel("ai")}><Sparkles size={16}/>{tr(locale,"AI editor","تصحيح AI","AI-redigering")}</button>
+          </div>
+          {toolPanel==="add" && <div className="studio-rail-body">
+            <p className="muted">{tr(locale,"Use + between paragraphs for text, headings, quotes and dividers.","استعمل + بين الفقرات لإضافة النص والعناوين والاقتباسات والفواصل.","Använd + mellan stycken för text, rubriker, citat och avdelare.")}</p>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>setShowIllustrations(true)}><ImagePlus size={17}/>{tr(locale,"Image or logo","صورة أو شعار","Bild eller logotyp")}</button>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={addDivider}><SeparatorHorizontal size={17}/>{tr(locale,"Scene divider","فاصل زخرفي","Avdelare")}</button>
+            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>{setVisualMode(true);setRead(false);}}><FileText size={17}/>{tr(locale,"Visual editor","المحرر البصري","Visuell redigerare")}</button>
+          </div>}
+          {toolPanel==="ai" && <div className="studio-rail-body">
+            <p className="muted">{selectedCount>=4?
+              tr(locale,"Choose an action. The change requires approval.","اختر التصحيح، ولن يتغير النص إلا بموافقتك.","Välj en åtgärd. Du godkänner alltid ändringen."):
+              tr(locale,"Select a sentence or paragraph first.","حدّد جملة أو فقرة أولًا.","Markera först en mening eller ett stycke.")}</p>
+            {selectedCount>=4 && <>
+               {current && book.unlocked && config.ai && (
+                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
+                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
+                   {([
+                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
+                   ] as const).map(([action,label])=><button type="button" key={action}
+                     disabled={disabled || !!book.text_edit_candidate}
+                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+                 </div>
+               )}
+
+            </>}
+          </div>}
+        </aside>}
       </div>
       {modal && (
         <Dialog
