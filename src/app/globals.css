@@ -3174,6 +3174,7 @@ html[dir="rtl"] .muted {
   background: var(--cover-bg);
   color: var(--cover-ink);
 }
+.book-cover.cover-back.has-artwork { color: #fffdf6; }
 .cover-back-content {
   position: relative;
   z-index: 2;
