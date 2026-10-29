@@ -18,7 +18,7 @@ export function BookCover({
 }) {
   return (
     <div
-      className={`book-cover cover-${style} ${small ? "cover-small" : ""}`}
+      className={`book-cover cover-${style} ${small ? "cover-small" : ""} ${image ? "has-artwork" : ""}`}
       dir={language === "ar" ? "rtl" : "ltr"}
       lang={language}
     >
@@ -40,6 +40,33 @@ export function BookCover({
           ✳
         </span>
       </div>
+    </div>
+  );
+}
+
+/** Back cover uses the exact same palette and dimensions as the front cover.
+ * It is part of the book, not a claimed print-ready wrap/spine.
+ */
+export function BookBackCover({
+  style = "cobalt", language = "en", title, author = "", blurb = "", authorBio = "",
+}: {
+  style?: string; language?: string; title: string; author?: string;
+  blurb?: string; authorBio?: string;
+}) {
+  return (
+    <div className={`book-cover cover-${style} cover-back`} dir={language === "ar" ? "rtl" : "ltr"} lang={language}>
+      <div className="cover-grain" />
+      <div className="cover-orbit orbit-one" />
+      <div className="cover-back-content">
+        <span className="cover-back-kicker">✦</span>
+        <h2>{title}</h2>
+        <p className="cover-back-blurb">{blurb}</p>
+        {authorBio && <div className="cover-back-author">
+          <strong>{author}</strong>
+          <p>{authorBio}</p>
+        </div>}
+      </div>
+      <div className="cover-bottom"><span>{author || "\u00a0"}</span><span className="cover-star" aria-hidden="true">✳</span></div>
     </div>
   );
 }
