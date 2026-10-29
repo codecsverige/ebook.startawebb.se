@@ -104,7 +104,6 @@ export function Editor({
   const [showAllCoverTemplates, setShowAllCoverTemplates] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [read, setRead] = useState(false);
-  const [toolPanel, setToolPanel] = useState<"add" | "ai">("add");
   const [selectedCount, setSelectedCount] = useState(0);
   const [aiInstruction, setAiInstruction] = useState("");
   const [importError, setImportError] = useState("");
@@ -1440,7 +1439,7 @@ export function Editor({
                 <span className="sr-only">{t.chapters}</span>
                 <select
                   value={active?.id || ""}
-                  onChange={(e) => setChapterId(e.target.value)}
+                  onChange={(e) => {setChapterId(e.target.value);visualSelectedRef.current="";setSelectedCount(0);}}
                 >
                   {draft.outline.map((c, i) => (
                     <option key={c.id} value={c.id}>
@@ -1453,7 +1452,9 @@ export function Editor({
                 "Write directly in your book. Select text for AI; use + to insert images, logos and blocks.",
                 "اكتب مباشرة داخل كتابك. حدّد النص ليظهر تصحيح AI، واستعمل + لإضافة الصور والشعارات والعناصر.",
                 "Skriv direkt i boken. Markera text för AI och använd + för bilder, logotyper och block.")}</p>
-              <div className="chapter-author-actions">
+              <details className="studio-chapter-management">
+                <summary>{tr(locale,"Chapter options: new, split, merge, import","خيارات الفصل: إضافة وتقسيم ودمج واستيراد","Kapitelalternativ: nytt, dela, slå ihop, importera")}</summary>
+                <div className="chapter-author-actions">
                  <button type="button" className="button button-outline button-small"
                    disabled={disabled || draft.outline.length >= 30} onClick={() => addChapter(active?.id)}>
                    <Plus size={15}/>{tr(locale,"New chapter","فصل جديد","Nytt kapitel")}
@@ -1471,6 +1472,7 @@ export function Editor({
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
+              </details>
                {book.text_edit_candidate && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -1487,27 +1489,17 @@ export function Editor({
                  </section>
                )}
                <div className="chapter-toolbar">
-                <div className="segmented">
-                  <button
-                    className={!read ? "selected" : ""}
-                    onClick={() => setRead(false)}
-                  >
-                    {t.editing}
+                <div className="segmented studio-edit-modes" role="group" aria-label={tr(locale,"Editing mode","وضع التحرير","Redigeringsläge")}>
+                  <button type="button" className={!read && visualMode ? "selected" : ""}
+                    onClick={()=>{setRead(false);setVisualMode(true);}}>
+                    {tr(locale,"Write in book","تحرير الكتاب","Redigera bok")}
                   </button>
-                  <button
-                    className={read ? "selected" : ""}
-                    onClick={() => setRead(true)}
-                  >
-                    {t.reading}
+                  <button type="button" className={read ? "selected" : ""}
+                    onClick={()=>setRead(true)}>{tr(locale,"Read","قراءة","Läs")}</button>
+                  <button type="button" className={!read && !visualMode ? "selected" : ""}
+                    onClick={()=>{setRead(false);setVisualMode(false);}}>
+                    {tr(locale,"Advanced text","نص متقدم","Avancerad text")}
                   </button>
-                  {!read && <button type="button" className={visualMode ? "selected" : ""}
-                    onClick={()=>setVisualMode(true)}>
-                    {tr(locale,"Visual","محرر بصري","Visuell")}
-                  </button>}
-                  {!read && <button type="button" className={!visualMode ? "selected" : ""}
-                    onClick={()=>setVisualMode(false)}>
-                    {tr(locale,"Markdown","النص الأصلي","Källtext")}
-                  </button>}
                 </div>
                 {active && (
                   <button
@@ -1534,22 +1526,16 @@ export function Editor({
                   </button>
                 )}
               </div>
-              {current && (
-                <div className="illustration-toolbar">
-                  <button type="button" className="button button-outline button-small"
-                    disabled={disabled || !book.unlocked}
-                    onClick={() => setShowIllustrations(value => !value)}>
-                    <ImagePlus size={17} /> {tr(locale, "Insert image", "إضافة صورة داخل الفصل", "Infoga bild")}
-                  </button>
-                  <button type="button" className="button button-outline button-small"
-                    disabled={disabled} onClick={addDivider}>
-                    <SeparatorHorizontal size={17} /> {tr(locale, "Scene divider", "فاصل زخرفي صغير", "Scenavdelare")}
-                  </button>
-                </div>
-              )}
               {current && showIllustrations && (
-                <div className="illustration-inserter" dir={locale === "ar" ? "rtl" : "ltr"}>
-                  <strong>{tr(locale, "Illustrations inside your book", "صور ورسومات داخل كتابك", "Illustrationer i din bok")}</strong>
+                <Dialog title={tr(locale,"Insert image or logo","إدراج صورة أو شعار","Infoga bild eller logotyp")}
+                  closeLabel={tr(locale,"Close","إغلاق","Stäng")}
+                  onClose={()=>setShowIllustrations(false)}>
+                <div className="illustration-inserter studio-image-dialog"
+                  dir={locale === "ar" ? "rtl" : "ltr"}>
+                  <p className="studio-image-location">{tr(locale,
+                    "You chose a specific point in your chapter. The image will be inserted there.",
+                    "حددت موضع الصورة داخل الفصل. ستُضاف الصورة هنا بالضبط.",
+                    "Du valde en plats i kapitlet. Bilden läggs in just där.")}</p>
                   <p className="muted">{tr(locale, "Place images between paragraphs or at chapter boundaries. Pages adapt to each reader's screen.", "أدرج الصور بين الفقرات أو في بداية الفصل أو نهايته. صفحات الكتاب تتغير بحسب شاشة القارئ.", "Lägg till bilder mellan stycken eller vid kapitelgränser. Sidor anpassas efter skärmen.")}</p>
                   <div className="illustration-fields">
                     <label>{tr(locale, "Insert at", "موضع الصورة", "Placering")}
@@ -1585,11 +1571,13 @@ export function Editor({
                   </div>
                   <label className="cover-upload-label">
                     {tr(locale, "Upload an image (PNG, JPG, WebP · max 3 MB)", "ارفع صورة من جهازك (PNG أو JPG أو WebP · حتى 3 ميغابايت)", "Ladda upp bild (PNG, JPG, WebP · max 3 MB)")}
+                    <span className="studio-select-file"><ImagePlus size={16}/>{tr(locale,"Choose an image","اختيار صورة من الهاتف","Välj en bild")}</span>
                     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
                       onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
                   </label>
                   <label className="cover-upload-label">
                     {tr(locale,"Or upload a company logo (transparent PNG recommended)","أو ارفع شعار الشركة (يُفضّل PNG شفاف)","Eller ladda upp företagets logotyp (helst transparent PNG)")}
+                    <span className="studio-select-file"><ImagePlus size={16}/>{tr(locale,"Choose a logo","اختيار شعار","Välj logotyp")}</span>
                     <input type="file" accept="image/png,image/jpeg,image/webp"
                       disabled={disabled || !book.unlocked}
                       onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void uploadIllustration(file,true);}}/>
@@ -1613,7 +1601,38 @@ export function Editor({
                     <Sparkles size={17} /> {tr(locale, "Generate and insert AI image", "توليد الصورة وإدراجها في الفصل", "Skapa och infoga AI-bild")}
                   </button>
                 </div>
+                </Dialog>
               )}
+              {current && !read && selectedCount>=4 && <div className="studio-inline-ai" role="group"
+                aria-label={tr(locale,"AI editing for the selected text","تحرير النص المحدد بالذكاء الاصطناعي","AI för markerad text")}>
+                <div className="studio-inline-ai-heading"><Sparkles size={17}/>
+                  <strong>{tr(locale,"Selected text","النص المحدد","Markerad text")}</strong>
+                  <span>{selectedCount} {tr(locale,"characters","حرف","tecken")}</span>
+                </div>
+                <p>{tr(locale,"Choose one action, then review and approve the suggestion. Your original is kept.",
+                  "اختر إجراءً ثم راجع الاقتراح واعتمده. لن يُستبدل النص تلقائيًا.",
+                  "Välj en åtgärd och granska förslaget innan du godkänner.")}</p>
+                <div className="studio-inline-ai-actions">
+                  {([
+                    ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                    ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                    ["simplify",tr(locale,"Simplify","تبسيط","Förenkla")],
+                    ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                    ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                    ["tone",tr(locale,"Change style","تغيير الأسلوب","Ändra stil")],
+                  ] as const).map(([action,label])=><button type="button" key={action}
+                    disabled={disabled||!config.ai||!book.unlocked||!!book.text_edit_candidate||selectedCount>1800}
+                    onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+                </div>
+                <details className="studio-custom-ai">
+                  <summary>{tr(locale,"Other instruction","تعليمات أخرى","Egen instruktion")}</summary>
+                  <textarea value={aiInstruction} rows={2} maxLength={500} onChange={e=>setAiInstruction(e.target.value)}
+                    placeholder={tr(locale,"What should AI improve?","ماذا تريد من AI أن يعدّل؟","Vad ska AI ändra?")}/>
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled||!book.unlocked||!config.ai||selectedCount>1800||aiInstruction.trim().length<5}
+                    onClick={()=>proposeTextEdit("custom")}>{tr(locale,"Get a suggestion","اقتراح تعديل","Få förslag")}</button>
+                </details>
+              </div>}
               <h3
                 className="current-chapter-title"
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
@@ -1636,9 +1655,11 @@ export function Editor({
                     onChange={content => change(b=>({...b,chapters:{
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
-                    onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);if(value.trim().length>=4)setToolPanel("ai");}}
+                    onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);}}
                     onInsertImage={position=>{
                       cursorRef.current=position;
+                      visualSelectedRef.current="";
+                      setSelectedCount(0);
                       setImagePlacement("cursor");
                       setShowIllustrations(true);
                     }} />
@@ -1981,6 +2002,7 @@ export function Editor({
                   </button>
                   <label className="cover-upload-label">
                     <span>{tr(locale, "Or upload your own cover image (PNG, JPG or WebP, max 3 MB)", "أو ارفع صورة غلاف من هاتفك (PNG أو JPG أو WebP، بحد 3 ميغابايت)", "Eller ladda upp en egen omslagsbild (PNG, JPG eller WebP, max 3 MB)")}</span>
+                    <span className="studio-select-file"><ImagePlus size={16}/>{tr(locale,"Choose cover image","اختيار صورة الغلاف","Välj omslagsbild")}</span>
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
@@ -2197,55 +2219,7 @@ export function Editor({
             </button>
           </div>}
         </div>
-        {tab==="write" && draft.outline.length>0 && <aside className="studio-tool-rail" aria-label={tr(locale,"Book tools","أدوات الكتاب","Bokverktyg")}>
-          <div className="studio-rail-heading"><Sparkles size={18}/><h3>{tr(locale,"Your tools","أدواتك","Verktyg")}</h3></div>
-          <p className="muted">{tr(locale,"Only the tools you need, when you need them.","تظهر الأدوات المناسبة وقت الحاجة فقط.","Bara verktygen du behöver, när du behöver dem.")}</p>
-          <div className="studio-rail-switch">
-            <button type="button" className={toolPanel==="add"?"active":""} onClick={()=>setToolPanel("add")}><Plus size={16}/>{tr(locale,"Add","إضافة","Lägg till")}</button>
-            <button type="button" className={toolPanel==="ai"?"active":""} onClick={()=>setToolPanel("ai")}><Sparkles size={16}/>{tr(locale,"AI editor","تصحيح AI","AI-redigering")}</button>
-          </div>
-          {toolPanel==="add" && <div className="studio-rail-body">
-            <p className="muted">{tr(locale,"Use + between paragraphs for text, headings, quotes and dividers.","استعمل + بين الفقرات لإضافة النص والعناوين والاقتباسات والفواصل.","Använd + mellan stycken för text, rubriker, citat och avdelare.")}</p>
-            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>setShowIllustrations(true)}><ImagePlus size={17}/>{tr(locale,"Image or logo","صورة أو شعار","Bild eller logotyp")}</button>
-            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={addDivider}><SeparatorHorizontal size={17}/>{tr(locale,"Scene divider","فاصل زخرفي","Avdelare")}</button>
-            <button className="studio-rail-action" type="button" disabled={disabled||!current} onClick={()=>{setVisualMode(true);setRead(false);}}><FileText size={17}/>{tr(locale,"Visual editor","المحرر البصري","Visuell redigerare")}</button>
-          </div>}
-          {toolPanel==="ai" && <div className="studio-rail-body">
-            <p className="muted">{selectedCount>=4?
-              tr(locale,"Choose an action. The change requires approval.","اختر التصحيح، ولن يتغير النص إلا بموافقتك.","Välj en åtgärd. Du godkänner alltid ändringen."):
-              tr(locale,"Select a sentence or paragraph first.","حدّد جملة أو فقرة أولًا.","Markera först en mening eller ett stycke.")}</p>
-            {selectedCount>=4 && <>
-               {current && book.unlocked && config.ai && (
-                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
-                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
-                   {([
-                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
-                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
-                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
-                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
-                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
-                     ["simplify",tr(locale,"Simplify","تبسيط","Förenkla")],
-                   ] as const).map(([action,label])=><button type="button" key={action}
-                     disabled={disabled || !!book.text_edit_candidate}
-                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
-                 </div>
-               )}
-               {current && book.unlocked && config.ai && <div className="studio-custom-ai">
-                 <label>{tr(locale,"Special instructions","تعليمات خاصة","Egna instruktioner")}
-                   <textarea rows={3} maxLength={500} value={aiInstruction}
-                     placeholder={tr(locale,"For example: make the tone warmer without changing facts.","مثال: اجعل الأسلوب أبسط دون تغيير الحقائق.","Exempel: förenkla tonen utan att ändra fakta.")}
-                     onChange={e=>setAiInstruction(e.target.value)} disabled={disabled}/>
-                 </label>
-                 <button className="button button-outline button-small" type="button"
-                   disabled={disabled||!!book.text_edit_candidate||selectedCount<4||aiInstruction.trim().length<5}
-                   onClick={()=>proposeTextEdit("custom")}>
-                   <Sparkles size={15}/>{tr(locale,"Apply custom instruction","اقترح تعديلًا خاصًا","Föreslå egen ändring")}
-                 </button>
-               </div>}
 
-            </>}
-          </div>}
-        </aside>}
       </div>
       {modal && (
         <Dialog

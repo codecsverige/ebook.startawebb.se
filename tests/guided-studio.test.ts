@@ -32,3 +32,14 @@ test("contextual AI edit accepts simplify and bounded author directions", () => 
   assert.equal(jobRequestSchema.safeParse({...request,text_action:"custom",text_instruction:"x".repeat(600)}).success,false);
   assert.equal(jobRequestSchema.safeParse({...request,text_action:"unknown"}).success,false);
 });
+
+test("adding an author block at a precise boundary preserves the other paragraphs", async () => {
+  const {serializeVisualBlocks} = await import("../src/components/visual-chapter-editor");
+  const before=parseManuscript("First paragraph.\n\nSecond paragraph.");
+  const inserted=serializeVisualBlocks([
+    before[0],{type:"quote",text:"An author's aside."},before[1],
+  ]);
+  assert.deepEqual(parseManuscript(inserted).map(b=>b.type),["paragraph","quote","paragraph"]);
+  assert.equal(inserted.indexOf("First paragraph.") < inserted.indexOf("An author's aside."),true);
+  assert.equal(inserted.indexOf("An author's aside.") < inserted.indexOf("Second paragraph."),true);
+});

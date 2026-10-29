@@ -56,41 +56,80 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   onChange, onInsertImage, onSelection}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
+  const [menuAt, setMenuAt] = useState<number | null>(null);
+  const [insertDraft, setInsertDraft] = useState<{ index: number; type: "paragraph" | "heading" | "quote" | "note" | "ul" } | null>(null);
+  const [insertText, setInsertText] = useState("");
   const apply = (index: number, next: ManuscriptBlock[]) => {
     const modified = [...blocks.slice(0,index), ...next, ...blocks.slice(index+1)];
     const text = serializeVisualBlocks(modified);
     if (text.length <= 30000 && text.trim()) onChange(text);
   };
-  const insert = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul") => {
+  const insert = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul", value = "") => {
     if (disabled) return;
+    const clean = value.trim().slice(0, 3000);
+    if (!["divider","pagebreak"].includes(type) && !clean) return;
     const newBlock: ManuscriptBlock = type === "paragraph"
-      ? {type:"paragraph",text:tr(locale,"New paragraph","فقرة جديدة","Nytt stycke")}
-      : type === "heading" ? {type:"heading",level:2,text:tr(locale,"New heading","عنوان جديد","Ny rubrik")}
-      : type === "quote" ? {type:"quote",text:tr(locale,"An inspiring quote","اقتباس مهم","Ett citat")}
-      : type === "note" ? {type:"note",text:tr(locale,"A useful note for your reader","ملاحظة مهمة للقارئ","En läsarnotis")}
-      : type === "ul" ? {type:"ul",items:[tr(locale,"List item","عنصر القائمة","Listpunkt")]}
+      ? {type:"paragraph", text:clean}
+      : type === "heading" ? {type:"heading",level:2,text:clean}
+      : type === "quote" ? {type:"quote",text:clean}
+      : type === "note" ? {type:"note",text:clean}
+      : type === "ul" ? {type:"ul",items:clean.split(/\n+/).map(item=>item.trim()).filter(Boolean)}
       : type === "pagebreak" ? {type:"pagebreak"}
       : {type:"divider"};
-    const newBlocks = [...blocks.slice(0,index),newBlock,...blocks.slice(index)];
-    const text = serializeVisualBlocks(newBlocks);
+    const text = serializeVisualBlocks([...blocks.slice(0,index),newBlock,...blocks.slice(index)]);
     if (text.length <= 30000) onChange(text);
+    setMenuAt(null);
+    setInsertDraft(null);
+    setInsertText("");
   };
-  const at = (index: number) => serializeVisualBlocks(blocks.slice(0,index)).length +
-    (index > 0 ? 2 : 0);
-  const menu = (index: number) => <div className="visual-insert-bar" key={"plus-"+index}>
-    <details className="visual-add-menu">
-      <summary>+ {tr(locale,"Add","إضافة","Lägg till")}</summary>
-      <div className="visual-add-options">
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"paragraph")}>{tr(locale,"Text","نص","Text")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"heading")}>{tr(locale,"Heading","عنوان","Rubrik")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"quote")}>{tr(locale,"Quote","اقتباس","Citat")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"note")}>{tr(locale,"Note box","مربع ملاحظة","Anteckningsruta")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"ul")}>{tr(locale,"List","قائمة","Lista")}</button>
-        <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))}>{tr(locale,"Image / logo","صورة / شعار","Bild / logotyp")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")}>{tr(locale,"Divider","فاصل","Avdelare")}</button>
-        <button type="button" disabled={disabled} onClick={()=>insert(index,"pagebreak")}>{tr(locale,"Print page break","فاصل صفحة للطباعة","Sidbrytning")}</button>
-      </div>
-    </details>
+  const at = (index: number) => serializeVisualBlocks(blocks.slice(0,index)).length + (index>0?2:0);
+  const add = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul") => {
+    if (type==="divider" || type==="pagebreak") { insert(index,type); return; }
+    setInsertDraft({index,type});
+    setInsertText("");
+  };
+  const menu = (index: number) => <div className={"visual-insert-bar"+(menuAt===index?" is-open":"")} key={"plus-"+index}>
+    <button type="button" className="visual-add-trigger" disabled={disabled}
+      aria-expanded={menuAt===index}
+      aria-label={tr(locale, index===0?"Insert at chapter beginning":"Insert after paragraph",index===0?"إضافة في بداية الفصل":"إضافة بعد هذه الفقرة",index===0?"Infoga i början":"Infoga efter stycke")}
+      onClick={()=>{setMenuAt(menuAt===index?null:index);setInsertDraft(null);setInsertText("");}}>
+      <span aria-hidden="true">+</span><span>{tr(locale,"Add","إضافة","Lägg till")}</span>
+    </button>
+    {menuAt===index && <div className="visual-add-options" role="group"
+      aria-label={tr(locale,"Insert at this exact position","إضافة في هذا الموضع بالتحديد","Infoga här")}>
+      {([
+        ["paragraph",tr(locale,"Text","نص","Text")],
+        ["heading",tr(locale,"Heading","عنوان","Rubrik")],
+        ["quote",tr(locale,"Quote","اقتباس","Citat")],
+        ["note",tr(locale,"Note","ملاحظة","Anteckning")],
+        ["ul",tr(locale,"List","قائمة","Lista")],
+      ] as const).map(([type,label])=><button key={type} type="button" disabled={disabled}
+        onClick={()=>add(index,type)}>{label}</button>)}
+      <button type="button" disabled={disabled} onClick={()=>{setMenuAt(null);setInsertDraft(null);onInsertImage(at(index));}}>
+        {tr(locale,"Image / logo","صورة أو شعار","Bild / logotyp")}
+      </button>
+      <button type="button" disabled={disabled} onClick={()=>add(index,"divider")}>
+        {tr(locale,"Divider","فاصل زخرفي","Avdelare")}
+      </button>
+      <button type="button" disabled={disabled} onClick={()=>add(index,"pagebreak")}>
+        {tr(locale,"Print page break","فاصل صفحة للطباعة","Sidbrytning")}
+      </button>
+      {insertDraft?.index===index&&<div className="visual-add-compose">
+        <label>{tr(locale,"Enter the content to insert here","اكتب المحتوى الذي تريد إضافته هنا","Skriv innehållet här")}
+          <textarea autoFocus rows={insertDraft.type==="ul"?4:3} maxLength={3000}
+            value={insertText} onChange={e=>setInsertText(e.target.value)}
+            placeholder={insertDraft.type==="ul"
+              ?tr(locale,"Each list item on a separate line","كل عنصر في سطر مستقل","En punkt per rad")
+              :tr(locale,"Write the text here, then tap Insert","اكتب النص ثم اضغط إدراج","Skriv text och tryck Infoga")}/>
+        </label>
+        <div>
+          <button type="button" disabled={!insertText.trim()||disabled} className="visual-confirm-insert"
+            onClick={()=>insert(index,insertDraft.type,insertText)}>{tr(locale,"Insert here","إدراج هنا","Infoga här")}</button>
+          <button type="button" onClick={()=>{setInsertDraft(null);setInsertText("");}}>
+            {tr(locale,"Cancel","إلغاء","Avbryt")}</button>
+        </div>
+      </div>}
+    </div>}
   </div>;
   return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
     onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
