@@ -3448,3 +3448,12 @@ html[dir="rtl"] .muted {
 .visual-insert-bar{flex-wrap:wrap}
 @media(max-width:1150px){.editor-layout:has(.studio-tool-rail){grid-template-columns:minmax(160px,200px) minmax(0,1fr)}.studio-tool-rail{grid-column:2;grid-row:auto;position:static;width:auto;max-height:none;border:1px solid #e6eaf1;border-radius:12px;margin:12px 15px;display:block}}
 @media(max-width:760px){.editor-layout,.editor-layout:has(.studio-tool-rail){display:block}.studio-tool-rail{margin:10px 12px}.studio-progress-steps{gap:3px}.studio-progress-steps button{padding:7px 4px;font-size:.68rem;gap:4px}.studio-progress-steps button>span{width:17px;height:17px}.studio-chapter-nav{max-height:175px;overflow:auto}}
+
+.visual-add-menu{display:inline-block;position:relative}
+.visual-add-menu summary{display:inline-flex;align-items:center;gap:5px;border:1px solid #d3dfee;color:#3d5b81;font-weight:650;background:#f4f7fc;padding:5px 10px;border-radius:20px;font-size:.8rem;cursor:pointer;list-style:none}
+.visual-add-menu summary::-webkit-details-marker{display:none}
+.visual-add-menu[open] summary{background:#e9f0ff;border-color:#9eb8d9}
+.visual-add-options{position:relative;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:white;box-shadow:0 6px 20px #1b375612;border:1px solid #e0e6ef;padding:9px;border-radius:12px;margin:8px 0;z-index:5}
+.visual-add-options button{background:#fff;border:1px solid #e2e7ef;color:#314965;border-radius:7px;padding:7px 10px;cursor:pointer;font-size:.78rem}
+.visual-add-options button:hover:not(:disabled){background:#eef4ff}
+.visual-add-options button:disabled{opacity:.4}
