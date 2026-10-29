@@ -92,7 +92,8 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
           dir="auto"
           onFocus={()=>setActive(index)}
           onBlur={e=>{setActive(null); const value=nodeMarkdown(e.currentTarget);
-            if(value) save(value);}}
+            if(value) save(value);
+            else if(blocks.length>1) apply(index,[]);}}
           >{body}</Tag>;
       };
       if (block.type === "heading") return <div key={index} className="visual-block">
