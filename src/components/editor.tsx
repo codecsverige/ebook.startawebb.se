@@ -105,6 +105,7 @@ export function Editor({
   const [read, setRead] = useState(false);
   const [importError, setImportError] = useState("");
   const [visualMode, setVisualMode] = useState(true);
+  const visualSelectedRef = useRef("");
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
@@ -558,7 +559,8 @@ export function Editor({
       setPending("");
     }
   }
-  async function generate(kind: JobKind, chapter?: string) {
+  async function generate(kind: JobKind, chapter?: string,
+    edit?: {start:number;end:number;action:"improve"|"shorten"|"expand"|"proofread"|"tone"}) {
     if (!draft || generatingRef.current || disabled) return;
     if (!online) {
       setError("offline");
@@ -593,6 +595,9 @@ export function Editor({
           kind,
           chapter_id: chapter,
           request_id: requestId,
+          ...(kind === "text_edit" && edit ? {
+            text_action: edit.action, text_start: edit.start, text_end: edit.end,
+          } : {}),
           ...(kind === "illustration" ? {
             image_prompt: imagePrompt.trim(), image_caption: imageCaption.trim(),
             image_position: imageInsertPosition, image_size: imageSize,
@@ -683,6 +688,47 @@ export function Editor({
     } finally {
       setPending("");
     }
+  }
+  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone") {
+    if (!draft || !active || !current || disabled || !book?.unlocked) return;
+    let start=0,end=0;
+    if (visualMode && !read) {
+      const selection=visualSelectedRef.current.trim();
+      if (selection.length < 4) {
+        setImportError(tr(locale,"Select a passage in the visual editor first.",
+          "حدد فقرة في المحرر البصري أولًا.","Markera en text i den visuella redigeraren."));return;
+      }
+      start=current.content.indexOf(selection);
+      end=start+selection.length;
+      if(start<0 || current.content.indexOf(selection,start+1)!==-1) {
+        setImportError(tr(locale,"Select a unique passage, or use Markdown mode for precise selection.",
+          "اختر نصًا غير متكرر أو استخدم وضع النص الأصلي للتحديد بدقة.",
+          "Markera unik text eller använd källtextläget."));return;
+      }
+    } else {
+      const el=chapterEditorRef.current;
+      if (!el) return;
+      start=el.selectionStart;end=el.selectionEnd;
+    }
+    if (end-start<4 || end-start>1800) {
+      setImportError(tr(locale,"Select 4 to 1,800 characters.",
+        "حدد نصًا من 4 إلى 1800 حرف.","Markera 4–1800 tecken."));return;
+    }
+    setImportError("");
+    void generate("text_edit",active.id,{start,end,action});
+  }
+  async function decideTextEdit(accept:boolean) {
+    if (!book?.text_edit_candidate || disabled) return;
+    let revision=book.revision;
+    if(dirtyRef.current) {if(!(await save()))return;revision++;}
+    setPending(accept?"apply-ai-edit":"reject-ai-edit");setError("");
+    try {
+      const d=await request<{book:BookWithCover}>(`/api/books/${id}/text-edit`,{
+        method:"POST",body:JSON.stringify({revision,accept}),
+      });
+      setBook(d.book);setDraft(d.book);dirtyRef.current=false;setDirty(false);
+    } catch(e){setError(codeOf(e));}
+    finally{setPending("");}
   }
   async function decideCoverSuggestion(accept: boolean, side: "front" | "back" = "front") {
     if (!(side === "back" ? book?.back_cover_candidate_path : book?.cover_candidate_path) || disabled) return;
@@ -1347,6 +1393,35 @@ export function Editor({
                  </label>
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
+               {current && book.unlocked && config.ai && (
+                 <div className="ai-writing-toolbar" role="group" aria-label={tr(locale,"AI writing assistant","مساعد الكتابة بالذكاء الاصطناعي","AI-skrivhjälp")}>
+                   <span><Sparkles size={16}/>{tr(locale,"AI on selected text","AI للنص المحدد","AI på markerad text")}</span>
+                   {([
+                     ["improve",tr(locale,"Improve","تحسين","Förbättra")],
+                     ["shorten",tr(locale,"Shorten","اختصار","Förkorta")],
+                     ["expand",tr(locale,"Expand","توسيع","Utöka")],
+                     ["proofread",tr(locale,"Correct","تصحيح","Korrekturläs")],
+                     ["tone",tr(locale,"Style","تغيير الأسلوب","Anpassa tonen")],
+                   ] as const).map(([action,label])=><button type="button" key={action}
+                     disabled={disabled || !!book.text_edit_candidate}
+                     onClick={()=>proposeTextEdit(action)}>{label}</button>)}
+                 </div>
+               )}
+               {book.text_edit_candidate && (
+                 <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
+                   <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
+                   <div className="ai-edit-compare">
+                     <div><b>{tr(locale,"Original","الأصل","Original")}</b><p>{book.text_edit_candidate.original}</p></div>
+                     <div><b>{tr(locale,"Suggestion","الاقتراح","Förslag")}</b><p>{book.text_edit_candidate.replacement}</p></div>
+                   </div>
+                   <div className="cover-confirm-buttons">
+                     <button type="button" className="button button-primary button-small" disabled={disabled}
+                       onClick={()=>void decideTextEdit(true)}><Check size={16}/>{tr(locale,"Apply","اعتماد التعديل","Använd")}</button>
+                     <button type="button" className="button button-outline button-small" disabled={disabled}
+                       onClick={()=>void decideTextEdit(false)}>{tr(locale,"Keep original","الاحتفاظ بالأصل","Behåll original")}</button>
+                   </div>
+                 </section>
+               )}
                <div className="chapter-toolbar">
                 <div className="segmented">
                   <button
@@ -1482,6 +1557,7 @@ export function Editor({
                     onChange={content => change(b=>({...b,chapters:{
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
+                    onSelection={value=>{visualSelectedRef.current=value;}}
                     onInsertImage={position=>{
                       cursorRef.current=position;
                       setImagePlacement("cursor");
