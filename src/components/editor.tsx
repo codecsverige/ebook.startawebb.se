@@ -988,6 +988,11 @@ export function Editor({
             )}{" "}
             {pending === "save" ? t.saving : dirty ? t.unsaved : t.saved}
           </span>
+          <button className="button button-small button-outline"
+            type="button" onClick={()=>setTab("preview")} disabled={!draft?.outline.length}
+            title={tr(locale,"Preview your book","معاينة كتابك","Förhandsgranska din bok")}>
+            <Eye size={16}/>{tr(locale,"Preview","معاينة","Förhandsvisa")}
+          </button>
           <button
             className="icon-button"
             onClick={history}
@@ -1582,6 +1587,15 @@ export function Editor({
                     <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled}
                       onChange={e => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (file) void uploadIllustration(file); }} />
                   </label>
+                  <button type="button" className="button button-outline button-small"
+                    disabled={disabled || !current}
+                    onClick={()=>setImagePrompt(tr(locale,
+                      "An original, clear, professional book illustration connected to this text: ",
+                      "رسم أصلي واحترافي مرتبط مباشرة بهذا النص: ",
+                      "En originell, professionell illustration som passar denna text: ")+
+                      current.content.slice(Math.max(0,cursorRef.current-250),cursorRef.current+350).slice(0,530))}>
+                    <Sparkles size={16}/>{tr(locale,"Suggest from the paragraph (free)","اقترح من الفقرة (مجاني)","Föreslå utifrån stycket (gratis)")}
+                  </button>
                   <label>{tr(locale, "Describe the AI illustration", "صف الصورة التي تريد توليدها بالذكاء الاصطناعي", "Beskriv AI-illustrationen")}
                     <textarea rows={3} maxLength={700} value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
                       placeholder={tr(locale, "A scene from this chapter, a character, or a visual explanation…", "مشهد من هذا الفصل أو شخصية أو رسم يوضح فكرة...", "En scen, en karaktär eller en förklarande bild…")} />
@@ -1771,6 +1785,11 @@ export function Editor({
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
               </div>
+              <div className="studio-design-steps">
+                <div><span>01</span><strong>{tr(locale,"Describe the mood and visual idea","صف الجو والفكرة البصرية","Beskriv känsla och motiv")}</strong></div>
+                <div><span>02</span><strong>{tr(locale,"Choose one of the suggested covers","اختر تصميم الغلاف المناسب","Välj omslag")}</strong></div>
+                <div><span>03</span><strong>{tr(locale,"Review front and back covers","راجع الغلاف الأمامي والخلفي","Granska framsida och baksida")}</strong></div>
+              </div>
               <div className="design-layout">
                 <div className="design-cover">
                   <div className="cover-side-switch" role="group" aria-label={tr(locale, "Cover side", "جهة الغلاف", "Omslagssida")}>
@@ -1851,7 +1870,7 @@ export function Editor({
                     <label>
                       {tr(locale, "Describe your ideal AI cover", "صف للذكاء الاصطناعي الغلاف الذي تتخيله", "Beskriv ditt drömomslag för AI")}
                       <textarea rows={4} maxLength={800} disabled={disabled} value={draft.cover_direction || ""}
-                        placeholder={tr(locale, "Scene, main character, symbol, atmosphere, colors... The AI will use this alongside your book's idea.", "ما المشهد أو الشخصية أو الرمز أو الجو والألوان التي تريدها؟ سيقرأ الذكاء الاصطناعي وصفك مع فكرة الكتاب.", "Scen, huvudperson, symbol, stämning, färger... AI kombinerar detta med bokens idé.")}
+                        placeholder={tr(locale, "Mood? Main scene or symbol? What must never appear? The AI also reads your book's topic.", "١. ما الجو المطلوب؟ ٢. ما الرمز أو المشهد؟ ٣. ما الذي تريد تجنبه؟ يقرأ AI فكرة الكتاب أيضًا.", "Vilken stämning? Motiv? Vad ska undvikas? AI läser också bokens idé.")}
                         onChange={(e) => change((b) => ({ ...b, cover_direction: e.target.value }))} />
                     </label>
                     <p className="muted">{tr(locale,
@@ -2043,6 +2062,23 @@ export function Editor({
                       "Slutför alla kapitel och ladda sedan ner boken som PDF, Word eller EPUB. Ingen betalning krävs i ditt privata test.")
                   : t.exportHint}</p>
               </div>
+              <div className="studio-readiness" role="group" aria-label={tr(locale,"Publication readiness","جاهزية الكتاب","Publiceringskontroll")}>
+                <div className="studio-readiness-heading">
+                  <Check size={18}/><strong>{tr(locale,"Ready to publish?","هل كتابك جاهز؟","Redo att publicera?")}</strong>
+                  <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length} {tr(locale,"chapters written","فصل مكتمل","skrivna kapitel")}</span>
+                </div>
+                <div className="studio-readiness-items">
+                  {([
+                    [Boolean(draft.title.trim()),tr(locale,"Book title","عنوان الكتاب","Boktitel"),"outline"],
+                    [Boolean(draft.outline.length && draft.outline.every(c=>draft.chapters[c.id]?.content.trim())),tr(locale,"All chapters finished","كتابة جميع الفصول","Alla kapitel klara"),"write"],
+                    [Boolean(draft.author.trim()),tr(locale,"Author's name (recommended)","اسم المؤلف (مستحسن)","Författarnamn (rekommenderas)"),"design"],
+                    [Boolean(draft.back_blurb?.trim()),tr(locale,"Back cover description (recommended)","نبذة الغلاف الخلفي (مستحسنة)","Baksidestext (rekommenderas)"),"design"],
+                    [!dirty && !pending,tr(locale,"All changes saved","حفظ جميع التعديلات","Alla ändringar sparade"),"preview"],
+                  ] as const).map(([done,label,step],i)=>
+                    <button type="button" key={i} className={done?"is-ready":"needs-attention"}
+                      onClick={()=>setTab(step)}><span>{done?<Check size={15}/>:i+1}</span>{label}</button>)}
+                </div>
+              </div>
               <div className="export-buttons">
                 <button
                   className="button button-primary"
@@ -2143,6 +2179,16 @@ export function Editor({
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
+          {tab!=="preview" && draft.outline.length>0 && <div className="studio-next-step">
+            <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
+            <button type="button" className="button button-primary"
+              onClick={()=>setTab(tab==="outline"?"write":tab==="write"?"design":"preview")}>
+              {tab==="outline"?tr(locale,"Next: Write the book","التالي: كتابة الكتاب","Nästa: Skriv")
+               :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
+               :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
+              <ChevronRight size={16}/>
+            </button>
+          </div>}
         </div>
         {tab==="write" && draft.outline.length>0 && <aside className="studio-tool-rail" aria-label={tr(locale,"Book tools","أدوات الكتاب","Bokverktyg")}>
           <div className="studio-rail-heading"><Sparkles size={18}/><h3>{tr(locale,"Your tools","أدواتك","Verktyg")}</h3></div>
