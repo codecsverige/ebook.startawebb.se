@@ -21,6 +21,9 @@ function encodeBlock(block: ManuscriptBlock): string {
   if (block.type === "ul") return block.items.map(item => "- " + item).join("\n");
   if (block.type === "ol") return block.items.map((item, i) => (i + 1) + ". " + item).join("\n");
   if (block.type === "divider") return "***";
+  if (block.type === "pagebreak") return "[[pagebreak]]";
+  if (block.type === "quote") return "> " + block.text;
+  if (block.type === "note") return "> [!NOTE] " + block.text;
   return "[[illustration:" + block.id + "]]";
 }
 export function serializeVisualBlocks(blocks: ManuscriptBlock[]): string {
@@ -56,11 +59,16 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     const text = serializeVisualBlocks(modified);
     if (text.length <= 30000 && text.trim()) onChange(text);
   };
-  const insert = (index: number, type: "paragraph" | "heading" | "divider") => {
+  const insert = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul") => {
     if (disabled) return;
     const newBlock: ManuscriptBlock = type === "paragraph"
       ? {type:"paragraph",text:"New paragraph"}
-      : type === "heading" ? {type:"heading",level:2,text:"New heading"} : {type:"divider"};
+      : type === "heading" ? {type:"heading",level:2,text:"New heading"}
+      : type === "quote" ? {type:"quote",text:"A meaningful quotation"}
+      : type === "note" ? {type:"note",text:"A useful note for your reader"}
+      : type === "ul" ? {type:"ul",items:["List item"]}
+      : type === "pagebreak" ? {type:"pagebreak"}
+      : {type:"divider"};
     const newBlocks = [...blocks.slice(0,index),newBlock,...blocks.slice(index)];
     const text = serializeVisualBlocks(newBlocks);
     if (text.length <= 30000) onChange(text);
@@ -71,7 +79,11 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     <button type="button" disabled={disabled} onClick={()=>insert(index,"paragraph")} title="Add paragraph">+ {/** text */}¶</button>
     <button type="button" disabled={disabled} onClick={()=>insert(index,"heading")} title="Add heading">+ H</button>
     <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))} title="Insert image">+ ◩</button>
+    <button type="button" disabled={disabled} onClick={()=>insert(index,"quote")} title="Add quotation">+ ❝</button>
+    <button type="button" disabled={disabled} onClick={()=>insert(index,"note")} title="Add note box">+ ▤</button>
+    <button type="button" disabled={disabled} onClick={()=>insert(index,"ul")} title="Add list">+ ☷</button>
     <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")} title="Add divider">+ ✦</button>
+    <button type="button" disabled={disabled} onClick={()=>insert(index,"pagebreak")} title="Page break">+ ↴</button>
   </div>;
   return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
     onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
@@ -79,7 +91,7 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
     <p className="visual-hint">✦ Select and edit each paragraph directly. Changes save when leaving a block. Use + to insert content between paragraphs.</p>
     {menu(0)}
     {blocks.map((block,index) => {
-      if (block.type === "illustration" || block.type === "divider")
+      if (block.type === "illustration" || block.type === "divider" || block.type === "pagebreak")
         return <div key={chapterId+"-"+index} className="visual-block-static">
           <Markdown text={encodeBlock(block)} illustrations={illustrations} bookId={bookId}/>
           {menu(index+1)}
@@ -98,6 +110,10 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
       };
       if (block.type === "heading") return <div key={index} className="visual-block">
         {editable("h3",inlineNodes(block.text),text=>apply(index,[{...block,text}]))}
+        {menu(index+1)}
+      </div>;
+      if (block.type === "quote" || block.type === "note") return <div key={index} className={"visual-block visual-"+block.type}>
+        {editable("p",inlineNodes(block.text),text=>apply(index,[{...block,text}]))}
         {menu(index+1)}
       </div>;
       if (block.type === "paragraph") return <div key={index} className="visual-block">
