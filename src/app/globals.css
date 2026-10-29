@@ -3457,3 +3457,24 @@ html[dir="rtl"] .muted {
 .visual-add-options button{background:#fff;border:1px solid #e2e7ef;color:#314965;border-radius:7px;padding:7px 10px;cursor:pointer;font-size:.78rem}
 .visual-add-options button:hover:not(:disabled){background:#eef4ff}
 .visual-add-options button:disabled{opacity:.4}
+
+/* One predictable journey from idea through export. */
+.studio-design-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:17px 0 24px}
+.studio-design-steps>div{display:flex;align-items:center;gap:9px;border:1px solid #e2e7ee;background:#f8f9fc;padding:10px;border-radius:10px}
+.studio-design-steps span{font-size:.75rem;font-weight:750;color:#4168a5}
+.studio-design-steps strong{font-size:.76rem;color:#344969;font-weight:600;line-height:1.5}
+.studio-custom-ai{display:grid;gap:8px;margin:15px 0}
+.studio-custom-ai label{display:grid;gap:7px;font-size:.82rem;color:#344969}
+.studio-custom-ai textarea{border:1px solid #cbd6e7;border-radius:9px;padding:11px;color:#283b56;resize:vertical;font:inherit;background:white;min-height:76px}
+.studio-next-step{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:26px 0 12px;padding:18px;background:#f6f8fc;border-radius:12px}
+.studio-next-step>span{font-size:.81rem;color:#617086;line-height:1.5}
+.studio-readiness{background:#f8fafd;border:1px solid #dce4ef;border-radius:14px;padding:17px;margin:18px 0}
+.studio-readiness-heading{display:flex;align-items:center;gap:8px;color:#314b6d}
+.studio-readiness-heading>strong{font-size:1rem}
+.studio-readiness-heading>span{margin-inline-start:auto;color:#6a7891;font-size:.8rem}
+.studio-readiness-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+.studio-readiness-items button{border:1px solid #e0e6ee;background:white;display:flex;align-items:center;gap:9px;padding:10px;border-radius:9px;color:#57677e;cursor:pointer;text-align:start;font-size:.83rem}
+.studio-readiness-items button>span{width:25px;height:25px;border-radius:100%;display:inline-flex;align-items:center;justify-content:center;background:#f1f3f8;color:#64758f;flex:0 0 25px;font-size:.73rem}
+.studio-readiness-items button.is-ready>span{background:#e6f5ef;color:#237558}
+.studio-readiness-items button.needs-attention:hover{background:#f8fbff;border-color:#a4b6cf}
+@media(max-width:760px){.studio-design-steps{grid-template-columns:1fr}.studio-readiness-items{grid-template-columns:1fr}.studio-next-step{flex-direction:column;align-items:stretch}.studio-next-step .button{justify-content:center}}
