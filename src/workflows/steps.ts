@@ -240,7 +240,11 @@ export async function createCover(jobId: string) {
   try {
     result = await generateDirectCover(`Make ONE professional, original bookstore-quality vertical cover BACKGROUND illustration for a ${book.kind}. Art direction: ${genreDirection[book.kind]}. Book context: ${JSON.stringify({ title: book.title, idea: book.idea.slice(0, 700), audience: book.audience, openingChapter: book.outline[0]?.summary?.slice(0, 300) })}. Color treatment: ${book.cover_style}. Use a strong focal point, rich visual storytelling and a quiet upper quarter where the app will overlay the REAL title later. Make it clearly resemble an original BOOK COVER, never a website screenshot, app UI, social media post, document, phone screen, news article, poster with text, real existing book cover, watermark or logo. ABSOLUTELY NO printed or drawn text, typography, letters, characters, numbers, captions or logos: the app adds typography separately.`, model);
   } catch (error) {
-    const code = classifyAiFailure(error);
+    const safeCode = error instanceof Error ? error.message : "";
+    const code = [
+      "ai_auth_failed", "ai_credits_exhausted", "ai_model_unavailable",
+      "ai_provider_busy", "ai_provider_unavailable", "ai_generation_invalid",
+    ].includes(safeCode) ? safeCode : classifyAiFailure(error);
     console.warn("cover_request_failed", { jobId, code });
     await persistFailure(jobId, code);
     throw new FatalError(code);
