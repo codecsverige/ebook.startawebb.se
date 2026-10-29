@@ -193,6 +193,9 @@ export class FirestoreStudio {
         preface: "",
         cover_path: null,
         cover_candidate_path: null,
+        back_cover_path: null,
+        back_cover_candidate_path: null,
+        illustrations: {},
         use_artwork: false,
         unlocked: false,
         revision: 0,
@@ -330,6 +333,9 @@ export class FirestoreStudio {
         chapters: {},
         cover_path: null,
         cover_candidate_path: null,
+        back_cover_path: null,
+        back_cover_candidate_path: null,
+        illustrations: {},
         use_artwork: false,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
@@ -364,7 +370,7 @@ export class FirestoreStudio {
   }
 
   /** Approve or discard an AI cover suggestion without touching saved chapters. */
-  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean): Promise<Book> {
+  async decideCoverCandidate(uid: string, id: string, revision: number, accept: boolean, side: "front" | "back" = "front"): Promise<Book> {
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id);
@@ -373,13 +379,15 @@ export class FirestoreStudio {
       const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
       if (book.state.active_job) fail("busy");
       if (book.revision !== revision) fail("conflict");
-      if (!book.cover_candidate_path) fail("not_found");
+      const candidate = side === "back" ? book.back_cover_candidate_path : book.cover_candidate_path;
+      if (!candidate) fail("not_found");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
         ...book,
-        cover_path: accept ? book.cover_candidate_path : book.cover_path,
-        cover_candidate_path: null,
-        use_artwork: accept ? true : book.use_artwork,
+        ...(side === "back"
+          ? { back_cover_path: accept ? candidate : book.back_cover_path, back_cover_candidate_path: null }
+          : { cover_path: accept ? candidate : book.cover_path, cover_candidate_path: null,
+              use_artwork: accept ? true : book.use_artwork }),
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -465,6 +473,9 @@ export class FirestoreStudio {
         preface: snapshot.preface || "",
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
+        back_cover_path: snapshot.back_cover_path || null,
+        back_cover_candidate_path: null,
+        illustrations: structuredClone(snapshot.illustrations || {}),
         use_artwork: snapshot.use_artwork,
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
