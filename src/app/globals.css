@@ -3356,3 +3356,22 @@ html[dir="rtl"] .muted {
 .ai-edit-compare b{font-size:12px;color:#4b658c}
 .ai-edit-compare p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font-size:.89rem}
 @media(max-width:640px){.ai-edit-compare{grid-template-columns:1fr}}
+
+.preview-mode-toggle{display:flex;gap:7px;margin:15px 0;background:#f0f2f5;border-radius:11px;padding:5px;width:max-content;max-width:100%;flex-wrap:wrap}
+.preview-mode-toggle button{border:none;border-radius:8px;padding:9px 15px;background:transparent;color:#55617a;font-weight:600;cursor:pointer}
+.preview-mode-toggle button.active{background:#fff;color:#1e355e;box-shadow:0 2px 7px #1726461b}
+.book-section-reader{background:#f0f0ed;border:1px solid #e0e1df;padding:clamp(12px,3vw,23px);border-radius:16px;margin:13px 0}
+.book-reader-header,.book-reader-nav{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.book-reader-header{color:#546077;font-size:.88rem;margin-bottom:13px}
+.book-reader-page{background:#fffdf8;min-height:445px;max-height:680px;overflow:auto;border-radius:10px;box-shadow:0 7px 24px #15253d15;display:flex;justify-content:center;align-items:flex-start;padding:clamp(12px,3vw,38px)}
+.book-reader-page .preview-cover{max-width:310px;width:100%;margin:auto}
+.reader-content{max-width:590px;width:100%;font-size:1rem;line-height:1.9}
+.reader-content h2{font-size:1.65rem;line-height:1.5;margin:0 0 20px}
+.reader-content.theme-literary h2{font-family:Georgia,serif;text-align:center}
+.reader-content.theme-modern h2{font-family:Inter,sans-serif;letter-spacing:-.02em;border-bottom:1px solid #d3d7e2;padding-bottom:10px}
+.reader-content .manuscript-figure{max-width:100%;height:auto}
+.reader-content button{border:0;background:none;color:#3f5e97;text-align:start;cursor:pointer;padding:5px}
+.book-reader-nav{margin-top:15px}
+.book-reader-nav>span{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;font-size:.8rem;color:#697188}
+.book-reader-note{font-size:.74rem;color:#687184;margin:10px 0 0}
+@media(max-width:580px){.book-reader-page{min-height:370px}.book-reader-nav>span{display:none}}
