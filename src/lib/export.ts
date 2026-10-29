@@ -177,7 +177,12 @@ export async function makeDocx(
       new Paragraph({ ...base, heading: HeadingLevel.HEADING_1,
         children: [text({ en: "Preface", ar: "المقدمة", sv: "Förord" }[book.language], true)] }));
     for (const block of parseManuscript(book.preface)) {
-      children.push(new Paragraph({ ...base, children: [text(stripInlineMarkdown(block.text))] }));
+      if (block.type === "ul" || block.type === "ol") {
+        for (const item of block.items)
+          children.push(new Paragraph({ ...base, children: [text("• " + stripInlineMarkdown(item))] }));
+      } else {
+        children.push(new Paragraph({ ...base, children: [text(stripInlineMarkdown(block.text))] }));
+      }
     }
   }
   children.push(
