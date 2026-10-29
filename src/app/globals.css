@@ -3585,3 +3585,65 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
   .studio-next-step{padding:12px!important;}
   .studio-next-step button{min-height:44px!important;font-size:.87rem!important;padding:10px 14px!important;}
 }
+
+
+/* Book Studio: content is the center; edit controls belong to each element. */
+.visual-edit-block { position:relative; min-width:0; margin:6px 0; border:1px solid transparent; border-radius:12px; padding:3px 6px; }
+.visual-edit-block.is-selected { border-color:#c7d6ee; background:#f9fbff; }
+.visual-edit-block .visual-editable { width:100%; max-width:100%; box-sizing:border-box; min-width:0; display:block; overflow-wrap:anywhere; }
+.visual-edit-block .visual-block-content { min-width:0; max-width:100%; }
+.visual-edit-block .manuscript-figure { max-width:100%; margin:10px auto; }
+.visual-block-controls { display:none; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 0 6px; }
+.visual-edit-block.is-selected > .visual-block-controls, .visual-edit-block:focus-within > .visual-block-controls, .visual-edit-block:hover > .visual-block-controls { display:flex; }
+.visual-block-controls button { font:inherit; font-size:12px; font-weight:600; min-height:36px; border-radius:8px; border:1px solid #cbd9e9; padding:6px 10px; color:#34577e; background:#fff; cursor:pointer; }
+.visual-block-controls button:hover:not(:disabled) { background:#edf4ff; }
+.visual-block-controls button:disabled { opacity:.35; cursor:not-allowed; }
+.visual-block-controls .visual-remove-block { color:#ae3941; border-color:#edd0d2; margin-inline-start:auto; }
+.visual-block-controls .visual-remove-block:hover:not(:disabled){background:#fff1f1;}
+.visual-image-details { margin:6px 0 12px; border-radius:9px; border:1px solid #d7e0ed; padding:8px 12px; background:#fff; }
+.visual-image-details summary {cursor:pointer;color:#3d5c87;font-size:13px;font-weight:650;}
+.visual-image-settings {display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end;padding-top:12px;}
+.visual-image-settings label {display:grid;gap:6px;font-size:12px;color:#4c607f;font-weight:600;}
+.visual-image-settings input,.visual-image-settings select {min-width:0;width:100%;border:1px solid #c9d5e6;border-radius:9px;padding:10px;font:inherit;font-size:16px;color:#253955;background:#fff;}
+.visual-image-settings button {grid-column:1/-1;justify-self:start;font:inherit;font-weight:650;font-size:13px;border:1px solid #a7bce0;border-radius:9px;background:#eaf1ff;color:#244d84;padding:10px 15px;cursor:pointer;}
+.visual-image-settings button:disabled{opacity:.5;cursor:not-allowed;}
+.visual-insert-bar.is-open {display:block;min-width:0;width:100%;max-width:100%;}
+.visual-insert-bar .visual-add-options {box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;overflow:visible;}
+.visual-insert-bar .visual-add-options > button {white-space:normal;min-width:0;min-height:40px;text-align:start;font-size:13px;line-height:1.4;}
+.visual-add-compose {grid-column:1/-1;width:100%;min-width:0;box-sizing:border-box;background:#fff;border-radius:12px;padding:13px;}
+.visual-add-compose label {width:100%;min-width:0;}
+.visual-add-compose textarea {display:block;width:100%;min-width:0;box-sizing:border-box;min-height:125px;resize:vertical;background:#fff;}
+.visual-add-compose>div{display:flex;gap:9px;flex-wrap:wrap;}
+.visual-add-compose>div button {font-size:13px;min-height:40px;padding:9px 15px;}
+.outline-item {display:grid;grid-template-columns:42px minmax(0,1fr);grid-template-areas:"number fields" "actions actions";align-items:start;gap:10px 12px;min-width:0;}
+.outline-item>.outline-number {grid-area:number;text-align:center;align-self:start;padding-top:12px;}
+.outline-item>.stack {grid-area:fields;width:100%;min-width:0;display:grid;gap:12px;}
+.outline-item>.stack>label {width:100%;display:block;min-width:0;}
+.outline-item>.stack input,.outline-item>.stack textarea {display:block;width:100%;box-sizing:border-box;min-width:0;font-size:16px;line-height:1.7;border:1px solid #cfd9e7;border-radius:9px;}
+.outline-item>.stack textarea {min-height:116px;max-height:none;resize:vertical;padding:12px 14px;}
+.outline-item>.chapter-move-actions {grid-area:actions;display:flex;align-items:center;justify-content:flex-end;gap:9px;padding-top:9px;border-top:1px solid #edf0f4;min-width:0;}
+.outline-item>.chapter-move-actions button {width:39px;height:39px;border-radius:9px;cursor:pointer;flex:none;}
+.outline-item>.chapter-move-actions .chapter-check {margin:0 auto 0 0;}
+.visual-manuscript img[src^="/illustrations/"] {aspect-ratio:16/9;object-fit:cover;object-position:center 20%;width:100%;max-height:320px;}
+@media(max-width:760px){
+  .outline-list {display:grid;gap:12px;}
+  .outline-item {grid-template-columns:28px minmax(0,1fr);gap:10px;padding:14px 12px;border-radius:13px;}
+  .outline-item>.stack {gap:10px;}
+  .outline-item>.stack input {font-size:16px;min-height:50px;padding:11px 12px;}
+  .outline-item>.stack textarea {font-size:16px;min-height:125px;padding:12px;line-height:1.7;}
+  .outline-item>.chapter-move-actions {justify-content:flex-start;gap:8px;}
+  .outline-item>.chapter-move-actions .chapter-check {margin-inline-start:auto;}
+  .visual-manuscript{padding:14px 11px;max-width:100%;overflow:visible;}
+  .visual-edit-block{padding:5px;margin:5px -3px;}
+  .visual-block-controls{gap:6px;padding:9px 0;}
+  .visual-block-controls button{flex:1 1 auto;min-height:39px;font-size:12px;}
+  .visual-block-controls .visual-remove-block{flex:0 1 auto;margin-inline-start:0;}
+  .visual-insert-bar .visual-add-options{grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;gap:6px;}
+  .visual-add-compose{padding:10px;}
+  .visual-add-compose textarea{font-size:16px;min-height:155px;padding:12px;}
+  .visual-image-settings{grid-template-columns:1fr;}
+  .visual-image-settings button{grid-column:1;}
+  .visual-edit-block .visual-editable{font-size:17px;line-height:1.85;}
+  .visual-edit-block .manuscript-figure{width:100%;max-width:100%;overflow:hidden;}
+  .visual-edit-block .manuscript-figure img{max-height:420px;object-fit:contain;}
+}
