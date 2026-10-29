@@ -23,6 +23,7 @@ export async function GET(
     const job = await studioStore().latestJob(id);
     if (job && ["queued", "running"].includes(job.status))
       throw new AppError("busy", 409);
+    const preview = format === "pdf" && new URL(request.url).searchParams.get("preview") === "1";
     const artwork = book.use_artwork ? await coverArtwork(book) : undefined;
     const data =
       format === "pdf"
@@ -38,7 +39,7 @@ export async function GET(
             : format === "docx"
               ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               : "application/epub+zip",
-        "Content-Disposition": `attachment; filename="ebook.${format}"; filename*=UTF-8''${encodeURIComponent(filename(book.title))}.${format}`,
+        "Content-Disposition": `${preview ? "inline" : "attachment"}; filename="ebook.${format}"; filename*=UTF-8''${encodeURIComponent(filename(book.title))}.${format}`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },

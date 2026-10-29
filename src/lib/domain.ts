@@ -84,6 +84,11 @@ export const editBookSchema = z
     author: z.string().trim().max(100),
     cover_style: z.enum(coverStyles),
     use_artwork: z.boolean(),
+    cover_direction: z.string().trim().max(800).default(""),
+    back_blurb: z.string().trim().max(1800).default(""),
+    author_bio: z.string().trim().max(800).default(""),
+    dedication: z.string().trim().max(500).default(""),
+    preface: z.string().trim().max(5000).default(""),
     outline: z.array(outlineItemSchema).min(3).max(10),
     chapters: z.record(
       z.string().uuid(),
@@ -123,6 +128,12 @@ export type Book = Brief & {
   chapters: Record<string, Chapter>;
   cover_style: (typeof coverStyles)[number];
   cover_path: string | null;
+  /** Optional for existing books created before the cover studio update. */
+  cover_direction?: string;
+  back_blurb?: string;
+  author_bio?: string;
+  dedication?: string;
+  preface?: string;
   cover_candidate_path?: string | null;
   use_artwork: boolean;
   unlocked: boolean;

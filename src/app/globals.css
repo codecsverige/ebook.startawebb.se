@@ -3154,3 +3154,111 @@ html[dir="rtl"] .muted {
 .draft-recovery { border-color:#a2bbdf; background:#f3f7ff; }
 .draft-recovery strong { display:block; font-size:15px; margin-bottom:7px; }
 .draft-recovery p { font-size:14px; line-height:1.7; }
+
+
+/* Cover Studio: real front/back previews share the same printed-page proportions. */
+.book-cover.has-artwork .cover-art { opacity: .88; }
+.book-cover.has-artwork::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, #090d2090 0%, #11162633 36%, #09101c96 100%);
+  pointer-events: none;
+}
+.book-cover.has-artwork { color: #fffdf6; }
+.book-cover.has-artwork .cover-orbit { opacity: .14; }
+.book-cover.has-artwork .cover-grain { opacity: .045; }
+.book-cover.has-artwork .cover-top { position: relative; z-index: 2; }
+.book-cover.cover-back {
+  background: var(--cover-bg);
+  color: var(--cover-ink);
+}
+.cover-back-content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+.cover-back-kicker { font-size: 25px; opacity: .7; margin-bottom: 12px; }
+.cover-back-content h2 {
+  font-family: var(--serif);
+  font-size: clamp(14px, 7cqi, 23px);
+  line-height: 1.35;
+  margin: 0 0 17px;
+  overflow-wrap: anywhere;
+}
+.cover-back-blurb {
+  white-space: pre-wrap;
+  font-size: clamp(10px, 3.5cqi, 13px);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 14;
+  -webkit-box-orient: vertical;
+}
+.cover-back-author {
+  border-top: 1px solid color-mix(in srgb, var(--cover-ink) 28%, transparent);
+  margin-top: 18px;
+  padding-top: 12px;
+  font-size: clamp(9px, 3cqi, 12px);
+  overflow: hidden;
+}
+.cover-back-author strong { display: block; margin-bottom: 4px; }
+.cover-back-author p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.book-cover.cover-back[lang="ar"] h2 { font-family: "Noto Naskh Arabic", serif; line-height: 1.7; }
+.book-cover.cover-back[lang="ar"] .cover-back-blurb,
+.book-cover.cover-back[lang="ar"] .cover-back-author { font-family: "Noto Naskh Arabic", serif; line-height: 1.8; }
+.cover-side-switch {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+  justify-content: center;
+}
+.cover-side-switch button {
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 18px;
+  font-size: 13px;
+}
+.cover-side-switch button.active { background: var(--ink); color: white; border-color: var(--ink); }
+.cover-content-fields { display: grid; gap: 16px; }
+.cover-content-fields textarea { resize: vertical; width: 100%; min-height: 65px; }
+.cover-concept-list { display: grid; grid-template-columns: 1fr; gap: 7px; }
+.cover-concept-chip {
+  text-align: start;
+  border-radius: 9px;
+  border: 1px solid #dfe5ef;
+  background: #f6f8fc;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.cover-concept-chip:hover:not(:disabled), .cover-concept-chip:focus-visible { border-color: var(--blue); background: #eaf0ff; }
+.preview-cover-pair { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; padding: 24px; background: #f5f4f0; }
+.preview-cover-pair .preview-cover { border: 0; padding: 0; background: transparent; min-width: 0; }
+.preview-cover-pair .preview-cover .book-cover { width: 100%; max-width: 320px; }
+.chapter-move-actions { display: flex; align-items: center; gap: 4px; }
+.chapter-move-actions button { border: 1px solid #dce3ec; background: white; border-radius: 6px; width: 30px; height: 30px; display: grid; place-items: center; }
+.chapter-move-actions button:hover:not(:disabled) { border-color: var(--blue); }
+@media(max-width: 640px) {
+  .preview-cover-pair { gap: 9px; padding: 10px; }
+  .preview-cover-pair .book-cover { padding: 12px 10px; }
+  .preview-cover-pair .cover-back-blurb { -webkit-line-clamp: 8; }
+  .preview-cover-pair .cover-back-author { display: none; }
+}
