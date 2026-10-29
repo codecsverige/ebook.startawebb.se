@@ -96,7 +96,7 @@ test("keeps one paid attempt and preserves the exact reason of model refusal", a
       generateDirectStructured("outline", z.object({ allowed: z.boolean() }), "Editor", "An outline", 1000),
       (error: unknown) => error instanceof DirectOpenAiError && error.message === "ai_model_unavailable",
     );
-    assert.equal(calls, 1);
+    assert.equal(calls, 2); // Primary refused, one bounded existing-model fallback.
   } finally {
     globalThis.fetch = saved;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
@@ -109,4 +109,57 @@ test("separates invalid keys, restricted models and exhausted API quota", () => 
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
+});
+
+test("direct OpenAI recovers 403/404 model access with previously configured 4.1-mini", async () => {
+  const savedFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  const models: string[] = [];
+  process.env.OPENAI_API_KEY = "test-only";
+  try {
+    globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      models.push(body.model);
+      if (body.model === "gpt-5-mini")
+        return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
+      assert.equal(body.model, "gpt-4.1-mini");
+      return new Response(JSON.stringify({
+        status: "completed",
+        output: [{ type: "message", content: [{
+          type: "output_text", text: JSON.stringify({ content: "قصة عربية", summary: "ملخص" }),
+        }] }],
+      }), { status: 200 });
+    };
+    const result = await generateDirectStructured("chapter",
+      z.object({ content: z.string(), summary: z.string() }), "Editor", "Arabic story", 500);
+    assert.equal(result.output.content, "قصة عربية");
+    assert.deepEqual(models, ["gpt-5-mini", "gpt-4.1-mini"]);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("direct OpenAI never tries a different model for invalid credentials", async () => {
+  const savedFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  let calls = 0;
+  process.env.OPENAI_API_KEY = "test-only";
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(JSON.stringify({ error: { code: "invalid_api_key" } }), { status: 401 });
+    };
+    await assert.rejects(
+      generateDirectStructured("outline", z.object({ allowed: z.boolean() }),
+        "Editor", "Outline", 500),
+      /ai_auth_failed/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
 });
