@@ -111,6 +111,7 @@ export function Editor({
   const [readerMode, setReaderMode] = useState(true);
   const visualSelectedRef = useRef("");
   const [showIllustrations, setShowIllustrations] = useState(false);
+  const [imageSource, setImageSource] = useState<"library"|"upload"|"ai">("library");
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
   const [imagePrompt, setImagePrompt] = useState("");
@@ -1448,10 +1449,6 @@ export function Editor({
                   ))}
                 </select>
               </label>
-              <p className="studio-writing-hint">{tr(locale,
-                "Write directly in your book. Select text for AI; use + to insert images, logos and blocks.",
-                "اكتب مباشرة داخل كتابك. حدّد النص ليظهر تصحيح AI، واستعمل + لإضافة الصور والشعارات والعناصر.",
-                "Skriv direkt i boken. Markera text för AI och använd + för bilder, logotyper och block.")}</p>
               <details className="studio-chapter-management">
                 <summary>{tr(locale,"Chapter options: new, split, merge, import","خيارات الفصل: إضافة وتقسيم ودمج واستيراد","Kapitelalternativ: nytt, dela, slå ihop, importera")}</summary>
                 <div className="chapter-author-actions">
@@ -1540,7 +1537,7 @@ export function Editor({
                   <div className="illustration-fields">
                     <label>{tr(locale, "Insert at", "موضع الصورة", "Placering")}
                       <select value={imagePlacement} onChange={e => setImagePlacement(e.target.value as "cursor"|"start"|"end")}>
-                        <option value="cursor">{tr(locale, "Text cursor", "موضع المؤشر", "Textmarkören")}</option>
+                        <option value="cursor">{tr(locale, "Selected + position", "المكان المحدد بزر +", "Vald infogningspunkt")}</option>
                         <option value="start">{tr(locale, "Chapter start", "بداية الفصل", "Kapitelstart")}</option>
                         <option value="end">{tr(locale, "Chapter end", "نهاية الفصل", "Kapitelslut")}</option>
                       </select>
@@ -1556,6 +1553,15 @@ export function Editor({
                   <label>{tr(locale, "Caption (optional)", "وصف أسفل الصورة (اختياري)", "Bildtext (valfritt)")}
                     <input maxLength={240} value={imageCaption} onChange={e => setImageCaption(e.target.value)} />
                   </label>
+                  <div className="insert-source-tabs" role="group" aria-label={tr(locale,"Choose source","اختر مصدر الصورة","Välj bildkälla")}>
+                    {(["library","upload","ai"] as const).map(source=><button type="button" key={source}
+                      className={imageSource===source?"active":""} onClick={()=>setImageSource(source)}>
+                      {source==="library"?tr(locale,"Library","المكتبة","Bibliotek"):
+                       source==="upload"?tr(locale,"Upload / logo","رفع صورة أو شعار","Bild eller logotyp"):
+                       tr(locale,"AI illustration","رسم AI","AI-bild")}
+                    </button>)}
+                  </div>
+                  {imageSource==="library" && <div className="image-source-content">
                   <strong>{tr(locale, "Built-in illustration library · free", "مكتبة الرسومات الداخلية · مجانية", "Inbyggt bildbibliotek · gratis")}</strong>
                   <div className="illustration-library-grid">
                     {(["mountain", "botanical", "stars", "waves"] as const).map(name => (
@@ -1569,6 +1575,8 @@ export function Editor({
                       </button>
                     ))}
                   </div>
+                  </div>}
+                  {imageSource==="upload" && <div className="image-source-content">
                   <label className="cover-upload-label">
                     {tr(locale, "Upload an image (PNG, JPG, WebP · max 3 MB)", "ارفع صورة من جهازك (PNG أو JPG أو WebP · حتى 3 ميغابايت)", "Ladda upp bild (PNG, JPG, WebP · max 3 MB)")}
                     <span className="studio-select-file"><ImagePlus size={16}/>{tr(locale,"Choose an image","اختيار صورة من الهاتف","Välj en bild")}</span>
@@ -1582,6 +1590,8 @@ export function Editor({
                       disabled={disabled || !book.unlocked}
                       onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value="";if(file)void uploadIllustration(file,true);}}/>
                   </label>
+                  </div>}
+                  {imageSource==="ai" && <div className="image-source-content">
                   <button type="button" className="button button-outline button-small"
                     disabled={disabled || !current}
                     onClick={()=>setImagePrompt(tr(locale,
@@ -1600,6 +1610,7 @@ export function Editor({
                     onClick={() => void generate("illustration", active?.id)}>
                     <Sparkles size={17} /> {tr(locale, "Generate and insert AI image", "توليد الصورة وإدراجها في الفصل", "Skapa och infoga AI-bild")}
                   </button>
+                  </div>}
                 </div>
                 </Dialog>
               )}
@@ -1656,7 +1667,11 @@ export function Editor({
                       ...b.chapters,[active.id]:{...b.chapters[active.id],content}
                     }}))}
                     onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);}}
-                    onInsertImage={position=>{
+                    onInsertImage={(position,canonicalContent)=>{
+                      if (canonicalContent !== current.content && active)
+                        change(b=>({...b,chapters:{...b.chapters,[active.id]:{
+                          ...b.chapters[active.id],content:canonicalContent}}}));
+                      setImageSource("library");
                       cursorRef.current=position;
                       visualSelectedRef.current="";
                       setSelectedCount(0);
@@ -2211,8 +2226,14 @@ export function Editor({
           {tab!=="preview" && draft.outline.length>0 && <div className="studio-next-step">
             <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
             <button type="button" className="button button-primary"
-              onClick={()=>setTab(tab==="outline"?"write":tab==="write"?"design":"preview")}>
+              onClick={()=>{
+                const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
+                if(tab==="write" && missing){setChapterId(missing.id);setRead(false);setVisualMode(true);}
+                else setTab(tab==="outline"?"write":tab==="write"?"design":"preview");
+              }}>
               {tab==="outline"?tr(locale,"Next: Write the book","التالي: كتابة الكتاب","Nästa: Skriv")
+               :tab==="write" && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
+                 ?tr(locale,"Finish missing chapters","استكمل الفصول الناقصة","Skriv färdigt kapitlen")
                :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
                :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
               <ChevronRight size={16}/>
