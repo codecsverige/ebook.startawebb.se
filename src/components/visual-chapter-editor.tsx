@@ -1,12 +1,14 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
 import { parseManuscript, type ManuscriptBlock } from "@/lib/manuscript";
-import type { Illustration } from "@/lib/domain";
+import type { Illustration, Locale } from "@/lib/domain";
+import { tr } from "@/lib/i18n";
 import { Markdown } from "./markdown";
 
 type Props = {
   content: string;
   chapterId: string;
+  locale?: Locale;
   illustrations?: Record<string, Illustration>;
   bookId: string;
   disabled?: boolean;
@@ -50,7 +52,7 @@ function inlineNodes(value: string): ReactNode {
       : part.startsWith("*") && part.endsWith("*")
         ? <em key={i}>{part.slice(1,-1)}</em> : part);
 }
-export function VisualChapterEditor({content, chapterId, illustrations, bookId, disabled=false,
+export function VisualChapterEditor({content, chapterId, illustrations, bookId, locale="en", disabled=false,
   onChange, onInsertImage, onSelection}: Props) {
   const blocks = useMemo(() => parseManuscript(content), [content]);
   const [active, setActive] = useState<number | null>(null);
@@ -62,11 +64,11 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   const insert = (index: number, type: "paragraph" | "heading" | "divider" | "quote" | "note" | "pagebreak" | "ul") => {
     if (disabled) return;
     const newBlock: ManuscriptBlock = type === "paragraph"
-      ? {type:"paragraph",text:"New paragraph"}
-      : type === "heading" ? {type:"heading",level:2,text:"New heading"}
-      : type === "quote" ? {type:"quote",text:"A meaningful quotation"}
-      : type === "note" ? {type:"note",text:"A useful note for your reader"}
-      : type === "ul" ? {type:"ul",items:["List item"]}
+      ? {type:"paragraph",text:tr(locale,"New paragraph","فقرة جديدة","Nytt stycke")}
+      : type === "heading" ? {type:"heading",level:2,text:tr(locale,"New heading","عنوان جديد","Ny rubrik")}
+      : type === "quote" ? {type:"quote",text:tr(locale,"An inspiring quote","اقتباس مهم","Ett citat")}
+      : type === "note" ? {type:"note",text:tr(locale,"A useful note for your reader","ملاحظة مهمة للقارئ","En läsarnotis")}
+      : type === "ul" ? {type:"ul",items:[tr(locale,"List item","عنصر القائمة","Listpunkt")]}
       : type === "pagebreak" ? {type:"pagebreak"}
       : {type:"divider"};
     const newBlocks = [...blocks.slice(0,index),newBlock,...blocks.slice(index)];
@@ -76,19 +78,24 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
   const at = (index: number) => serializeVisualBlocks(blocks.slice(0,index)).length +
     (index > 0 ? 2 : 0);
   const menu = (index: number) => <div className="visual-insert-bar" key={"plus-"+index}>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"paragraph")} title="Add paragraph">+ {/** text */}¶</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"heading")} title="Add heading">+ H</button>
-    <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))} title="Insert image">+ ◩</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"quote")} title="Add quotation">+ ❝</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"note")} title="Add note box">+ ▤</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"ul")} title="Add list">+ ☷</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")} title="Add divider">+ ✦</button>
-    <button type="button" disabled={disabled} onClick={()=>insert(index,"pagebreak")} title="Page break">+ ↴</button>
+    <details className="visual-add-menu">
+      <summary>+ {tr(locale,"Add","إضافة","Lägg till")}</summary>
+      <div className="visual-add-options">
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"paragraph")}>{tr(locale,"Text","نص","Text")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"heading")}>{tr(locale,"Heading","عنوان","Rubrik")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"quote")}>{tr(locale,"Quote","اقتباس","Citat")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"note")}>{tr(locale,"Note box","مربع ملاحظة","Anteckningsruta")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"ul")}>{tr(locale,"List","قائمة","Lista")}</button>
+        <button type="button" disabled={disabled} onClick={()=>onInsertImage(at(index))}>{tr(locale,"Image / logo","صورة / شعار","Bild / logotyp")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"divider")}>{tr(locale,"Divider","فاصل","Avdelare")}</button>
+        <button type="button" disabled={disabled} onClick={()=>insert(index,"pagebreak")}>{tr(locale,"Print page break","فاصل صفحة للطباعة","Sidbrytning")}</button>
+      </div>
+    </details>
   </div>;
   return <div className="visual-manuscript" aria-label="Visual chapter editor" data-chapter={chapterId}
     onMouseUp={()=>onSelection?.(window.getSelection()?.toString() || "")}
     onKeyUp={()=>onSelection?.(window.getSelection()?.toString() || "")}>
-    <p className="visual-hint">✦ Select and edit each paragraph directly. Changes save when leaving a block. Use + to insert content between paragraphs.</p>
+    <p className="visual-hint">✦ {tr(locale,"Edit paragraphs directly. Use + between paragraphs to add elements.","عدّل الفقرات مباشرة، واضغط + بين الفقرات لإضافة العناصر.","Redigera direkt. Använd + mellan stycken för att lägga till innehåll.")}</p>
     {menu(0)}
     {blocks.map((block,index) => {
       if (block.type === "illustration" || block.type === "divider" || block.type === "pagebreak")
@@ -129,6 +136,6 @@ export function VisualChapterEditor({content, chapterId, illustrations, bookId, 
         {menu(index+1)}
       </div>;
     })}
-    {active!==null && <div className="visual-selected-indicator">Editing paragraph {active+1}</div>}
+    {active!==null && <div className="visual-selected-indicator">{tr(locale,"Editing paragraph","تحرير الفقرة","Redigerar stycke")} {active+1}</div>}
   </div>;
 }
