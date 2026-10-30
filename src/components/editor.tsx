@@ -1128,7 +1128,7 @@ export function Editor({
               };
               const locked=(!draft.outline.length && !["brief","outline"].includes(step));
               return <button type="button" key={step} className={(tab===step || (tab==="write" && step==="outline"))?"active":""}
-                disabled={locked} onClick={()=>setTab(step==="outline" && draft.outline.length ? "write" : step)} aria-current={tab===step?"step":undefined}>
+                disabled={locked} onClick={()=>setTab(step==="outline" && draft.outline.length ? "write" : step)} aria-current={(tab===step || (tab==="write" && step==="outline"))?"step":undefined}>
                 <span>{i+1}</span><span>{labels[step]}</span>
               </button>;
             })}
@@ -1151,7 +1151,7 @@ export function Editor({
             <div>
               <button type="button" onClick={()=>{setCoverSide("front");setTab("design");}}>{tr(locale,"Front cover","الغلاف الأمامي","Framsida")}</button>
               <button type="button" onClick={()=>{setTab("design");requestAnimationFrame(()=>document.getElementById("book-preface")?.focus());}}>{tr(locale,"Preface and opening pages","المقدمة والصفحات الأولى","Förord och inledning")}</button>
-              {draft.outline.map((chapter,i)=><button type="button" key={chapter.id} className={`document-map-chapter${tab==="write"&&active?.id===chapter.id?" active":""}`} onClick={()=>{setChapterId(chapter.id);setTab("write");visualRangeRef.current=null;setSelectedCount(0);}}>
+              {draft.outline.map((chapter,i)=><button type="button" key={chapter.id} className="document-map-chapter" onClick={()=>{setChapterId(chapter.id);setTab("write");visualRangeRef.current=null;setSelectedCount(0);}}>
                 <span>{i+1}</span>{chapter.title}
               </button>)}
               <button type="button" onClick={()=>{setCoverSide("back");setTab("design");}}>{tr(locale,"Back cover","الغلاف الخلفي","Baksida")}</button>
@@ -1674,30 +1674,6 @@ export function Editor({
                     {tr(locale,"Advanced text","نص متقدم","Avancerad text")}
                   </button>
                 </div>
-                {active && (
-                  <button
-                    className="text-link"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : !current && active.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active.id,
-                      )
-                    }
-                  >
-                    <RotateCcw size={15} />
-                    {!book.unlocked &&
-                    (current || active.id !== draft.outline[0]?.id)
-                      ? t.unlock
-                      : current
-                        ? t.regenerate
-                        : t.generate}
-                  </button>
-                )}
               </div>
               {current && showIllustrations && (
                 <Dialog title={tr(locale,"Insert image or logo","إدراج صورة أو شعار","Infoga bild eller logotyp")}
@@ -1936,25 +1912,6 @@ export function Editor({
                         });
                       }}/>
                   </label>}
-                  <button
-                    className="button button-primary"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : active?.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active?.id,
-                      )
-                    }
-                  >
-                    <Sparkles size={17} />
-                    {book.unlocked || active?.id === draft.outline[0]?.id
-                      ? t.generate
-                      : t.unlock}
-                  </button>
                 </div>
               )}
               {current && (!visualMode || read) && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
@@ -2443,15 +2400,8 @@ export function Editor({
             <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
             <button type="button" className="button button-primary"
               disabled={disabled}
-              onClick={()=>{
-                const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
-                if(tab==="write" && missing){setChapterId(missing.id);setRead(false);setVisualMode(true);}
-                else setTab(tab==="write"?"design":"preview");
-              }}>
-              {tab==="write" && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
-                 ?tr(locale,"Finish missing chapters","استكمل الفصول الناقصة","Skriv färdigt kapitlen")
-               :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
-               :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
+              onClick={()=>setTab("preview")}>
+              {tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
               <ChevronRight size={16}/>
             </button>
           </div>}
