@@ -60,7 +60,18 @@ export function chapterGenerationPrompt(
         title: chapter.title,
         summary: book.chapters[chapter.id].summary,
       })),
-    // Bound context cost and never send a future chapter's manuscript.
+    // Edited prose is the source of truth. Generated summaries can become stale
+    // after a person changes a character, event or conclusion in the editor.
+    // Keep the latest six finished chapters bounded for predictable AI cost.
+    priorManuscriptExcerpts: previous
+      .filter((chapter) => Boolean(book.chapters[chapter.id]?.content.trim()))
+      .slice(-6)
+      .map((chapter) => ({
+        title: chapter.title,
+        opening: book.chapters[chapter.id].content.slice(0, 450),
+        ending: book.chapters[chapter.id].content.slice(-1350),
+      })),
+    // Never include the target or future chapter's manuscript.
     previousChapterEnding: previousDraft
       ? {
           title: previousChapter.title,
@@ -71,7 +82,7 @@ export function chapterGenerationPrompt(
   return [
     writing,
     "Write only the current chapter. Do not repeat its title or restart the book's introduction.",
-    "Use earlier summaries and the previous chapter ending for continuity, without copying or recapping them. Do not bring future outline events forward.",
+    "Use the preceding chapter manuscripts and endings for continuity, without copying or recapping them. If older generated summaries conflict with edited chapter text, trust the actual manuscript. Do not bring future outline events forward.",
     "End with a complete sentence at a natural chapter stopping point, never an unfinished paragraph or a promise to continue later.",
     "Return content (the full chapter) and summary (a factual 30–90 word continuity summary).",
     "Write both fields entirely in " + languageNames[book.language] + ".",

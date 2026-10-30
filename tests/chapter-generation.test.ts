@@ -123,3 +123,16 @@ test("continuity context includes the previous ending, is bounded and excludes f
   assert.equal(context.previousSummaries[0].summary, "PREVIOUS_SUMMARY");
   assert.doesNotMatch(prompt, /FUTURE_MANUSCRIPT|FUTURE_SUMMARY/);
 });
+
+test("new chapters honor updated text over stale generated summaries", () => {
+  const draft = book();
+  draft.chapters.first = {
+    content: "The child chooses a blue coat and leaves the old map behind. ".repeat(30) + "FINAL_EDITED_FACT",
+    summary: "The child wears a red coat and still holds the map.",
+  };
+  const prompt = chapterGenerationPrompt(draft, "second");
+  const context = JSON.parse(prompt.slice(prompt.indexOf("Data: ") + 6));
+  assert.match(context.priorManuscriptExcerpts[0].ending, /FINAL_EDITED_FACT$/);
+  assert.match(prompt, /trust the actual manuscript/);
+  assert.doesNotMatch(prompt, /FUTURE_MANUSCRIPT/);
+});

@@ -187,7 +187,8 @@ export function Editor({
       setRestartLanguage(isArabicBrief(d.book.idea) ? "ar" : d.book.language);
       setJob(d.job);
       setCredits(d.credits);
-      setChapterId((old) => old || d.book.outline[0]?.id || "");
+      setChapterId(old=>d.book.outline.some(c=>c.id===old)?old:
+      (d.book.outline.find(c=>!d.book.chapters[c.id]?.content?.trim())||d.book.outline[0])?.id||"");
       setLoadError("");
     } catch (e) {
       if (mounted.current) setLoadError(codeOf(e));
@@ -1117,18 +1118,17 @@ export function Editor({
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
-          <nav className="studio-progress-steps guided-five" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
-            {(["brief","outline","write","design","preview"] as const).map((step,i)=>{
+          <nav className="studio-progress-steps guided-four" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
+            {(["brief","outline","design","preview"] as const).map((step,i)=>{
               const labels={
                 brief:tr(locale,"Idea","الفكرة","Idé"),
-                outline:tr(locale,"Chapters","الفصول","Kapitel"),
-                write:tr(locale,"Writing","الكتابة","Skriv"),
+                outline:tr(locale,"Chapters + Writing","الفصول والكتابة","Kapitel och skrivning"),
                 design:tr(locale,"Design","التصميم","Design"),
                 preview:tr(locale,"Review","المراجعة","Granska"),
               };
               const locked=(!draft.outline.length && !["brief","outline"].includes(step));
-              return <button type="button" key={step} className={tab===step?"active":""}
-                disabled={locked} onClick={()=>setTab(step)} aria-current={tab===step?"step":undefined}>
+              return <button type="button" key={step} className={(tab===step || (tab==="write" && step==="outline"))?"active":""}
+                disabled={locked} onClick={()=>setTab(step==="outline" && draft.outline.length ? "write" : step)} aria-current={(tab===step || (tab==="write" && step==="outline"))?"step":undefined}>
                 <span>{i+1}</span><span>{labels[step]}</span>
               </button>;
             })}
@@ -1138,22 +1138,20 @@ export function Editor({
               <strong>{tr(locale,"From your idea to a finished book","من الفكرة إلى كتاب جاهز","Från idé till färdig bok")}</strong>
               <p>{tab==="brief"
                 ? tr(locale,"Check your book idea and settings, then create a chapter plan.","راجع فكرة كتابك وإعداداته، ثم أنشئ مخطط الفصول.","Granska din idé och skapa en kapitelplan.")
-                :tab==="outline"
-                ? tr(locale,"Review the chapter plan before writing.","راجع ترتيب الفصول ومحتواها قبل الكتابة.","Granska kapitelplanen före skrivandet.")
-                :tab==="write"
-                ? tr(locale,"Write each chapter yourself or let AI draft it, then edit directly.","اكتب كل فصل بنفسك أو دَع AI يكتب مسودته ثم عدّله مباشرة.","Skriv varje kapitel själv eller låt AI skapa ett utkast.")
+                :(tab==="outline"||tab==="write")
+                ? tr(locale,"Plan each chapter and write or generate the text directly underneath.","خطّط كل فصل واكتب أو ولّد النص تحته مباشرة.","Planera varje kapitel och skriv eller generera direkt under.")
                 :tab==="design"
                 ? tr(locale,"Choose your cover and interior layout.","اختر الغلاف وتنسيق الصفحات.","Välj omslag och inlaga.")
                 :tr(locale,"Check missing parts, preview and download your book.","افحص الأجزاء الناقصة وعاين الكتاب ثم نزّله.","Kontrollera, förhandsgranska och ladda ner.")}</p>
             </div>
             <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length}/{draft.outline.length} {tr(locale,"chapters ready","فصل جاهز","färdiga kapitel")}</span>
           </div>
-          {draft.outline.length>0 && <details className="studio-document-map">
+          {draft.outline.length>0 && tab!=="write" && tab!=="outline" && <details className="studio-document-map">
             <summary>{tr(locale,"Book contents · choose a section","أجزاء الكتاب · اختر القسم الذي تريد العمل عليه","Bokens innehåll · välj avsnitt")}</summary>
             <div>
               <button type="button" onClick={()=>{setCoverSide("front");setTab("design");}}>{tr(locale,"Front cover","الغلاف الأمامي","Framsida")}</button>
               <button type="button" onClick={()=>{setTab("design");requestAnimationFrame(()=>document.getElementById("book-preface")?.focus());}}>{tr(locale,"Preface and opening pages","المقدمة والصفحات الأولى","Förord och inledning")}</button>
-              {draft.outline.map((chapter,i)=><button type="button" key={chapter.id} className={`document-map-chapter${tab==="write"&&active?.id===chapter.id?" active":""}`} onClick={()=>{setChapterId(chapter.id);setTab("write");visualRangeRef.current=null;setSelectedCount(0);}}>
+              {draft.outline.map((chapter,i)=><button type="button" key={chapter.id} className="document-map-chapter" onClick={()=>{setChapterId(chapter.id);setTab("write");visualRangeRef.current=null;setSelectedCount(0);}}>
                 <span>{i+1}</span>{chapter.title}
               </button>)}
               <button type="button" onClick={()=>{setCoverSide("back");setTab("design");}}>{tr(locale,"Back cover","الغلاف الخلفي","Baksida")}</button>
@@ -1315,7 +1313,7 @@ export function Editor({
                   setTab("outline");
                 }}>
                 {draft.outline.length
-                  ? tr(locale,"Next: Review chapter plan","التالي: مراجعة مخطط الفصول","Nästa: Granska kapitelplan")
+                  ? tr(locale,"Next: Plan and write chapters","التالي: تخطيط الفصول وكتابتها","Nästa: Planera och skriv kapitel")
                   : tr(locale,"Next: Create chapter plan","التالي: إنشاء مخطط الفصول","Nästa: Skapa kapitelplan")}
                 <ChevronRight size={18}/>
               </button>
@@ -1357,10 +1355,10 @@ export function Editor({
               </div>
             </details>
           </section>}
-          {tab === "outline" && (
+          {tab === "outline" && draft.outline.length === 0 && (
             <section className="editor-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 2 of 5","المرحلة 2 من 5","Steg 2 av 5")}</span>
+                <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
                 <h2>
                   {draft.outline.length
                     ? t.outline
@@ -1551,42 +1549,73 @@ export function Editor({
               )}
             </section>
           )}
-          {tab === "write" && (
-            <section className="editor-panel chapter-panel">
+          {(tab === "write" || (tab === "outline" && draft.outline.length > 0)) && (
+            <section className="editor-panel chapter-panel chapter-flow">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 3 of 5","المرحلة 3 من 5","Steg 3 av 5")}</span>
-                <h2>{t.write}</h2>
+                <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
+                <h2>{tr(locale,"Plan and write your chapters","خطّط فصول كتابك واكتبها","Planera och skriv dina kapitel")}</h2>
+                <p>{tr(locale,"Open any chapter to adjust its plan, generate or write the text, and edit it right here. Continue chapter by chapter.","افتح أي فصل لتعديل خطته وتوليد نصه أو كتابته وتحريره هنا، ثم انتقل للفصل التالي.","Öppna ett kapitel, ändra planen, skriv eller generera texten och gå sedan vidare.")}</p>
               </div>
-              {draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim()) && <div className="guided-writing-choice">
-                <div>
-                  <strong>{tr(locale,"How would you like to write?","كيف تريد كتابة الفصول؟","Hur vill du skriva?")}</strong>
-                  <p>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length}/{draft.outline.length}
-                     {" "}{tr(locale,"chapters written","فصل مكتمل","kapitel klara")}</p>
-                </div>
-                <div className="guided-brief-actions">
-                  <button type="button" className="button button-primary" disabled={disabled || !config.ai}
-                    onClick={()=>void generate("book")}>
-                    <Sparkles size={17}/>{tr(locale,"Create missing chapters with AI","توليد الفصول الناقصة بواسطة AI","Generera saknade kapitel med AI")}
-                  </button>
-                  <button type="button" className="button button-outline" disabled={disabled}
-                    onClick={()=>{setChapterId(draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim())?.id||draft.outline[0].id);setRead(false);setVisualMode(true);}}>
-                    <FileText size={17}/>{tr(locale,"Write next chapter myself","كتابة الفصل التالي بنفسي","Skriv nästa kapitel själv")}
-                  </button>
-                </div>
-              </div>}
-              <label className="chapter-selector">
-                <span className="sr-only">{t.chapters}</span>
-                <select
-                  value={active?.id || ""}
-                  onChange={(e) => {setChapterId(e.target.value);visualSelectedRef.current="";visualRangeRef.current=null;setSelectedCount(0);}}
-                >
-                  {draft.outline.map((c, i) => (
-                    <option key={c.id} value={c.id}>
-                      {i + 1}. {c.title} {draft.chapters[c.id] ? "✓" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="chapter-flow-overview">
+                <strong>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length} / {draft.outline.length} {tr(locale,"chapters with text","فصول مكتوبة","skrivna kapitel")}</strong>
+                <span>{bookWords(draft).toLocaleString(locale)} {t.words} · {tr(locale,"Approx.","نحو","Cirka")} {Math.ceil(bookWords(draft)/300)} {tr(locale,"pages","صفحة","sidor")}</span>
+                <div className="chapter-flow-track"><span style={{width:(draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length/draft.outline.length*100)+"%"}} /></div>
+                <small>{tr(locale,"Target for this outline: approximately","التقدير الأولي لهذا المخطط: نحو","För denna plan: ungefär")} {draft.outline.length*2}–{draft.outline.length*4} {tr(locale,"pages after writing. The final count depends on words, formatting and images.","صفحة بعد الكتابة. العدد النهائي يعتمد على الكلمات والتنسيق والصور.","sidor när boken skrivits. Slutligt antal beror på ord, layout och bilder.")}</small>
+              </div>
+              <details className="chapter-flow-book-settings">
+                <summary>{tr(locale,"Edit book title and subtitle","تعديل عنوان الكتاب والعنوان الفرعي","Ändra boktitel och undertitel")}</summary>
+                <label>{t.title}<input maxLength={180} value={draft.title} disabled={disabled} onChange={e=>change(b=>({...b,title:e.target.value}))}/></label>
+                <label>{t.subtitle}<input maxLength={240} value={draft.subtitle} disabled={disabled} onChange={e=>change(b=>({...b,subtitle:e.target.value}))}/></label>
+              </details>
+              <div className="chapter-flow-list">
+                {draft.outline.map((c,i)=>(
+                  <article key={c.id} id={`chapter-${c.id}`} className={`chapter-flow-card ${active?.id===c.id?"is-open":""}`}>
+                    <div className="chapter-flow-head">
+                      <button type="button" className="chapter-flow-open" aria-expanded={active?.id===c.id}
+                        onClick={()=>{setChapterId(c.id);setRead(false);visualSelectedRef.current="";visualRangeRef.current=null;setSelectedCount(0);}}>
+                        <span className="chapter-flow-num">{i+1}</span>
+                        <span className="chapter-flow-title">
+                          <strong>{c.title}</strong>
+                          <small>{draft.chapters[c.id]?.content?.trim()
+                            ? draft.chapters[c.id].content.trim().split(/\s+/u).length.toLocaleString(locale)+" "+t.words
+                            : tr(locale,"Not written · AI target ~2–4 pages","لم يُكتب بعد · هدف AI نحو صفحتين إلى أربع","Inte skrivet · AI-mål ca 2–4 sidor")}</small>
+                        </span>
+                        {draft.chapters[c.id]?.content?.trim()?<Check size={18} className="chapter-flow-check"/>:<ChevronRight size={18}/>}
+                      </button>
+                      <button type="button" className="button button-outline button-small chapter-flow-ai"
+                        disabled={disabled || !config.ai || !draft.title.trim()}
+                        onClick={()=>{setChapterId(c.id);setRead(false);void generate(
+                          !book.unlocked && i===0 && !draft.chapters[c.id]?"sample":"chapter",c.id);}}>
+                        <Sparkles size={16}/>{draft.chapters[c.id]?.content?.trim()
+                          ? tr(locale,"Regenerate","إعادة التوليد","Generera om")
+                          : tr(locale,"Generate chapter","توليد الفصل AI","Generera kapitel")}
+                      </button>
+                    </div>
+                    {active?.id===c.id && <div className="chapter-flow-body">
+                      <div className="chapter-flow-plan" dir={draft.language==="ar"?"rtl":"ltr"}>
+                        <label>{tr(locale,"Chapter title","عنوان الفصل","Kapitelrubrik")}
+                          <input maxLength={160} value={c.title} disabled={disabled}
+                            onChange={e=>change(b=>({...b,outline:b.outline.map(x=>x.id===c.id?{...x,title:e.target.value}:x)}))}/>
+                        </label>
+                        <label>{tr(locale,"Chapter plan: what happens or what readers learn","مخطط الفصل: ماذا يحدث أو ماذا سيتعلم القارئ؟","Kapitelplan: vad händer eller lär sig läsaren?")}
+                          <textarea maxLength={600} rows={2} value={c.summary} disabled={disabled}
+                            onChange={e=>change(b=>({...b,outline:b.outline.map(x=>x.id===c.id?{...x,summary:e.target.value}:x)}))}/>
+                        </label>
+                        <div className="chapter-flow-controls">
+                          <button type="button" className="button button-outline button-small" disabled={disabled||i===0}
+                            onClick={()=>change(b=>{const a=[...b.outline];[a[i-1],a[i]]=[a[i],a[i-1]];return {...b,outline:a};})}>
+                            <ArrowUp size={14}/>{tr(locale,"Up","أعلى","Upp")}</button>
+                          <button type="button" className="button button-outline button-small" disabled={disabled||i===draft.outline.length-1}
+                            onClick={()=>change(b=>{const a=[...b.outline];[a[i],a[i+1]]=[a[i+1],a[i]];return {...b,outline:a};})}>
+                            <ArrowDown size={14}/>{tr(locale,"Down","أسفل","Ner")}</button>
+                          <button type="button" className="button button-outline button-small" disabled={disabled||draft.outline.length>=30}
+                            onClick={()=>addChapter(c.id)}><Plus size={14}/>{tr(locale,"Add after","إضافة بعده","Lägg till efter")}</button>
+                          <button type="button" className="button button-outline button-small" disabled={disabled||draft.outline.length<=1}
+                            onClick={()=>deleteChapter(c.id)}><Trash2 size={14}/>{tr(locale,"Delete","حذف","Ta bort")}</button>
+                        </div>
+                      </div>
+                      <div className="chapter-flow-workspace">
+                        <p className="chapter-flow-tip">{tr(locale,"Edit the chapter below. Select a passage for AI suggestions, or insert an image.","حرّر الفصل أدناه. حدد فقرة لاقتراحات AI أو أضف صورة.","Redigera kapitlet nedan. Markera text för AI-förslag eller infoga en bild.")}</p>
                 {(["novel","short_story","children_story"] as const).some(kind=>kind===draft.kind) && <details className="studio-story-notes">
                   <summary>{tr(locale,"Story notebook","دفتر القصة والشخصيات","Berättelsens anteckningsbok")}</summary>
                   <label>{tr(locale,"Characters, setting and continuity notes","الشخصيات والمكان وتسلسل الأحداث","Karaktärer, miljö och kontinuitet")}
@@ -1617,7 +1646,7 @@ export function Editor({
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
               </details>
-               {book.text_edit_candidate && (
+               {book.text_edit_candidate?.chapter_id === active?.id && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
                    <div className="ai-edit-compare">
@@ -1645,30 +1674,6 @@ export function Editor({
                     {tr(locale,"Advanced text","نص متقدم","Avancerad text")}
                   </button>
                 </div>
-                {active && (
-                  <button
-                    className="text-link"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : !current && active.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active.id,
-                      )
-                    }
-                  >
-                    <RotateCcw size={15} />
-                    {!book.unlocked &&
-                    (current || active.id !== draft.outline[0]?.id)
-                      ? t.unlock
-                      : current
-                        ? t.regenerate
-                        : t.generate}
-                  </button>
-                )}
               </div>
               {current && showIllustrations && (
                 <Dialog title={tr(locale,"Insert image or logo","إدراج صورة أو شعار","Infoga bild eller logotyp")}
@@ -1907,25 +1912,6 @@ export function Editor({
                         });
                       }}/>
                   </label>}
-                  <button
-                    className="button button-primary"
-                    disabled={disabled || !config.ai}
-                    onClick={() =>
-                      generate(
-                        book.unlocked
-                          ? "chapter"
-                          : active?.id === draft.outline[0]?.id
-                            ? "sample"
-                            : "book",
-                        active?.id,
-                      )
-                    }
-                  >
-                    <Sparkles size={17} />
-                    {book.unlocked || active?.id === draft.outline[0]?.id
-                      ? t.generate
-                      : t.unlock}
-                  </button>
                 </div>
               )}
               {current && (!visualMode || read) && Object.values(draft.illustrations || {}).some(asset => current.content.includes(`[[illustration:${asset.id}]]`)) && (
@@ -1969,27 +1955,49 @@ export function Editor({
                   ))}
                 </div>
               )}
-              <div className="editor-bottom-actions">
-                <p className="muted">
-                  {book.unlocked ? t.background : config.ownerTrial ? tr(locale, "Your private test: generate a full book without buying credits.", "تجربتك الخاصة: أنشئ كتابًا كاملًا دون شراء رصيد.", "Din privata test: skapa en hel bok utan att köpa krediter.") : t.unlockBody}
-                </p>
-                {!complete && (
-                  <button
-                    className="button button-primary"
-                    disabled={disabled || !config.ai}
-                    onClick={() => generate("book")}
-                  >
-                    <BookOpen size={17} />
-                    {book.unlocked ? t.resume : config.ownerTrial ? tr(locale, "Generate complete book for free", "توليد الكتاب كاملًا مجانًا", "Skapa hela boken gratis") : t.unlock}
-                  </button>
-                )}
+
+                      </div>
+                      <div className="chapter-flow-next">
+                        <span>{dirty?tr(locale,"Changes are being saved","يجري حفظ التعديلات","Ändringar sparas"):tr(locale,"Automatic cloud saving is enabled","الحفظ التلقائي مفعّل","Automatisk molnsparning är aktiv")}</span>
+                        <button type="button" className="button button-primary" disabled={disabled || saving || !draft.title.trim()}
+                          onClick={async()=>{
+                            if(dirtyRef.current && !(await save(true)))return;
+                            const next=draftRef.current?.outline[i+1] || draftRef.current?.outline.find(x=>!draftRef.current?.chapters[x.id]?.content?.trim());
+                            if(next){setChapterId(next.id);setRead(false);setVisualMode(true);
+                              requestAnimationFrame(()=>document.getElementById(`chapter-${next.id}`)?.scrollIntoView({behavior:"smooth",block:"start"}));}
+                            else setTab("design");
+                          }}>
+                          <Save size={16}/>{i===draft.outline.length-1
+                            ?tr(locale,"Save and continue","حفظ والمتابعة","Spara och fortsätt")
+                            :tr(locale,"Save and next chapter","حفظ والفصل التالي","Spara och nästa kapitel")}
+                        </button>
+                      </div>
+                    </div>}
+                  </article>
+                ))}
+              </div>
+              <div className="chapter-flow-footer">
+                <button type="button" className="button button-outline" disabled={disabled||draft.outline.length>=30}
+                  onClick={()=>addChapter()}><Plus size={16}/>{tr(locale,"Add chapter","إضافة فصل","Lägg till kapitel")}</button>
+                <label className="button button-outline">{tr(locale,"Import full manuscript (Word/TXT/MD)","استيراد كتاب كامل (Word/TXT/MD)","Importera helt manus (Word/TXT/MD)")}
+                  <input type="file" accept=".txt,.md,.docx" hidden disabled={disabled}
+                    onChange={e=>{const f=e.currentTarget.files?.[0];e.currentTarget.value="";if(f)void importManuscript(f,"book");}}/>
+                </label>
+                <button type="button" className="button button-primary" disabled={disabled}
+                  onClick={()=>{const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
+                    if(missing){setChapterId(missing.id);requestAnimationFrame(()=>document.getElementById(`chapter-${missing.id}`)?.scrollIntoView({behavior:"smooth",block:"start"}));}
+                    else setTab("design");}}>
+                  {draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
+                    ?tr(locale,"Continue unfinished chapters","استكمال الفصول الناقصة","Fortsätt ofärdiga kapitel")
+                    :tr(locale,"Next: Design the book","التالي: تصميم الكتاب","Nästa: Designa boken")}<ChevronRight size={16}/>
+                </button>
               </div>
             </section>
           )}
           {tab === "design" && (
             <section className="editor-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 4 of 5","المرحلة 4 من 5","Steg 4 av 5")}</span>
+                <span className="eyebrow">{tr(locale,"Step 3 of 4","المرحلة 3 من 4","Steg 3 av 4")}</span>
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
               </div>
@@ -2262,7 +2270,7 @@ export function Editor({
           {tab === "preview" && (
             <section className="editor-panel preview-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 5 of 5","المرحلة 5 من 5","Steg 5 av 5")}</span>
+                <span className="eyebrow">{tr(locale,"Step 4 of 4","المرحلة 4 من 4","Steg 4 av 4")}</span>
                 <h2>{t.previewTitle}</h2>
                 <p>{config.ownerTrial
                   ? tr(locale,
@@ -2388,19 +2396,12 @@ export function Editor({
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
-          {(tab==="write" || tab==="design") && <div className="studio-next-step">
+          {tab==="design" && <div className="studio-next-step">
             <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
             <button type="button" className="button button-primary"
               disabled={disabled}
-              onClick={()=>{
-                const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
-                if(tab==="write" && missing){setChapterId(missing.id);setRead(false);setVisualMode(true);}
-                else setTab(tab==="write"?"design":"preview");
-              }}>
-              {tab==="write" && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
-                 ?tr(locale,"Finish missing chapters","استكمل الفصول الناقصة","Skriv färdigt kapitlen")
-               :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
-               :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
+              onClick={()=>setTab("preview")}>
+              {tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
               <ChevronRight size={16}/>
             </button>
           </div>}
