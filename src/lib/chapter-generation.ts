@@ -16,6 +16,7 @@ export type ChapterBook = Pick<
   | "language"
   | "outline"
   | "chapters"
+  | "story_notes"
 >;
 type WriteChapter = (
   operation: "chapter" | "chapter_recovery",
@@ -50,6 +51,7 @@ export function chapterGenerationPrompt(
     audience: book.audience,
     kind: book.kind,
     tone: book.tone,
+    authorContinuityNotes: book.story_notes?.slice(0, 2000) || undefined,
     outline: book.outline,
     currentChapter: book.outline[index],
     previousSummaries: previous

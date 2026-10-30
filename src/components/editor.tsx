@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -31,7 +31,9 @@ import {
 } from "lucide-react";
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
-import { VisualChapterEditor } from "./visual-chapter-editor";
+import { VisualChapterEditor, type VisualSelection } from "./visual-chapter-editor";
+import { DraftHistory } from "@/lib/draft-history";
+import { draftKey, editableBook, readDraft, restoreDraft, writeDraft } from "@/lib/draft-storage";
 import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
@@ -93,7 +95,15 @@ export function Editor({
 }) {
   const t = copy[locale];
   const [book, setBook] = useState<BookWithCover | null>(null);
-  const [draft, setDraft] = useState<BookWithCover | null>(null);
+  const [draft, setDraftState] = useState<BookWithCover | null>(null);
+  const draftRef = useRef<BookWithCover | null>(null);
+  const setDraft = useCallback((value: SetStateAction<BookWithCover | null>) => {
+    const next = typeof value === "function" ? value(draftRef.current) : value;
+    draftRef.current = next;
+    setDraftState(next);
+  }, []);
+  const undoHistory = useRef(new DraftHistory());
+  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [job, setJob] = useState<Job | null>(null);
   const [credits, setCredits] = useState(0);
   const [tab, setTab] = useState<Tab>("outline");
@@ -110,6 +120,7 @@ export function Editor({
   const [visualMode, setVisualMode] = useState(true);
   const [readerMode, setReaderMode] = useState(true);
   const visualSelectedRef = useRef("");
+  const visualRangeRef = useRef<VisualSelection | null>(null);
   const [showIllustrations, setShowIllustrations] = useState(false);
   const [imageSource, setImageSource] = useState<"library"|"upload"|"ai">("library");
   const [imageCaption, setImageCaption] = useState("");
@@ -117,6 +128,7 @@ export function Editor({
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageSize, setImageSize] = useState<"small" | "medium" | "full">("medium");
   const [imagePlacement, setImagePlacement] = useState<"cursor" | "start" | "end">("cursor");
+  const [replaceImageId, setReplaceImageId] = useState<string | null>(null);
   const cursorRef = useRef(0);
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const chapterEditorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -126,10 +138,15 @@ export function Editor({
   const [dirty, setDirty] = useState(false);
   const [recoveryDraft, setRecoveryDraft] = useState<BookWithCover | null>(null);
   const recoveryCheckedRef = useRef(false);
-  const backupKey = `ebook-studio:draft:${id}`;
+  const backupKey = draftKey(id);
+  const [localSaved, setLocalSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const [retryTick, setRetryTick] = useState(0);
   const [online, setOnline] = useState(true);
   const saveFailuresRef = useRef(0);
   const savingRef = useRef(false);
+  const saveWaitersRef = useRef<(() => void)[]>([]);
   const generatingRef = useRef(false);
   const editSequenceRef = useRef(0);
   const dirtyRef = useRef(false);
@@ -137,7 +154,16 @@ export function Editor({
   const [modal, setModal] = useState<"credits" | "history" | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const busy = !!job && ["queued", "running"].includes(job.status);
-  const disabled = busy || !!pending;
+  const disabled = busy || !!pending || !!recoveryDraft;
+  const persistDraft = useCallback((value: BookWithCover) => {
+    try { writeDraft(localStorage, value); setLocalSaved(true); }
+    catch { setLocalSaved(false); try { writeDraft(sessionStorage, value); } catch {} }
+  }, []);
+  const clearBackup = useCallback(() => {
+    try { localStorage.removeItem(backupKey); } catch {}
+    try { sessionStorage.removeItem(backupKey); } catch {}
+    setLocalSaved(false);
+  }, [backupKey]);
   const load = useCallback(async () => {
     try {
       const d = await request<{
@@ -149,20 +175,14 @@ export function Editor({
       if (!recoveryCheckedRef.current && !dirtyRef.current) {
         recoveryCheckedRef.current = true;
         try {
-          const data = sessionStorage.getItem(backupKey);
-          if (data) {
-            const saved = JSON.parse(data) as BookWithCover;
-            if (saved.id === id && saved.revision === d.book.revision &&
-                Array.isArray(saved.outline) && typeof saved.chapters === "object" &&
-                saved.title !== undefined) {
-              setRecoveryDraft(saved);
-            }
-          }
+          const saved = readDraft(localStorage, d.book) || readDraft(sessionStorage, d.book);
+          if (saved) setRecoveryDraft(saved.book);
         } catch {
           // Private mode or malformed browser storage: cloud save continues normally.
         }
       }
       setBook(d.book);
+      setLastSavedAt(d.book.updated_at);
       if (!dirtyRef.current) setDraft(d.book);
       setRestartLanguage(isArabicBrief(d.book.idea) ? "ar" : d.book.language);
       setJob(d.job);
@@ -262,13 +282,11 @@ export function Editor({
     };
   }, [locale]);
   useEffect(() => {
-    if (!dirty || !draft) return;
-    try {
-      sessionStorage.setItem(backupKey, JSON.stringify(draft));
-    } catch {
-      // Browser storage is best effort. The unsaved changes warning remains visible.
-    }
-  }, [backupKey, draft, dirty]);
+    const flush = () => { if (dirtyRef.current && draftRef.current) persistDraft(draftRef.current); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", flush); };
+  }, [persistDraft]);
 
   useEffect(() => {
     if (!coverCandidate) {
@@ -283,6 +301,7 @@ export function Editor({
     const sync = () => {
       if (navigator.onLine) saveFailuresRef.current = 0;
       setOnline(navigator.onLine);
+      if (navigator.onLine) setRetryTick(value => value + 1);
     };
     sync();
     window.addEventListener("online", sync);
@@ -293,20 +312,33 @@ export function Editor({
     };
   }, []);
   useEffect(() => {
-    if (!dirty || !online || disabled || !draft?.outline.length ||
-        error === "conflict" || error === "rate_limit" ||
-        saveFailuresRef.current >= 4) return;
+    if (!dirty || !online || disabled || saving || !draft?.outline.length || error === "conflict") return;
     // Debounce saves and back off if the network is unavailable.
-    const delay = Math.min(30_000, 2_200 * (2 ** Math.min(4, saveFailuresRef.current)));
+    const delay = error === "rate_limit" ? 60_000 : Math.min(30_000, 1_500 * (2 ** Math.min(5, saveFailuresRef.current)));
     const timer = window.setTimeout(() => void save(), delay);
     return () => window.clearTimeout(timer);
-  }, [draft, dirty, online, disabled, pending, error]);
+  }, [draft, dirty, online, disabled, saving, pending, error, retryTick]);
 
-  function change(fn: (b: BookWithCover) => BookWithCover) {
+  function change(fn: (b: BookWithCover) => BookWithCover, typing = false) {
+    const before = draftRef.current;
+    if (!before) return;
+    const next = fn(before);
+    undoHistory.current.record(before, next, typing);
+    setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
     editSequenceRef.current += 1;
-    setDraft((b) => (b ? fn(b) : b));
+    setDraft(next);
     dirtyRef.current = true;
     setDirty(true);
+    persistDraft(next);
+  }
+  function travelHistory(direction: "undo" | "redo") {
+    if (!draftRef.current || disabled) return;
+    const next = undoHistory.current[direction](draftRef.current);
+    if (!next) return;
+    editSequenceRef.current++;
+    setDraft(next); dirtyRef.current = true; setDirty(true); persistDraft(next);
+    setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
+    visualRangeRef.current = null; visualSelectedRef.current = ""; setSelectedCount(0);
   }
   const imagePosition = (text: string) => imagePlacement === "start" ? 0 :
     imagePlacement === "end" ? text.length : Math.min(cursorRef.current, text.length);
@@ -325,17 +357,20 @@ export function Editor({
     if (!draft || !active || !current || disabled) return;
     const position = imagePosition(current.content);
     const wasDirty = dirtyRef.current;
-    if (wasDirty && !(await save())) return;
     setPending("illustration"); setError("");
+    if ((wasDirty || savingRef.current) && !(await save())) { setPending(""); return; }
     try {
       const d = await request<{ book: BookWithCover }>(`/api/books/${id}/illustrations`, {
         method: "POST", body: JSON.stringify({
-          revision: draft.revision + (wasDirty ? 1 : 0),
+          revision: draftRef.current!.revision,
           chapter_id: active.id, position, preset,
+          ...(replaceImageId ? { replace_id: replaceImageId } : {}),
           size: imageSize, caption: imageCaption,
         }),
       });
-      setBook(d.book); setDraft(d.book);
+      if (draftRef.current) undoHistory.current.record(draftRef.current, d.book);
+      setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
+      setBook(d.book); setDraft(d.book); clearBackup(); setReplaceImageId(null);
       dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
     } catch (e) { setError(codeOf(e)); }
     finally { setPending(""); }
@@ -346,21 +381,24 @@ export function Editor({
         file.size > 3_000_000) { setError("invalid_input"); return; }
     const position = imagePosition(current.content);
     const wasDirty = dirtyRef.current;
-    if (wasDirty && !(await save())) return;
     setPending("illustration"); setError("");
+    if ((wasDirty || savingRef.current) && !(await save())) { setPending(""); return; }
     try {
       const params = new URLSearchParams({
-        revision: String(draft.revision + (wasDirty ? 1 : 0)),
+        revision: String(draftRef.current!.revision),
         chapter_id: active.id, position: String(position),
         size: asLogo ? "small" : imageSize,
         caption: asLogo ? (imageCaption.trim() || tr(locale, "Logo", "الشعار", "Logotyp")) : imageCaption,
       });
+      if (replaceImageId) params.set("replace_id", replaceImageId);
       const response = await fetch(`/api/books/${id}/illustrations/upload?${params}`, {
         method: "POST", headers: { "Content-Type": file.type }, body: file,
       });
       const payload = await response.json().catch(() => ({ error: "service_error" }));
       if (!response.ok) throw new Error(payload.error || "service_error");
-      setBook(payload.book); setDraft(payload.book);
+      if (draftRef.current) undoHistory.current.record(draftRef.current, payload.book);
+      setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
+      setBook(payload.book); setDraft(payload.book); clearBackup(); setReplaceImageId(null);
       dirtyRef.current = false; setDirty(false); setShowIllustrations(false);
     } catch (e) { setError(e instanceof Error ? e.message : "service_error"); }
     finally { setPending(""); }
@@ -373,18 +411,18 @@ export function Editor({
       "حذف هذه الصورة من النسخة الحالية؟ ستبقى في الإصدارات القديمة المحفوظة.",
       "Ta bort bilden från aktuell bok? Tidigare versioner behåller den."))) return;
     const wasDirty = dirtyRef.current;
-    if (wasDirty && !(await save())) return;
     setPending("illustration"); setError("");
+    if ((wasDirty || savingRef.current) && !(await save())) { setPending(""); return; }
     try {
       const updated = override || imageEdits[imageId];
       const result = await request<{ book: BookWithCover }>(
         `/api/books/${id}/illustrations/${imageId}`, {
           method: remove ? "DELETE" : "PATCH",
-          body: JSON.stringify({ revision: draft!.revision + (wasDirty ? 1 : 0),
+          body: JSON.stringify({ revision: draftRef.current!.revision,
             ...(!remove ? { caption: updated?.caption ?? illustration.caption,
               size: updated?.size ?? illustration.size } : {}) }),
         });
-      setBook(result.book); setDraft(result.book);
+      setBook(result.book); setDraft(result.book); clearBackup();
       dirtyRef.current = false; setDirty(false);
       setImageEdits(state => { const next = { ...state }; delete next[imageId]; return next; });
     } catch (e) { setError(codeOf(e)); }
@@ -538,40 +576,29 @@ export function Editor({
       editor.setSelectionRange(from + prefix.length, from + prefix.length + (selected || " ").length);
     });
   }
-  async function save(): Promise<boolean> {
-    if (!draft || !dirtyRef.current) return true;
-    if (savingRef.current) return false;
-    if (!online) {
+  async function save(checkpoint = false): Promise<boolean> {
+    if (savingRef.current) {
+      await new Promise<void>(resolve => saveWaitersRef.current.push(resolve));
+      return dirtyRef.current ? save(checkpoint) : true;
+    }
+    const source = draftRef.current;
+    if (!source || !dirtyRef.current) return true;
+    if (!navigator.onLine) {
       setError("offline");
       return false;
     }
     savingRef.current = true;
     const savingSequence = editSequenceRef.current;
-    setPending("save");
+    setSaving(true);
     setError("");
     try {
       const d = await request<{ book: BookWithCover }>(`/api/books/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          revision: draft.revision,
-          title: draft.title,
-          subtitle: draft.subtitle,
-          author: draft.author,
-          cover_style: draft.cover_style,
-          use_artwork: draft.use_artwork,
-          cover_direction: draft.cover_direction || "",
-          back_blurb: draft.back_blurb || "",
-          author_bio: draft.author_bio || "",
-          dedication: draft.dedication || "",
-          preface: draft.preface || "",
-          acknowledgments: draft.acknowledgments || "",
-          copyright_notice: draft.copyright_notice || "",
-          layout_theme: draft.layout_theme || "classic",
-          outline: draft.outline,
-          chapters: draft.chapters,
-        }),
+        body: JSON.stringify({ ...editableBook(source), checkpoint }),
+        signal: AbortSignal.timeout(25_000),
       });
       setBook(d.book);
+      setLastSavedAt(d.book.updated_at);
       const editedWhileSaving = editSequenceRef.current !== savingSequence;
       if (editedWhileSaving) {
         // Never replace a newer on-screen draft with the older request body.
@@ -581,11 +608,12 @@ export function Editor({
           : d.book);
         dirtyRef.current = true;
         setDirty(true);
+        if (draftRef.current) persistDraft(draftRef.current);
       } else {
         setDraft(d.book);
         dirtyRef.current = false;
         setDirty(false);
-        try { sessionStorage.removeItem(backupKey); } catch {}
+        clearBackup();
         setRecoveryDraft(null);
       }
       saveFailuresRef.current = 0;
@@ -596,7 +624,9 @@ export function Editor({
       return false;
     } finally {
       savingRef.current = false;
-      setPending("");
+      setSaving(false);
+      const waiters = saveWaitersRef.current.splice(0);
+      waiters.forEach(resolve => resolve());
     }
   }
   async function generate(kind: JobKind, chapter?: string,
@@ -617,7 +647,11 @@ export function Editor({
     }
     const imageInsertPosition = kind === "illustration" && chapter ?
       imagePosition(draft.chapters[chapter].content) : 0;
-    if (dirtyRef.current && !(await save())) return;
+    generatingRef.current = true;
+    setPending("generate");
+    if ((dirtyRef.current || savingRef.current) && !(await save())) {
+      generatingRef.current = false; setPending(""); return;
+    }
     // A lost HTTP response must not trigger a second (billable) AI job.
     // Reuse the same request ID on uncertain network errors, even after reload.
     const requestKey = `ebook-studio:generate:${id}:${kind}:${chapter || "all"}`;
@@ -687,7 +721,7 @@ export function Editor({
       setChapterId(result.outline[0]?.id || "");
       setDirty(false);
       dirtyRef.current = false;
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      clearBackup();
     } catch (error) {
       setError(codeOf(error));
     } finally {
@@ -716,7 +750,7 @@ export function Editor({
       });
       setBook(fresh);
       setDraft(fresh);
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      clearBackup();
       setRecoveryDraft(null);
       setJob(null);
       setChapterId("");
@@ -730,13 +764,19 @@ export function Editor({
       setPending("");
     }
   }
-  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom") {
+  function proposeTextEdit(action:"improve"|"shorten"|"expand"|"proofread"|"tone"|"simplify"|"custom", range?: VisualSelection) {
     if (!draft || !active || !current || disabled || !book?.unlocked) return;
     if (action === "custom" && aiInstruction.trim().length < 5) {
       setImportError(tr(locale,"Write an instruction first.","اكتب تعليمات التعديل أولًا.","Skriv en instruktion först."));return;
     }
     let start=0,end=0;
     if (visualMode && !read) {
+      const precise = range || visualRangeRef.current;
+      if (precise && precise.content !== draftRef.current?.chapters[active.id]?.content) {
+        change(b => ({ ...b, chapters: { ...b.chapters, [active.id]: { ...b.chapters[active.id], content: precise.content } } }));
+      }
+      if (precise) { start = precise.start; end = precise.end; }
+      else {
       const selection=visualSelectedRef.current.trim();
       if (selection.length < 4) {
         setImportError(tr(locale,"Select a passage in the visual editor first.",
@@ -748,6 +788,7 @@ export function Editor({
         setImportError(tr(locale,"Select a unique passage, or use Markdown mode for precise selection.",
           "اختر نصًا غير متكرر أو استخدم وضع النص الأصلي للتحديد بدقة.",
           "Markera unik text eller använd källtextläget."));return;
+      }
       }
     } else {
       const el=chapterEditorRef.current;
@@ -763,14 +804,16 @@ export function Editor({
   }
   async function decideTextEdit(accept:boolean) {
     if (!book?.text_edit_candidate || disabled) return;
-    let revision=book.revision;
-    if(dirtyRef.current) {if(!(await save()))return;revision++;}
     setPending(accept?"apply-ai-edit":"reject-ai-edit");setError("");
+    if ((dirtyRef.current || savingRef.current) && !(await save())) {setPending("");return;}
+    const revision=draftRef.current!.revision;
     try {
       const d=await request<{book:BookWithCover}>(`/api/books/${id}/text-edit`,{
         method:"POST",body:JSON.stringify({revision,accept}),
       });
-      setBook(d.book);setDraft(d.book);dirtyRef.current=false;setDirty(false);
+      if (draftRef.current) undoHistory.current.record(draftRef.current,d.book);
+      setHistoryState({canUndo:undoHistory.current.canUndo,canRedo:undoHistory.current.canRedo});
+      setBook(d.book);setDraft(d.book);dirtyRef.current=false;setDirty(false);clearBackup();
     } catch(e){setError(codeOf(e));}
     finally{setPending("");}
   }
@@ -879,7 +922,7 @@ export function Editor({
       dirtyRef.current = false;
       setDirty(false);
       setModal(null);
-      try { sessionStorage.removeItem(backupKey); } catch {}
+      clearBackup();
     } catch (e) {
       setError(codeOf(e));
     } finally {
@@ -980,14 +1023,17 @@ export function Editor({
         </Link>
         <div className="editor-top-actions">
           <span className={`save-status ${dirty ? "is-dirty" : ""}`}>
-            {pending === "save" ? (
+            {saving ? (
               <Loader2 size={14} className="spin" />
             ) : dirty ? (
               <span className="dirty-dot" />
             ) : (
               <Check size={14} />
             )}{" "}
-            {pending === "save" ? t.saving : dirty ? t.unsaved : t.saved}
+            {saving ? t.saving : dirty ? localSaved
+              ? tr(locale,"Saved on this device · waiting to sync","محفوظ على الجهاز · بانتظار المزامنة","Sparat på enheten · väntar på synk")
+              : t.unsaved : tr(locale,"Saved to cloud","محفوظ في السحابة","Sparat i molnet")}
+            {!dirty && lastSavedAt && <time dateTime={lastSavedAt}>{new Date(lastSavedAt).toLocaleTimeString(locale,{hour:"2-digit",minute:"2-digit"})}</time>}
           </span>
           <button className="button button-small button-outline"
             type="button" onClick={()=>setTab("preview")} disabled={!draft?.outline.length}
@@ -1012,8 +1058,8 @@ export function Editor({
           </button>
           <button
             className="button button-small button-ink"
-            onClick={() => void save()}
-            disabled={disabled || !dirty}
+            onClick={() => void save(true)}
+            disabled={disabled || saving || !dirty}
           >
             <Save size={15} />
             {t.save}
@@ -1033,7 +1079,7 @@ export function Editor({
             </span>
           </div>
           <nav className="editor-tabs" aria-label={t.studio}>
-            <div className="studio-journey-first"><span className="tab-number">01</span><Check size={15}/>{tr(locale, "Idea and audience", "الفكرة والجمهور", "Idé och målgrupp")}</div>
+            <div className="studio-journey-first"><Check size={15}/>{tr(locale, "Book workspace", "مساحة صناعة الكتاب", "Bokens arbetsyta")}</div>
             {(
               [
                 { id: "outline", icon: ListTree },
@@ -1049,7 +1095,7 @@ export function Editor({
                 disabled={!draft.outline.length && tabId !== "outline"}
                 aria-current={tab === tabId ? "page" : undefined}
               >
-                <span className="tab-number">0{i + 2}</span>
+                <span className="tab-number">0{i + 1}</span>
                 <Icon size={17} />
                 <span>{t[tabId]}</span>
                 <ChevronRight className="tab-chevron" size={15} />
@@ -1068,11 +1114,11 @@ export function Editor({
             <BookOpen size={18} />
             <div>
               <strong>
-                {Object.keys(book.chapters).length}/{book.chapter_count}
+                {draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length || draft.chapter_count}
               </strong>{" "}
               {t.chapters}
               <small>
-                {bookWords(book).toLocaleString(locale)} {t.words}
+                {bookWords(draft).toLocaleString(locale)} {t.words}
               </small>
             </div>
           </div>
@@ -1095,12 +1141,24 @@ export function Editor({
               className={tab===step?"active":""}
               aria-current={tab===step?"step":undefined}
               disabled={!draft.outline.length&&step!=="outline"} onClick={()=>setTab(step)}>
-              <span>{i+2}</span>{step==="outline"?tr(locale,"Plan","التخطيط","Planera")
+              <span>{i+1}</span>{step==="outline"?tr(locale,"Plan","التخطيط","Planera")
                 :step==="write"?tr(locale,"Write","الكتابة","Skriv")
                 :step==="design"?tr(locale,"Design","التصميم","Design")
                 :tr(locale,"Review","المراجعة","Granska")}
             </button>)}
           </nav>
+          {draft.outline.length>0 && <details className="studio-document-map">
+            <summary>{tr(locale,"Book contents · choose a section","أجزاء الكتاب · اختر القسم الذي تريد العمل عليه","Bokens innehåll · välj avsnitt")}</summary>
+            <div>
+              <button type="button" onClick={()=>{setCoverSide("front");setTab("design");}}>{tr(locale,"Front cover","الغلاف الأمامي","Framsida")}</button>
+              <button type="button" onClick={()=>{setTab("design");requestAnimationFrame(()=>document.getElementById("book-preface")?.focus());}}>{tr(locale,"Preface and opening pages","المقدمة والصفحات الأولى","Förord och inledning")}</button>
+              {draft.outline.map((chapter,i)=><button type="button" key={chapter.id} className={`document-map-chapter${tab==="write"&&active?.id===chapter.id?" active":""}`} onClick={()=>{setChapterId(chapter.id);setTab("write");visualRangeRef.current=null;setSelectedCount(0);}}>
+                <span>{i+1}</span>{chapter.title}
+              </button>)}
+              <button type="button" onClick={()=>{setCoverSide("back");setTab("design");}}>{tr(locale,"Back cover","الغلاف الخلفي","Baksida")}</button>
+              <button type="button" onClick={()=>setTab("preview")}>{tr(locale,"Review and export","المراجعة والتنزيل","Granska och exportera")}</button>
+            </div>
+          </details>}
           {!online && (
             <div className="notice offline-warning" role="status">
               {tr(locale,
@@ -1109,23 +1167,21 @@ export function Editor({
                 "Du är offline. Ändringarna har inte sparats i molnet ännu. Låt sidan vara öppen. Automatisk sparning återupptas när anslutningen återkommer.")}
             </div>
           )}
-          {recoveryDraft && !dirty && (
+          {recoveryDraft && (
             <div className="notice draft-recovery" role="status">
               <strong>{tr(locale, "Recover unsaved changes?", "هل تريد استعادة التعديلات غير المحفوظة؟", "Återställa osparade ändringar?")}</strong>
               <p>{tr(locale,
-                "A draft from this browser tab was found. You can restore it or keep the last cloud-saved version.",
-                "وُجدت مسودة من هذا المتصفح. يمكنك استعادتها أو الإبقاء على آخر نسخة محفوظة على السحابة.",
+                "An unsynced draft was found on this device. Restore it or keep the cloud version.",
+                "وُجدت تعديلات غير متزامنة محفوظة على هذا الجهاز. يمكنك استعادتها أو الاحتفاظ بالنسخة السحابية.",
                 "Ett utkast från den här webbläsarfliken hittades. Återställ det eller behåll den senast molnsparade versionen.")}</p>
               <div className="cover-confirm-buttons">
                 <button type="button" className="button button-primary button-small" onClick={() => {
-                  editSequenceRef.current += 1;
-                  setDraft(recoveryDraft);
-                  dirtyRef.current = true;
-                  setDirty(true);
+                  const recovered = restoreDraft(book, recoveryDraft);
+                  change(() => recovered);
                   setRecoveryDraft(null);
                 }}>{tr(locale, "Restore draft", "استعادة المسودة", "Återställ utkast")}</button>
                 <button type="button" className="button button-outline button-small" onClick={() => {
-                  try { sessionStorage.removeItem(backupKey); } catch {}
+                  clearBackup();
                   setRecoveryDraft(null);
                 }}>{tr(locale, "Keep saved version", "الإبقاء على النسخة المحفوظة", "Behåll sparad version")}</button>
               </div>
@@ -1134,6 +1190,15 @@ export function Editor({
           {(error || loadError) && (
             <div className="error-message" role="alert">
               {errorMessage(error || loadError, locale)}
+              {error==="conflict" && <div className="save-conflict-actions">
+                <button type="button" className="button button-small button-outline" disabled={!!pending} onClick={async()=>{
+                  const local=draftRef.current;if(!local)return;
+                  persistDraft(local);setPending("resolve-conflict");
+                  try{const result=await request<{book:BookWithCover;job:Job|null;credits:number}>(`/api/books/${id}`);
+                    setBook(result.book);setDraft(result.book);setJob(result.job);setRecoveryDraft(local);dirtyRef.current=false;setDirty(false);setError("");
+                  }catch(e){setError(codeOf(e));}finally{setPending("");}
+                }}>{tr(locale,"Review cloud version and recover draft","مراجعة النسخة السحابية واستعادة المسودة","Granska molnversion och återställ utkast")}</button>
+              </div>}
             </div>
           )}
           {busy && (
@@ -1440,7 +1505,7 @@ export function Editor({
                 <span className="sr-only">{t.chapters}</span>
                 <select
                   value={active?.id || ""}
-                  onChange={(e) => {setChapterId(e.target.value);visualSelectedRef.current="";setSelectedCount(0);}}
+                  onChange={(e) => {setChapterId(e.target.value);visualSelectedRef.current="";visualRangeRef.current=null;setSelectedCount(0);}}
                 >
                   {draft.outline.map((c, i) => (
                     <option key={c.id} value={c.id}>
@@ -1449,6 +1514,15 @@ export function Editor({
                   ))}
                 </select>
               </label>
+                {(["novel","short_story","children_story"] as const).some(kind=>kind===draft.kind) && <details className="studio-story-notes">
+                  <summary>{tr(locale,"Story notebook","دفتر القصة والشخصيات","Berättelsens anteckningsbok")}</summary>
+                  <label>{tr(locale,"Characters, setting and continuity notes","الشخصيات والمكان وتسلسل الأحداث","Karaktärer, miljö och kontinuitet")}
+                    <textarea rows={4} maxLength={2000} disabled={disabled} value={draft.story_notes||""}
+                      placeholder={tr(locale,"Names, ages, character traits and facts AI must preserve.","اكتب أسماء الشخصيات وأعمارها وصفاتها والأحداث التي يجب الحفاظ عليها.","Namn, åldrar, egenskaper och fakta som AI ska bevara.")}
+                      onChange={e=>change(b=>({...b,story_notes:e.target.value}),true)}/>
+                  </label>
+                  <p>{tr(locale,"These notes guide future chapters and text improvements.","تُستخدم هذه الملاحظات عند توليد الفصول وتحسين النصوص التالية.","Anteckningarna vägleder kommande kapitel och textförbättringar.")}</p>
+                </details>}
               <details className="studio-chapter-management">
                 <summary>{tr(locale,"Chapter options: new, split, merge, import","خيارات الفصل: إضافة وتقسيم ودمج واستيراد","Kapitelalternativ: nytt, dela, slå ihop, importera")}</summary>
                 <div className="chapter-author-actions">
@@ -1526,9 +1600,11 @@ export function Editor({
               {current && showIllustrations && (
                 <Dialog title={tr(locale,"Insert image or logo","إدراج صورة أو شعار","Infoga bild eller logotyp")}
                   closeLabel={tr(locale,"Close","إغلاق","Stäng")}
-                  onClose={()=>setShowIllustrations(false)}>
+                  onClose={()=>{setShowIllustrations(false);setReplaceImageId(null);}}>
                 <div className="illustration-inserter studio-image-dialog"
                   dir={locale === "ar" ? "rtl" : "ltr"}>
+                  {error && <p className="error-message" role="alert">{errorMessage(error,locale)}</p>}
+                  {pending==="illustration" && <p role="status">{tr(locale,"Saving image…","جارٍ حفظ الصورة…","Sparar bilden…")}</p>}
                   <p className="studio-image-location">{tr(locale,
                     "You chose a specific point in your chapter. The image will be inserted there.",
                     "حددت موضع الصورة داخل الفصل. ستُضاف الصورة هنا بالضبط.",
@@ -1554,7 +1630,7 @@ export function Editor({
                     <input maxLength={240} value={imageCaption} onChange={e => setImageCaption(e.target.value)} />
                   </label>
                   <div className="insert-source-tabs" role="group" aria-label={tr(locale,"Choose source","اختر مصدر الصورة","Välj bildkälla")}>
-                    {(["library","upload","ai"] as const).map(source=><button type="button" key={source}
+                    {(["library","upload","ai"] as const).filter(source=>!replaceImageId||source!=="ai").map(source=><button type="button" key={source}
                       className={imageSource===source?"active":""} onClick={()=>setImageSource(source)}>
                       {source==="library"?tr(locale,"Library","المكتبة","Bibliotek"):
                        source==="upload"?tr(locale,"Upload / logo","رفع صورة أو شعار","Bild eller logotyp"):
@@ -1614,7 +1690,7 @@ export function Editor({
                 </div>
                 </Dialog>
               )}
-              {current && !read && selectedCount>=4 && <div className="studio-inline-ai" role="group"
+              {current && !read && !visualMode && selectedCount>=4 && <div className="studio-inline-ai" role="group"
                 aria-label={tr(locale,"AI editing for the selected text","تحرير النص المحدد بالذكاء الاصطناعي","AI för markerad text")}>
                 <div className="studio-inline-ai-heading"><Sparkles size={17}/>
                   <strong>{tr(locale,"Selected text","النص المحدد","Markerad text")}</strong>
@@ -1650,30 +1726,43 @@ export function Editor({
               >
                 {active?.title}
               </h3>
-              {current ? (
+              {importError && <p className="error-message" role="alert">{importError}</p>}
+              {current || (visualMode && active) ? (
                 read ? (
                   <div
                     className="chapter-read"
                     dir={draft.language === "ar" ? "rtl" : "ltr"}
                     lang={draft.language}
                   >
-                    <Markdown text={current.content} illustrations={draft.illustrations} bookId={id} />
+                    <Markdown text={current?.content || ""} illustrations={draft.illustrations} bookId={id} />
                   </div>
                 ) : visualMode && active ? (
                   <VisualChapterEditor key={active.id} chapterId={active.id} locale={locale}
-                    content={current.content} bookId={id} illustrations={draft.illustrations}
+                    content={current?.content || ""} language={draft.language} bookId={id} illustrations={draft.illustrations}
                     disabled={disabled}
-                    onChange={content => change(b=>({...b,chapters:{
-                      ...b.chapters,[active.id]:{...b.chapters[active.id],content}
-                    }}))}
-                    onSelection={value=>{visualSelectedRef.current=value;setSelectedCount(value.length);}}
-                    onRemoveImage={imageId=>{void changeExistingImage(imageId,true);}}
-                    onClearChapter={()=>change(b=>{const chapters={...b.chapters};delete chapters[active.id];return {...b,chapters};})}
+                    onChange={(content,typing) => change(b=>({...b,chapters:{
+                      ...b.chapters,[active.id]:{...(b.chapters[active.id] || {summary:active.summary}),content}
+                    }}),typing)}
+                    onSelection={range=>{visualRangeRef.current=range;visualSelectedRef.current=range.text;setSelectedCount(range.text.length);}}
+                    onUndo={()=>travelHistory("undo")} onRedo={()=>travelHistory("redo")} canUndo={historyState.canUndo} canRedo={historyState.canRedo}
+                    aiEnabled={config.ai&&book.unlocked&&!book.text_edit_candidate}
+                    onAI={(range,action)=>proposeTextEdit(action,range)}
+                    chapters={draft.outline}
+                    onMoveToChapter={(block,remaining,target)=>{
+                      const targetChapter=draftRef.current?.chapters[target];
+                      const targetContent=[targetChapter?.content,block].filter(Boolean).join("\n\n");
+                      if(targetContent.length>30000){setImportError(tr(locale,"The destination chapter is full.","الفصل الذي اخترته بلغ الحد الأقصى للنص.","Målkapitlet är fullt."));return false;}
+                      change(b=>({...b,chapters:{...b.chapters,
+                        [active.id]:{...(b.chapters[active.id] || {summary:active.summary}),content:remaining},
+                        [target]:{...(b.chapters[target] || {summary:b.outline.find(c=>c.id===target)?.summary||""}),content:targetContent},
+                      }}));return true;
+                    }}
                     onSaveImage={(imageId,size,caption)=>{void changeExistingImage(imageId,false,{size,caption});}}
-                    onInsertImage={(position,canonicalContent)=>{
-                      if (canonicalContent !== current.content && active)
+                    onInsertImage={(position,canonicalContent,replaceId)=>{
+                      if (canonicalContent !== current?.content && active)
                         change(b=>({...b,chapters:{...b.chapters,[active.id]:{
-                          ...b.chapters[active.id],content:canonicalContent}}}));
+                          ...(b.chapters[active.id] || {summary:active.summary}),content:canonicalContent}}}));
+                      setReplaceImageId(replaceId||null);
                       setImageSource("library");
                       cursorRef.current=position;
                       visualSelectedRef.current="";
@@ -1689,7 +1778,7 @@ export function Editor({
                       <button type="button" disabled={disabled} aria-label={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} title={tr(locale, "Heading", "عنوان فرعي", "Rubrik")} onClick={() => formatSelection("heading")}><Heading2 size={18}/></button>
                       <button type="button" disabled={disabled} aria-label={tr(locale, "List", "قائمة", "Lista")} title={tr(locale, "List", "قائمة", "Lista")} onClick={() => formatSelection("list")}><ListIcon size={18}/></button>
                       <span className="chapter-format-spacer"/>
-                      <span className="chapter-word-count">{current.content.trim().split(/\s+/u).filter(Boolean).length.toLocaleString(locale)} {t.words}</span>
+                      <span className="chapter-word-count">{(current?.content || "").trim().split(/\s+/u).filter(Boolean).length.toLocaleString(locale)} {t.words}</span>
                       <button type="button" aria-label={fullscreenEditor ? tr(locale, "Close full-screen editor", "إغلاق وضع الشاشة الكاملة", "Stäng helskärm") : tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} title={tr(locale, "Full-screen editor", "تحرير بملء الشاشة", "Helskärmsredigering")} onClick={() => setFullscreenEditor(v => !v)}>{fullscreenEditor ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}</button>
                     </span>
                     <textarea
@@ -1697,7 +1786,7 @@ export function Editor({
                       className="chapter-editor"
                       dir={draft.language === "ar" ? "rtl" : "ltr"}
                       lang={draft.language}
-                      value={current.content}
+                      value={current?.content || ""}
                       maxLength={30000}
                       disabled={disabled}
                       onClick={e => { cursorRef.current = e.currentTarget.selectionStart; }}
@@ -1951,7 +2040,7 @@ export function Editor({
                     </label>
                     <label>
                       {tr(locale, "Preface (optional)", "المقدمة (اختيارية)", "Förord (valfritt)")}
-                      <textarea rows={5} maxLength={5000} disabled={disabled} value={draft.preface || ""}
+                      <textarea id="book-preface" rows={5} maxLength={5000} disabled={disabled} value={draft.preface || ""}
                         onChange={(e) => change((b) => ({ ...b, preface: e.target.value }))} />
                     </label>
                     <label>{tr(locale, "Copyright page", "صفحة حقوق النشر", "Upphovsrätt")}

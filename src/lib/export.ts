@@ -14,7 +14,7 @@ import {
 } from "docx";
 import type { Book } from "./domain";
 import { escapeHtml as esc, markdownHtml } from "./export-text";
-import { parseManuscript, stripInlineMarkdown } from "./manuscript";
+import { inlineRuns, parseManuscript, stripInlineMarkdown } from "./manuscript";
 import type { ExportIllustration } from "./illustration-export";
 
 const palettes: Record<
@@ -166,6 +166,10 @@ export async function makeDocx(
       rightToLeft: rtl,
       size: rtl ? 26 : 22,
     });
+  const richText = (value: string, bold = false) => inlineRuns(value).map(run => new TextRun({
+    text: run.text, bold: bold || !!run.bold, italics: !!run.italic, font,
+    rightToLeft: rtl, size: rtl ? 26 : 22,
+  }));
   const children: Paragraph[] = [
     new Paragraph({
       ...base,
@@ -245,6 +249,7 @@ export async function makeDocx(
       }),
     );
     for (const block of parseManuscript(book.chapters[c.id]?.content || "")) {
+      const paragraphBase = { ...base, alignment: block.align ? ({left:AlignmentType.LEFT,right:AlignmentType.RIGHT,center:AlignmentType.CENTER,justify:AlignmentType.JUSTIFIED})[block.align] : base.alignment };
       if (block.type === "illustration") {
         const image = images[block.id];
         if (!image) continue;
@@ -267,10 +272,10 @@ export async function makeDocx(
         continue;
       }
       if (block.type === "quote" || block.type === "note") {
-        children.push(new Paragraph({...base,
+        children.push(new Paragraph({...paragraphBase,
           spacing:{before:160,after:200},
           indent:{left:380,right:250},
-          children:[text(stripInlineMarkdown(block.text),block.type==="note")],
+          children:richText(block.text,block.type==="note"),
         }));
         continue;
       }
@@ -281,24 +286,24 @@ export async function makeDocx(
       }
       if (block.type === "heading") {
         children.push(new Paragraph({
-          ...base,
+          ...paragraphBase,
           heading: block.level >= 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_2,
           spacing: { before: 260, after: 100 },
-          children: [text(stripInlineMarkdown(block.text), true)],
+          children: richText(block.text, true),
         }));
       } else if (block.type === "ul" || block.type === "ol") {
         block.items.forEach((item, index) =>
           children.push(new Paragraph({
-            ...base,
+            ...paragraphBase,
             spacing: { after: 90 },
-            children: [text(`${block.type === "ul" ? "•" : `${index + 1}.`}  ${stripInlineMarkdown(item)}`)],
+            children: [text(`${block.type === "ul" ? "•" : `${index + 1}.`}  `), ...richText(item)],
           })),
         );
       } else {
         children.push(new Paragraph({
-          ...base,
+          ...paragraphBase,
           spacing: { after: 170 },
-          children: [text(stripInlineMarkdown(block.text))],
+          children: richText(block.text),
         }));
       }
     }

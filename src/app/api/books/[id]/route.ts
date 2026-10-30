@@ -31,7 +31,7 @@ export async function PATCH(request: Request, ctx: Context) {
     const { id } = await ctx.params,
       { user } = await requireUser();
     await takeRate(`save:${user.id}`, 1000);
-    const input = await readJson(request, editBookSchema);
+    const { checkpoint, ...input } = await readJson(request, editBookSchema.safeExtend({ checkpoint: z.boolean().optional() }));
     // Refresh continuity summaries from the author's latest manuscript, not stale AI output.
     // Keep both opening and ending context so later chapters know how the scene concluded.
     for (const chapter of Object.values(input.chapters)) {
@@ -40,7 +40,7 @@ export async function PATCH(request: Request, ctx: Context) {
         plain.slice(0, 650).trimEnd() + " … " + plain.slice(-345).trimStart();
     }
     return json({
-      book: await withCover(await studioStore().saveBook(user.id, id, input)),
+      book: await withCover(await studioStore().saveBook(user.id, id, input, checkpoint ?? true)),
     });
   } catch (e) {
     return apiError(e);

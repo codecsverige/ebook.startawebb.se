@@ -179,6 +179,27 @@ test(
       assert.equal(restored.outline.length, 3);
       assert.equal(restored.chapters[outline[0].id].content, chapter.content);
       await assert.rejects(store.restoreBookVersion(other, book, versionsAfterRestart[0].id, restored.revision), /not_found/);
+      // Fast background saves keep a useful history window instead of pruning it every few seconds.
+      let mediaBook = await store.saveBook(uid, book, { ...restored, story_notes: "The protagonist keeps the same name." });
+      const historyCount = (await store.versions(uid, book)).length;
+      for (let n = 0; n < 3; n++) mediaBook = await store.saveBook(uid, book, { ...mediaBook, title: `Autosave ${n}` }, false);
+      assert.equal((await store.versions(uid, book)).length, historyCount);
+      assert.equal(mediaBook.story_notes, "The protagonist keeps the same name.");
+      const illustrationId = randomUUID(), replacementId = randomUUID();
+      const imagePosition = mediaBook.chapters[outline[0].id].content.length;
+      mediaBook = await store.insertIllustration(uid, book, mediaBook.revision, outline[0].id, imagePosition,
+        { id: illustrationId, source: "library", preset: "stars", alt: "Stars", caption: "Night", size: "medium" });
+      const oldMarker = `[[illustration:${illustrationId}]]`;
+      const replacementPosition = mediaBook.chapters[outline[0].id].content.indexOf(oldMarker);
+      mediaBook = await store.insertIllustration(uid, book, mediaBook.revision, outline[0].id, replacementPosition,
+        { id: replacementId, source: "library", preset: "waves", alt: "Sea", caption: "Ocean", size: "full" }, illustrationId);
+      assert.ok(mediaBook.chapters[outline[0].id].content.includes(`[[illustration:${replacementId}]]`));
+      assert.ok(!mediaBook.chapters[outline[0].id].content.includes(oldMarker));
+      assert.ok(mediaBook.illustrations?.[illustrationId], "Previous assets remain available to Undo and saved versions");
+      await assert.rejects(store.insertIllustration(other, book, mediaBook.revision, outline[0].id, 0,
+        { id: randomUUID(), source: "library", preset: "stars", alt: "", caption: "", size: "small" }), /not_found/);
+      await assert.rejects(store.insertIllustration(uid, book, mediaBook.revision, outline[0].id, 0,
+        { id: randomUUID(), source: "library", preset: "stars", alt: "", caption: "", size: "small" }, replacementId), /conflict/);
       // Even with the AI provider offline, users can prepare an editable
       // structure without making any billable model request.
       const manualBookId = await store.createBook(uid, brief);

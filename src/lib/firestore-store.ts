@@ -227,7 +227,7 @@ export class FirestoreStudio {
     // to decide which historical snapshot to delete.
     return (
       await tx.get(
-        ref.collection("versions").orderBy("revision", "desc").select(),
+        ref.collection("versions").orderBy("revision", "desc").select("created_at"),
       )
     ).docs;
   }
@@ -246,7 +246,7 @@ export class FirestoreStudio {
     });
     for (const version of old.slice(19)) tx.delete(version.ref);
   }
-  async saveBook(uid: string, id: string, raw: unknown): Promise<Book> {
+  async saveBook(uid: string, id: string, raw: unknown, checkpoint = true): Promise<Book> {
     const input = editBookSchema.parse(raw);
     if (!uuid(id)) fail("not_found");
     return this.db.runTransaction(async (tx) => {
@@ -274,7 +274,10 @@ export class FirestoreStudio {
         updated_at: new Date().toISOString(),
       };
       assertBookSize(bookOnly(next));
-      this.writeVersion(tx, ref, book, previous);
+      // Autosaves must not consume every historical slot while the author types.
+      const latestCheckpoint = previous[0]?.get("created_at");
+      if (checkpoint || !latestCheckpoint || Date.now() - Date.parse(latestCheckpoint) >= 60_000)
+        this.writeVersion(tx, ref, book, previous);
       tx.set(ref, next);
       return bookOnly(next);
     });
@@ -490,6 +493,7 @@ export class FirestoreStudio {
         acknowledgments: snapshot.acknowledgments || "",
         copyright_notice: snapshot.copyright_notice || "",
         layout_theme: snapshot.layout_theme || "classic",
+        story_notes: snapshot.story_notes || "",
         cover_path: snapshot.cover_path,
         cover_candidate_path: null,
         back_cover_path: snapshot.back_cover_path || null,
@@ -511,9 +515,9 @@ export class FirestoreStudio {
   /** Atomically attach a reviewed image at a manuscript cursor position. */
   async insertIllustration(
     uid: string, bookId: string, revision: number, chapterId: string,
-    position: number, illustration: Illustration,
+    position: number, illustration: Illustration, replaceId?: string,
   ): Promise<Book> {
-    if (!uuid(bookId) || !uuid(chapterId) || !uuid(illustration.id) ||
+    if (!uuid(bookId) || !uuid(chapterId) || !uuid(illustration.id) || (replaceId && !uuid(replaceId)) ||
         !Number.isInteger(position) || position < 0)
       fail("invalid_input");
     return this.db.runTransaction(async (tx) => {
@@ -526,11 +530,17 @@ export class FirestoreStudio {
       if (book.revision !== revision) fail("conflict");
       const chapter = book.chapters[chapterId];
       if (!chapter || position > chapter.content.length ||
-          Object.keys(book.illustrations || {}).length >= 24)
+          (!replaceId && Object.keys(book.illustrations || {}).filter(assetId => Object.values(book.chapters).some(ch => ch.content.includes(illustrationMarker(assetId)))).length >= 24))
         fail("invalid_input");
       const mark = illustrationMarker(illustration.id);
-      const content = chapter.content.slice(0, position) + "\n\n" + mark +
-        "\n\n" + chapter.content.slice(position);
+      let content: string;
+      if (replaceId) {
+        const token = illustrationMarker(replaceId);
+        const at = chapter.content.indexOf(token, position);
+        const gap = at < 0 ? "" : chapter.content.slice(position, at).replace(/\[\[align:(left|right|center|justify)\]\]/g, "").trim();
+        if (!book.illustrations?.[replaceId] || at < 0 || gap) fail("conflict");
+        content = chapter.content.slice(0, at) + mark + chapter.content.slice(at + token.length);
+      } else content = chapter.content.slice(0, position) + "\n\n" + mark + "\n\n" + chapter.content.slice(position);
       if (content.length > 30000) fail("too_large");
       const versions = await this.versionPlan(tx, ref);
       const next: StoredBook = {
