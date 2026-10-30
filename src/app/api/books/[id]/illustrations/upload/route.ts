@@ -28,6 +28,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       revision: z.coerce.number().int().nonnegative(),
       chapter_id: z.string().uuid(),
       position: z.coerce.number().int().nonnegative().max(30000),
+      replace_id: z.string().uuid().optional(),
       size: z.enum(["small", "medium", "full"]).default("medium"),
       caption: z.string().trim().max(240).default(""),
     }).safeParse(Object.fromEntries(params.entries()));
@@ -66,7 +67,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return json({ book: await withCover(await studioStore().insertIllustration(
         user.id, id, input.data.revision, input.data.chapter_id, input.data.position,
         { id: imageId, source: "upload", path, alt: input.data.caption || "Book illustration",
-          caption: input.data.caption, size: input.data.size },
+          caption: input.data.caption, size: input.data.size }, input.data.replace_id,
       )) });
     } catch (error) {
       await object.delete().catch(() => {});

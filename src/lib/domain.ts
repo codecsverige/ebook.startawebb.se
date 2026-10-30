@@ -92,11 +92,12 @@ export const editBookSchema = z
     acknowledgments: z.string().trim().max(5000).default(""),
     copyright_notice: z.string().trim().max(1000).default(""),
     layout_theme: z.enum(["classic", "modern", "literary"]).default("classic"),
+    story_notes: z.string().trim().max(2000).default(""),
     outline: z.array(outlineItemSchema).min(1).max(30),
     chapters: z.record(
       z.string().uuid(),
       z.object({
-        content: cleanText(1, 30000),
+        content: cleanText(0, 30000),
         summary: z.string().trim().max(1000),
       }),
     ),
@@ -176,6 +177,7 @@ export type Book = Brief & {
   acknowledgments?: string;
   copyright_notice?: string;
   layout_theme?: "classic" | "modern" | "literary";
+  story_notes?: string;
   cover_candidate_path?: string | null;
   use_artwork: boolean;
   unlocked: boolean;
@@ -231,7 +233,7 @@ export function bookWords(book: Book): number {
 export function isComplete(book: Book): boolean {
   return (
     book.outline.length > 0 &&
-    book.outline.every((c) => !!book.chapters[c.id]?.content)
+    book.outline.every((c) => !!book.chapters[c.id]?.content.trim())
   );
 }
 export function filename(title: string): string {

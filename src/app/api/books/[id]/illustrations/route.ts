@@ -18,6 +18,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       revision: z.number().int().nonnegative(),
       chapter_id: z.string().uuid(),
       position: z.number().int().nonnegative().max(30000),
+      replace_id: z.string().uuid().optional(),
       preset: z.enum(libraryIllustrations),
       size: z.enum(["small", "medium", "full"]).default("medium"),
       caption: z.string().trim().max(240).default(""),
@@ -27,7 +28,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return json({ book: await withCover(await studioStore().insertIllustration(
       user.id, id, input.revision, input.chapter_id, input.position,
       { id: newId, source: "library", preset: input.preset, alt: input.caption || input.preset,
-        caption: input.caption, size: input.size },
+        caption: input.caption, size: input.size }, input.replace_id,
     )) });
   } catch (error) {
     return apiError(error);
