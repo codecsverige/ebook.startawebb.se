@@ -79,9 +79,14 @@ export type Chapter = z.infer<typeof chapterSchema>;
 export const editBookSchema = z
   .object({
     revision: z.number().int().nonnegative(),
-    title: cleanText(1, 180),
+    title: z.string().trim().max(180),
     subtitle: z.string().trim().max(240),
     author: z.string().trim().max(100),
+    idea: cleanText(20, 2000).optional(),
+    audience: cleanText(3, 300).optional(),
+    kind: z.enum(kinds).optional(),
+    tone: z.enum(tones).optional(),
+    chapter_count: z.number().int().min(1).max(30).optional(),
     cover_style: z.enum(coverStyles),
     use_artwork: z.boolean(),
     cover_direction: z.string().trim().max(800).default(""),
@@ -93,7 +98,7 @@ export const editBookSchema = z
     copyright_notice: z.string().trim().max(1000).default(""),
     layout_theme: z.enum(["classic", "modern", "literary"]).default("classic"),
     story_notes: z.string().trim().max(2000).default(""),
-    outline: z.array(outlineItemSchema).min(1).max(30),
+    outline: z.array(outlineItemSchema).max(30),
     chapters: z.record(
       z.string().uuid(),
       z.object({
@@ -105,6 +110,9 @@ export const editBookSchema = z
   .superRefine((v, ctx) => {
     const ids = new Set(v.outline.map((c) => c.id));
     if (
+      (v.outline.length>0 && !v.title.trim()) ||
+      (v.outline.length===0 && v.chapter_count !== undefined &&
+        (v.chapter_count<3 || v.chapter_count>10)) ||
       ids.size !== v.outline.length ||
       Object.keys(v.chapters).some((id) => !ids.has(id))
     )
