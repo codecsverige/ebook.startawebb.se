@@ -3725,3 +3725,47 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
   .rich-word-count{display:none;}.rich-editor-hint{font-size:11px;padding:12px;}
   .rich-studio.is-fullscreen .rich-toolbar{top:0;}.rich-studio.is-fullscreen .rich-book-document{margin:0;}
 }
+
+/* Guided authoring journey: five steps, always anchored to the current task. */
+.studio-progress-steps.guided-five{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;align-items:stretch;margin:0 0 12px;}
+.studio-progress-steps.guided-five button{min-width:0;display:flex;justify-content:center;align-items:center;min-height:48px;padding:8px 6px;gap:7px;border-radius:11px;white-space:normal;text-align:center;font-size:13px;}
+.studio-progress-steps.guided-five button span:last-child{min-width:0;overflow-wrap:anywhere;}
+.studio-progress-steps.guided-five button>span:first-child{min-width:23px;width:23px;height:23px;flex:none;}
+.studio-sidebar-home{width:100%;display:flex;gap:10px;align-items:center;text-align:start;padding:12px 13px;margin-bottom:12px;border:1px solid #cbd9f0;border-radius:11px;background:#f4f7ff;color:#2e5183;font:inherit;font-weight:650;cursor:pointer;}
+.guided-progress-intro{display:flex;justify-content:space-between;align-items:start;gap:14px;border:1px solid #dce5ef;border-radius:14px;background:#f8faff;padding:16px 18px;margin:0 0 20px;}
+.guided-progress-intro strong{display:block;font-size:15px;color:#283e61;}
+.guided-progress-intro p{margin:5px 0 0;font-size:13px;color:#5e6f84;line-height:1.65;}
+.guided-progress-intro>span{flex:none;white-space:nowrap;font-size:12px;color:#35588d;padding:7px 10px;border-radius:999px;background:#e7eefe;font-weight:650;}
+.guided-brief-panel{max-width:960px;margin-inline:auto;}
+.guided-brief-form{display:grid;gap:18px;border:1px solid #e0e7ee;border-radius:16px;padding:22px;background:#fff;}
+.guided-brief-form>label,.guided-brief-grid>label{display:grid;gap:7px;font-size:14px;font-weight:650;color:#334761;min-width:0;}
+.guided-brief-form input,.guided-brief-form textarea,.guided-brief-form select,.guided-project-management select{min-width:0;width:100%;box-sizing:border-box;background:#fff;color:#253955;border:1px solid #cdd8e7;border-radius:10px;padding:13px 15px;font:inherit;font-weight:400;font-size:16px;line-height:1.7;}
+.guided-brief-form input:read-only{background:#f4f7fa;color:#627088;cursor:not-allowed;}
+.guided-brief-form textarea{resize:vertical;min-height:146px;}
+.guided-brief-form small,.guided-brief-grid small{font-weight:400;font-size:12px;color:#758299;}
+.guided-brief-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;}
+.guided-brief-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:19px 0;}
+.guided-brief-actions>.button{min-height:44px;padding:11px 17px;white-space:normal;}
+.guided-retain-warning{border-inline-start:3px solid #96afd1;background:#f2f6fc;border-radius:8px;padding:12px 15px;margin-top:16px;font-size:13px;line-height:1.8;color:#476381;}
+.guided-project-management{margin:25px 0 5px;border:1px solid #dbe3ed;border-radius:13px;background:#fafbfd;padding:17px;}
+.guided-project-management summary{font-weight:700;color:#415b7c;cursor:pointer;font-size:14px;line-height:1.6;}
+.guided-project-management p{color:#63758c;font-size:13px;line-height:1.75;}
+.guided-project-management>label{display:grid;gap:7px;max-width:360px;font-weight:650;font-size:13px;color:#495f7f;}
+.guided-writing-choice{border:1px solid #d7e4f2;border-radius:14px;padding:17px 18px;margin:9px 0 22px;background:#f7faff;}
+.guided-writing-choice strong{font-size:15px;color:#304c73;}
+.guided-writing-choice p{margin:6px 0;color:#67778f;font-size:13px;}
+.guided-writing-choice .guided-brief-actions{margin:13px 0 0;}
+.guided-brief-panel .panel-heading{margin-bottom:20px;}
+@media(max-width:900px){.guided-progress-intro{display:block}.guided-progress-intro>span{display:inline-block;margin-top:10px}}
+@media(max-width:760px){
+ .studio-progress-steps.guided-five{gap:4px;margin:0 0 11px}
+ .studio-progress-steps.guided-five button{min-height:56px;padding:6px 3px;gap:4px;flex-direction:column;font-size:11px;line-height:1.3}
+ .studio-progress-steps.guided-five button>span:first-child{width:23px;height:23px;font-size:12px}
+ .guided-progress-intro{padding:13px 14px;margin-bottom:15px}
+ .guided-progress-intro strong{font-size:14px}.guided-progress-intro p{font-size:12px}
+ .guided-brief-form{padding:14px;gap:14px}.guided-brief-grid{grid-template-columns:minmax(0,1fr);gap:13px}
+ .guided-brief-form>label,.guided-brief-grid>label{font-size:13px}
+ .guided-brief-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+ .guided-brief-actions>.button{width:100%;justify-content:center;min-height:45px;font-size:14px}
+ .guided-project-management{padding:13px}.guided-writing-choice{padding:13px}
+}
