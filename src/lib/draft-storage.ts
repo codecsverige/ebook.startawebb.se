@@ -3,7 +3,7 @@ import { editBookSchema, outlineItemSchema, type BookWithCover } from "./domain"
 
 const localDraftSchema = editBookSchema.safeExtend({
   title: z.string().max(180),
-  outline: z.array(outlineItemSchema.extend({ title: z.string().max(160), summary: z.string().max(600) })).min(1).max(30),
+  outline: z.array(outlineItemSchema.extend({ title: z.string().max(160), summary: z.string().max(600) })).max(30),
 });
 
 export const draftKey = (id: string) => `ebook-studio:draft:${id}`;
@@ -12,9 +12,10 @@ export type SavedDraft = { version: 2; savedAt: string; book: BookWithCover };
 
 /** Only author-editable data may be restored; server ownership, media and credits stay authoritative. */
 export function editableBook(book: BookWithCover) {
-  const { revision, title, subtitle, author, cover_style, use_artwork, outline, chapters } = book;
+  const { revision, title, subtitle, author, cover_style, use_artwork, outline, chapters, idea, audience, kind, tone, chapter_count } = book;
   return {
     revision, title, subtitle, author, cover_style, use_artwork, outline, chapters,
+    idea, audience, kind, tone, ...(outline.length ? {} : {chapter_count}),
     cover_direction: book.cover_direction || "", back_blurb: book.back_blurb || "",
     author_bio: book.author_bio || "", dedication: book.dedication || "",
     preface: book.preface || "", acknowledgments: book.acknowledgments || "",
