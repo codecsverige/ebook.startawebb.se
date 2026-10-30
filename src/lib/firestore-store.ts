@@ -258,14 +258,14 @@ export class FirestoreStudio {
       if (book.revision !== input.revision) fail("conflict");
       // Allow original authors to insert, reorder, merge and remove chapters.
       // Manuscript ownership is still enforced here; image paths never come from PATCH.
-      if (!book.outline.length || input.outline.length > 30 ||
+      if (input.outline.length > 30 ||
           (book.outline.length > 0 && input.outline.length < 1))
         fail("invalid_input");
       const previous = await this.versionPlan(tx, ref);
       const next = {
         ...book,
         ...input,
-        chapter_count: input.outline.length,
+        chapter_count: input.outline.length || input.chapter_count || book.chapter_count,
         state: { ...book.state, rewrites: Object.fromEntries(
           Object.entries(book.state.rewrites).filter(([id]) =>
             input.outline.some((item) => item.id === id)),
