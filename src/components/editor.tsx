@@ -1313,7 +1313,7 @@ export function Editor({
                   setTab("outline");
                 }}>
                 {draft.outline.length
-                  ? tr(locale,"Next: Review chapter plan","التالي: مراجعة مخطط الفصول","Nästa: Granska kapitelplan")
+                  ? tr(locale,"Next: Plan and write chapters","التالي: تخطيط الفصول وكتابتها","Nästa: Planera och skriv kapitel")
                   : tr(locale,"Next: Create chapter plan","التالي: إنشاء مخطط الفصول","Nästa: Skapa kapitelplan")}
                 <ChevronRight size={18}/>
               </button>
@@ -1358,7 +1358,7 @@ export function Editor({
           {tab === "outline" && draft.outline.length === 0 && (
             <section className="editor-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 2 of 5","المرحلة 2 من 5","Steg 2 av 5")}</span>
+                <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
                 <h2>
                   {draft.outline.length
                     ? t.outline
@@ -1560,7 +1560,7 @@ export function Editor({
                 <strong>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length} / {draft.outline.length} {tr(locale,"chapters with text","فصول مكتوبة","skrivna kapitel")}</strong>
                 <span>{bookWords(draft).toLocaleString(locale)} {t.words} · {tr(locale,"Approx.","نحو","Cirka")} {Math.ceil(bookWords(draft)/300)} {tr(locale,"pages","صفحة","sidor")}</span>
                 <div className="chapter-flow-track"><span style={{width:(draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length/draft.outline.length*100)+"%"}} /></div>
-                <small>{tr(locale,"Pages are estimated from words. Final layout and images can change the count.","الصفحات تقديرية حسب الكلمات. العدد النهائي يتغير مع التنسيق والصور.","Sidor uppskattas utifrån ord. Layout och bilder påverkar resultatet.")}</small>
+                <small>{tr(locale,"Target for this outline: approximately","التقدير الأولي لهذا المخطط: نحو","För denna plan: ungefär")} {draft.outline.length*2}–{draft.outline.length*4} {tr(locale,"pages after writing. The final count depends on words, formatting and images.","صفحة بعد الكتابة. العدد النهائي يعتمد على الكلمات والتنسيق والصور.","sidor när boken skrivits. Slutligt antal beror på ord, layout och bilder.")}</small>
               </div>
               <details className="chapter-flow-book-settings">
                 <summary>{tr(locale,"Edit book title and subtitle","تعديل عنوان الكتاب والعنوان الفرعي","Ändra boktitel och undertitel")}</summary>
@@ -1578,7 +1578,7 @@ export function Editor({
                           <strong>{c.title}</strong>
                           <small>{draft.chapters[c.id]?.content?.trim()
                             ? draft.chapters[c.id].content.trim().split(/\s+/u).length.toLocaleString(locale)+" "+t.words
-                            : tr(locale,"Not written · AI target ~3–4 pages","لم يُكتب بعد · هدف AI نحو 3 إلى 4 صفحات","Inte skrivet · AI-mål ca 3–4 sidor")}</small>
+                            : tr(locale,"Not written · AI target ~2–4 pages","لم يُكتب بعد · هدف AI نحو صفحتين إلى أربع","Inte skrivet · AI-mål ca 2–4 sidor")}</small>
                         </span>
                         {draft.chapters[c.id]?.content?.trim()?<Check size={18} className="chapter-flow-check"/>:<ChevronRight size={18}/>}
                       </button>
