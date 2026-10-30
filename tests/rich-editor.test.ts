@@ -19,7 +19,9 @@ const book: BookWithCover = {
 test("rich editor preserves semantic content, inline styles, alignment and image markers through reload",()=>{
   const input=`[[align:center]]\n## العنوان\n\nهذه فقرة **غامقة** مع _كلمات مائلة_.\n\n> اقتباس واضح\n\n> [!NOTE] ملاحظة مهمة\n\n- الأول\n- الثاني\n\n1. واحد\n2. اثنان\n\n[[illustration:${image}]]\n\n***\n\n[[pagebreak]]`;
   const serialized=serializeRichDocument(manuscriptDocument(input)).text;
-  assert.deepEqual(parseManuscript(serialized),parseManuscript(input));
+  // Asterisks and underscores are equivalent Markdown italic delimiters.
+  // The editor normalizes their spelling but must preserve the rendered semantics.
+  assert.deepEqual(parseManuscript(serialized),parseManuscript(input.replace("_كلمات مائلة_","*كلمات مائلة*")));
   assert.equal(serializeRichDocument(manuscriptDocument(serialized)).text,serialized);
   assert.match(markdownHtml(serialized),/style="text-align:center"/);
   assert.match(markdownHtml(serialized),/<strong>غامقة<\/strong>/);
