@@ -4,7 +4,7 @@ import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, useEditorState, type NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { NodeSelection, Plugin, TextSelection } from "@tiptap/pm/state";
-import { ArrowUp, ArrowDown, Bold, Italic, Plus, Copy, Trash2, Undo2, Redo2, Sparkles, Search, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowUp, ArrowDown, Bold, Italic, Plus, Copy, Trash2, Undo2, Redo2, Sparkles, Search, Maximize2, Minimize2, SlidersHorizontal, ArrowUpToLine, ArrowDownToLine, MoreHorizontal } from "lucide-react";
 import type { Illustration, Locale } from "@/lib/domain";
 import { tr } from "@/lib/i18n";
 import { manuscriptDocument, serializeRichDocument } from "@/lib/rich-manuscript";
@@ -18,6 +18,7 @@ type Props = {
   onInsertImage: (position: number, canonicalContent: string, replaceId?: string) => void;
   onSelection?: (selection: VisualSelection) => void;
   onSaveImage?: (id: string, size: "small" | "medium" | "full", caption: string) => void;
+  onDeleteImage?: (id: string) => void;
   onUndo?: () => void; onRedo?: () => void; canUndo?: boolean; canRedo?: boolean;
   onAI?: (selection: VisualSelection, action: "improve" | "proofread" | "shorten" | "expand" | "simplify") => void;
   aiEnabled?: boolean; chapters?: { id: string; title: string }[];
@@ -77,7 +78,7 @@ export function VisualChapterEditor(props:Props){
   const {locale="en",language=locale,disabled=false,content}=props;
   const latest=useRef(props);latest.current=props;
   const editorRef=useRef<Editor|null>(null),lastEmitted=useRef(content),discrete=useRef(false);
-  const [insertOpen,setInsertOpen]=useState(false),[aiOpen,setAiOpen]=useState(false),[toolsOpen,setToolsOpen]=useState(false);
+  const [insertOpen,setInsertOpen]=useState(false),[aiOpen,setAiOpen]=useState(false),[toolsOpen,setToolsOpen]=useState(false),[formatOpen,setFormatOpen]=useState(false);
   const [searchOpen,setSearchOpen]=useState(false),[full,setFull]=useState(false),[error,setError]=useState("");
   const [query,setQuery]=useState(""),[replacement,setReplacement]=useState("");
   const [caption,setCaption]=useState(""),[imageSize,setImageSize]=useState<Illustration["size"]>("medium");
@@ -183,10 +184,10 @@ export function VisualChapterEditor(props:Props){
   };
   const find=()=>{const ranges=matches(),next=ranges.find(r=>r.from>=(editor?.state.selection.to||0))||ranges[0];if(next)editor?.chain().focus().setTextSelection(next).scrollIntoView().run();};
   return <div className={`rich-studio${full?" is-fullscreen":""}`} data-chapter={props.chapterId}>
-    <div className="rich-toolbar" role="toolbar" aria-label={tr(locale,"Writing tools","أدوات الكتابة","Skrivverktyg")}>
+    <div className={"rich-toolbar rich-toolbar-compact"+(formatOpen?" is-advanced":"")} role="toolbar" aria-label={tr(locale,"Writing tools","أدوات الكتابة","Skrivverktyg")}>
       <div className="rich-toolbar-primary">
-        <button type="button" disabled={disabled||!props.canUndo} onClick={props.onUndo} aria-label={tr(locale,"Undo","تراجع","Ångra")} title={tr(locale,"Undo","تراجع","Ångra")}><Undo2 size={18}/></button>
-        <button type="button" disabled={disabled||!props.canRedo} onClick={props.onRedo} aria-label={tr(locale,"Redo","إعادة","Gör om")} title={tr(locale,"Redo","إعادة","Gör om")}><Redo2 size={18}/></button>
+        <button type="button" disabled={disabled||!props.canUndo} onMouseDown={e=>e.preventDefault()} onClick={props.onUndo} aria-label={tr(locale,"Undo","تراجع","Ångra")} title={tr(locale,"Undo","تراجع","Ångra")}><Undo2 size={18}/></button>
+        <button type="button" disabled={disabled||!props.canRedo} onMouseDown={e=>e.preventDefault()} onClick={props.onRedo} aria-label={tr(locale,"Redo","إعادة","Gör om")} title={tr(locale,"Redo","إعادة","Gör om")}><Redo2 size={18}/></button>
         <span className="rich-toolbar-divider"/>
         <button type="button" disabled={disabled} aria-pressed={state?.bold||false} aria-label={tr(locale,"Bold","غامق","Fetstil")} onMouseDown={e=>e.preventDefault()} onClick={()=>run(()=>{editor?.chain().focus().toggleBold().run();})}><Bold size={18}/></button>
         <button type="button" disabled={disabled} aria-pressed={state?.italic||false} aria-label={tr(locale,"Italic","مائل","Kursiv")} onMouseDown={e=>e.preventDefault()} onClick={()=>run(()=>{editor?.chain().focus().toggleItalic().run();})}><Italic size={18}/></button>
@@ -202,9 +203,20 @@ export function VisualChapterEditor(props:Props){
         <select aria-label={tr(locale,"Alignment","المحاذاة","Justering")} value={active?.json.attrs?.textAlign||""} disabled={disabled||!editor||!active} onChange={e=>run(()=>{editor?.chain().focus().updateAttributes(active.json.type!,{textAlign:e.target.value||null}).run();})}>
           <option value="">{tr(locale,"Alignment","المحاذاة","Justering")}</option><option value="right">{tr(locale,"Right","يمين","Höger")}</option><option value="center">{tr(locale,"Center","وسط","Centrera")}</option><option value="left">{tr(locale,"Left","يسار","Vänster")}</option><option value="justify">{tr(locale,"Justify","ضبط","Marginaljustera")}</option>
         </select>
-        <button type="button" disabled={disabled||!editor} className="rich-insert-button" onClick={()=>setInsertOpen(true)}><Plus size={17}/>{tr(locale,"Insert","إدراج","Infoga")}</button>
+        <button type="button" disabled={disabled||!editor} className="rich-insert-button" onMouseDown={e=>e.preventDefault()} onClick={()=>setInsertOpen(true)}>
+          <Plus size={17}/><span>{tr(locale,"Add","إضافة","Lägg till")}</span></button>
+        <button type="button" className="rich-ai-trigger" disabled={disabled||!props.aiEnabled||!editor||!!asset}
+          aria-expanded={aiOpen} onMouseDown={e=>e.preventDefault()} onClick={()=>setAiOpen(open=>!open)}><Sparkles size={17}/>AI</button>
+        <button type="button" disabled={!editor} aria-label={tr(locale,"Paragraph and image options","خيارات الفقرة والصورة","Stycke- och bildalternativ")}
+          aria-expanded={toolsOpen} onMouseDown={e=>e.preventDefault()} onClick={()=>setToolsOpen(open=>!open)}><SlidersHorizontal size={17}/></button>
+        <button type="button" aria-label={tr(locale,"More tools and navigation","المزيد من الأدوات والتنقل","Fler verktyg och navigering")}
+          aria-expanded={formatOpen} onMouseDown={e=>e.preventDefault()} onClick={()=>setFormatOpen(open=>!open)}><MoreHorizontal size={19}/></button>
       </div>
       <div className="rich-toolbar-secondary">
+        <button type="button" disabled={!editor} onClick={()=>editor?.chain().focus("start").scrollIntoView().run()}>
+          <ArrowUpToLine size={16}/>{tr(locale,"Start","البداية","Start")}</button>
+        <button type="button" disabled={!editor} onClick={()=>editor?.chain().focus("end").scrollIntoView().run()}>
+          <ArrowDownToLine size={16}/>{tr(locale,"End","النهاية","Slut")}</button>
         <button type="button" disabled={disabled||!props.aiEnabled||!editor||!!asset} onMouseDown={e=>e.preventDefault()} onClick={()=>setAiOpen(!aiOpen)}><Sparkles size={16}/>{tr(locale,"AI edit","تحسين AI","AI-redigering")}</button>
         <button type="button" disabled={disabled||!editor} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(!toolsOpen)}>{tr(locale,"Element options","خيارات العنصر","Objektalternativ")}</button>
         <button type="button" aria-label={tr(locale,"Search and replace","بحث واستبدال","Sök och ersätt")} onClick={()=>setSearchOpen(!searchOpen)}><Search size={17}/></button>
@@ -212,6 +224,21 @@ export function VisualChapterEditor(props:Props){
         <button type="button" aria-label={full?tr(locale,"Exit full screen","إغلاق ملء الشاشة","Stäng helskärm"):tr(locale,"Full screen","ملء الشاشة","Helskärm")} onClick={()=>setFull(!full)}>{full?<Minimize2 size={17}/>:<Maximize2 size={17}/>}</button>
       </div>
     </div>
+    {!!editor && !!state && state.from!==state.to && !state.image && <div className="rich-selection-actions" role="toolbar"
+      aria-label={tr(locale,"Selected text actions","أدوات النص المحدد","Verktyg för markerad text")}>
+      <span>{tr(locale,"Selected text","النص المحدد","Markerad text")}</span>
+      <button type="button" aria-label={tr(locale,"Bold","غامق","Fetstil")} disabled={disabled}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>run(()=>editor.chain().focus().toggleBold().run())}><Bold size={16}/></button>
+      <button type="button" aria-label={tr(locale,"Italic","مائل","Kursiv")} disabled={disabled}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>run(()=>editor.chain().focus().toggleItalic().run())}><Italic size={16}/></button>
+      <button type="button" disabled={disabled||!props.aiEnabled} onMouseDown={e=>e.preventDefault()} onClick={()=>ai("proofread")}>
+        <Sparkles size={16}/>{tr(locale,"Correct","تصحيح","Korrigera")}</button>
+      <button type="button" disabled={disabled||!props.aiEnabled} onMouseDown={e=>e.preventDefault()} onClick={()=>ai("improve")}>
+        {tr(locale,"Improve","تحسين","Förbättra")}</button>
+      <button type="button" className="rich-delete" aria-label={tr(locale,"Delete selected text","حذف النص المحدد","Ta bort markerad text")}
+        disabled={disabled} onMouseDown={e=>e.preventDefault()}
+        onClick={()=>run(()=>editor.chain().focus().deleteRange({from:state.from,to:state.to}).run())}><Trash2 size={16}/></button>
+    </div>}
     {aiOpen&&<div className="rich-ai-actions" role="group" aria-label={tr(locale,"Improve this passage","تحسين هذا النص","Förbättra texten")}>
       <p>{tr(locale,"Selected text, or the current paragraph. Review the suggestion before applying.","سيُعدّل النص المحدد، أو الفقرة الحالية. راجع الاقتراح قبل اعتماده.","Markerad text eller aktuellt stycke. Granska förslaget innan du använder det.")}</p>
       {(["proofread","improve","simplify","shorten","expand"] as const).map((action,i)=><button type="button" key={action} onClick={()=>ai(action)}>{[tr(locale,"Correct","تصحيح","Korrekturläs"),tr(locale,"Improve","تحسين","Förbättra"),tr(locale,"Simplify","تبسيط","Förenkla"),tr(locale,"Shorten","اختصار","Förkorta"),tr(locale,"Expand","توسيع","Utöka")][i]}</button>)}
@@ -222,7 +249,7 @@ export function VisualChapterEditor(props:Props){
         <button type="button" disabled={disabled||index===0} onClick={()=>move(index-1)}><ArrowUp size={15}/>{tr(locale,"Move up","للأعلى","Flytta upp")}</button>
         <button type="button" disabled={disabled||index===all.length-1} onClick={()=>move(index+1)}><ArrowDown size={15}/>{tr(locale,"Move down","للأسفل","Flytta ned")}</button>
         <button type="button" disabled={disabled} onClick={()=>run(()=>{editor?.chain().focus().insertContentAt(active.pos+active.size,active.json).run();})}><Copy size={15}/>{tr(locale,"Duplicate","نسخ العنصر","Duplicera")}</button>
-        <button type="button" className="rich-delete" disabled={disabled} onClick={()=>run(()=>{editor?.chain().focus().deleteRange({from:active.pos,to:active.pos+active.size}).run();})}><Trash2 size={15}/>{tr(locale,"Delete","حذف","Ta bort")}</button>
+        <button type="button" className="rich-delete" disabled={disabled} onClick={()=>{if(asset&&props.onDeleteImage){props.onDeleteImage(asset.id);setToolsOpen(false);}else run(()=>{editor?.chain().focus().deleteRange({from:active.pos,to:active.pos+active.size}).run();});}}><Trash2 size={15}/>{tr(locale,"Delete","حذف","Ta bort")}</button>
         <label>{tr(locale,"Move to position","نقل إلى الموضع","Flytta till plats")}<select value={index} disabled={disabled} onChange={e=>move(Number(e.target.value))}>{all.map((_,i)=><option key={i} value={i}>{i+1}</option>)}</select></label>
         {props.chapters&&props.chapters.length>1&&<label>{tr(locale,"Move to chapter","نقل إلى فصل","Flytta till kapitel")}<select value="" disabled={disabled} onChange={e=>{
           if(!e.target.value||!editor)return;
@@ -247,10 +274,10 @@ export function VisualChapterEditor(props:Props){
     </div>}
     {error&&<p className="error-message" role="alert">{error}</p>}
     <EditorContent editor={editor}/>
-    <p className="rich-editor-hint">{tr(locale,"Write directly. Enter creates a paragraph. Select text to format, or select an image and open Element options.","اكتب مباشرة. Enter يضيف فقرة. حدد النص لتنسيقه، أو حدد صورة وافتح خيارات العنصر.","Skriv direkt. Enter skapar ett stycke. Markera text för formatering, eller välj en bild och öppna Objektalternativ.")}</p>
+    {!content.trim()&&<p className="rich-editor-hint">{tr(locale,"Write directly. Enter creates a paragraph. Select text to format, or select an image and open Element options.","اكتب مباشرة. Enter يضيف فقرة. حدد النص لتنسيقه، أو حدد صورة وافتح خيارات العنصر.","Skriv direkt. Enter skapar ett stycke. Markera text för formatering, eller välj en bild och öppna Objektalternativ.")}</p>}
     {insertOpen&&<Dialog title={tr(locale,"Insert into your chapter","إضافة داخل الفصل","Infoga i kapitlet")} closeLabel={tr(locale,"Close","إغلاق","Stäng")} onClose={()=>setInsertOpen(false)}>
       <p>{tr(locale,"Insert at the text cursor. Images split the paragraph at the cursor.","ستُضاف العناصر عند مؤشر الكتابة. إدراج صورة يقسم الفقرة عند المؤشر.","Infoga vid markören. En bild delar stycket vid markören.")}</p>
-      <div className="rich-insert-grid">{Object.entries(names).map(([type,label])=><button type="button" key={type} disabled={disabled} onClick={()=>insert(type)}><Plus size={16}/>{label}</button>)}</div>
+      <div className="rich-insert-grid">{(["bookImage","paragraph","heading","bulletList","orderedList","bookNote","blockquote","horizontalRule","bookPageBreak"] as const).map(type=><button type="button" key={type} disabled={disabled} onClick={()=>insert(type)}><Plus size={16}/>{names[type]}</button>)}</div>
     </Dialog>}
   </div>;
 }

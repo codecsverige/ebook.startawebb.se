@@ -108,6 +108,19 @@ export function Editor({
   const [credits, setCredits] = useState(0);
   const [tab, setTab] = useState<Tab>("brief");
   const [chapterId, setChapterId] = useState("");
+  const [chapterWorkspaceOpen, setChapterWorkspaceOpen] = useState(false);
+  const lastAIReviewRef = useRef<string | null>(null);
+  useEffect(() => {
+    const candidate = book?.text_edit_candidate;
+    if (!candidate) {lastAIReviewRef.current = null; return;}
+    if (!chapterWorkspaceOpen || candidate.chapter_id !== chapterId) return;
+    const key = candidate.chapter_id + ":" + candidate.original + ":" + candidate.replacement;
+    if (lastAIReviewRef.current === key) return;
+    lastAIReviewRef.current = key;
+    requestAnimationFrame(() =>
+      document.querySelector(".ai-edit-candidate")?.scrollIntoView({block:"center",behavior:"smooth"}));
+  }, [book?.text_edit_candidate, chapterWorkspaceOpen, chapterId]);
+
   const [restartLanguage, setRestartLanguage] = useState<Locale>(locale);
   const [coverCandidate, setCoverCandidate] = useState<File | null>(null);
   const [coverSide, setCoverSide] = useState<"front" | "back">("front");
@@ -579,6 +592,26 @@ export function Editor({
       editor.setSelectionRange(from + prefix.length, from + prefix.length + (selected || " ").length);
     });
   }
+  async function openChapterWorkspace(targetId: string) {
+    if (!draftRef.current?.outline.some(chapter => chapter.id === targetId)) return;
+    if ((dirtyRef.current || savingRef.current) && !(await save(true))) return;
+    setChapterId(targetId);
+    setChapterWorkspaceOpen(true);
+    setRead(false);
+    setVisualMode(true);
+    setSelectedCount(0);
+    visualSelectedRef.current = "";
+    visualRangeRef.current = null;
+    requestAnimationFrame(() =>
+      document.getElementById("chapter-workspace-top")?.scrollIntoView({block:"start",behavior:"smooth"}));
+  }
+  async function leaveChapterWorkspace() {
+    if ((dirtyRef.current || savingRef.current) && !(await save(true))) return;
+    setChapterWorkspaceOpen(false);
+    setRead(false);
+    requestAnimationFrame(() =>
+      document.querySelector(".chapter-flow-list")?.scrollIntoView({block:"start",behavior:"smooth"}));
+  }
   async function save(checkpoint = false): Promise<boolean> {
     if (savingRef.current) {
       await new Promise<void>(resolve => saveWaitersRef.current.push(resolve));
@@ -1020,7 +1053,7 @@ export function Editor({
   const complete = isComplete(book);
   const canExport = complete && book.unlocked && !busy;
   return (
-    <div className="editor-shell">
+    <div className={chapterWorkspaceOpen && (tab==="write"||tab==="outline") ? "editor-shell is-chapter-workspace" : "editor-shell"}>
       <div className="editor-topbar">
         <Link className="text-link" href={`/${locale}/studio`}>
           <ArrowLeft size={17} />
@@ -1551,28 +1584,41 @@ export function Editor({
           )}
           {(tab === "write" || (tab === "outline" && draft.outline.length > 0)) && (
             <section className="editor-panel chapter-panel chapter-flow">
-              <div className="panel-heading">
+              {!chapterWorkspaceOpen && <div className="panel-heading">
                 <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
                 <h2>{tr(locale,"Plan and write your chapters","خطّط فصول كتابك واكتبها","Planera och skriv dina kapitel")}</h2>
                 <p>{tr(locale,"Open any chapter to adjust its plan, generate or write the text, and edit it right here. Continue chapter by chapter.","افتح أي فصل لتعديل خطته وتوليد نصه أو كتابته وتحريره هنا، ثم انتقل للفصل التالي.","Öppna ett kapitel, ändra planen, skriv eller generera texten och gå sedan vidare.")}</p>
-              </div>
-              <div className="chapter-flow-overview">
+              </div>}
+              {!chapterWorkspaceOpen && <div className="chapter-flow-overview">
                 <strong>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length} / {draft.outline.length} {tr(locale,"chapters with text","فصول مكتوبة","skrivna kapitel")}</strong>
                 <span>{bookWords(draft).toLocaleString(locale)} {t.words} · {tr(locale,"Approx.","نحو","Cirka")} {Math.ceil(bookWords(draft)/300)} {tr(locale,"pages","صفحة","sidor")}</span>
                 <div className="chapter-flow-track"><span style={{width:(draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length/draft.outline.length*100)+"%"}} /></div>
                 <small>{tr(locale,"Target for this outline: approximately","التقدير الأولي لهذا المخطط: نحو","För denna plan: ungefär")} {draft.outline.length*2}–{draft.outline.length*4} {tr(locale,"pages after writing. The final count depends on words, formatting and images.","صفحة بعد الكتابة. العدد النهائي يعتمد على الكلمات والتنسيق والصور.","sidor när boken skrivits. Slutligt antal beror på ord, layout och bilder.")}</small>
-              </div>
-              <details className="chapter-flow-book-settings">
+              </div>}
+              {!chapterWorkspaceOpen && <details className="chapter-flow-book-settings">
                 <summary>{tr(locale,"Edit book title and subtitle","تعديل عنوان الكتاب والعنوان الفرعي","Ändra boktitel och undertitel")}</summary>
                 <label>{t.title}<input maxLength={180} value={draft.title} disabled={disabled} onChange={e=>change(b=>({...b,title:e.target.value}))}/></label>
                 <label>{t.subtitle}<input maxLength={240} value={draft.subtitle} disabled={disabled} onChange={e=>change(b=>({...b,subtitle:e.target.value}))}/></label>
-              </details>
-              <div className="chapter-flow-list">
-                {draft.outline.map((c,i)=>(
+              </details>}
+              {chapterWorkspaceOpen && active && <header className="chapter-workspace-header" id="chapter-workspace-top">
+                <button type="button" className="chapter-workspace-back" onClick={()=>void leaveChapterWorkspace()}>
+                  <ListTree size={18}/>{tr(locale,"All chapters","كل الفصول","Alla kapitel")}
+                </button>
+                <div className="chapter-workspace-heading">
+                  <strong>{active.title}</strong>
+                  <small>{draft.outline.findIndex(c=>c.id===active.id)+1} / {draft.outline.length} · {current?.content?.trim().split(/\s+/u).filter(Boolean).length||0} {t.words}</small>
+                </div>
+                <span className="chapter-workspace-save" role="status">
+                  {saving?<Loader2 size={15} className="spin"/>:dirty?<Save size={15}/>:<Check size={15}/>}
+                  {saving?t.saving:dirty?(localSaved?tr(locale,"Saved on device","محفوظ على الجهاز","Sparat på enheten"):t.unsaved):tr(locale,"Saved to cloud","محفوظ بالسحابة","Sparat i molnet")}
+                </span>
+              </header>}
+              <div className={chapterWorkspaceOpen?"chapter-flow-list is-workspace":"chapter-flow-list"}>
+                {draft.outline.map((c,i)=>(!chapterWorkspaceOpen || active?.id===c.id) && (
                   <article key={c.id} id={`chapter-${c.id}`} className={`chapter-flow-card ${active?.id===c.id?"is-open":""}`}>
                     <div className="chapter-flow-head">
                       <button type="button" className="chapter-flow-open" aria-expanded={active?.id===c.id}
-                        onClick={()=>{setChapterId(c.id);setRead(false);visualSelectedRef.current="";visualRangeRef.current=null;setSelectedCount(0);}}>
+                        onClick={()=>void openChapterWorkspace(c.id)}>
                         <span className="chapter-flow-num">{i+1}</span>
                         <span className="chapter-flow-title">
                           <strong>{c.title}</strong>
@@ -1584,15 +1630,16 @@ export function Editor({
                       </button>
                       <button type="button" className="button button-outline button-small chapter-flow-ai"
                         disabled={disabled || !config.ai || !draft.title.trim()}
-                        onClick={()=>{setChapterId(c.id);setRead(false);void generate(
+                        onClick={()=>{setChapterId(c.id);setChapterWorkspaceOpen(true);setRead(false);if(draft.chapters[c.id]?.content?.trim() && !window.confirm(tr(locale,"Regenerate this chapter? The previous text may be replaced. Save a version first.","هل تريد إعادة توليد هذا الفصل؟ قد يُستبدل النص القديم؛ احفظ نسخة أولًا.","Generera om kapitlet? Texten kan ersättas. Spara en version först.")))return;void generate(
                           !book.unlocked && i===0 && !draft.chapters[c.id]?"sample":"chapter",c.id);}}>
                         <Sparkles size={16}/>{draft.chapters[c.id]?.content?.trim()
                           ? tr(locale,"Regenerate","إعادة التوليد","Generera om")
                           : tr(locale,"Generate chapter","توليد الفصل AI","Generera kapitel")}
                       </button>
                     </div>
-                    {active?.id===c.id && <div className="chapter-flow-body">
-                      <div className="chapter-flow-plan" dir={draft.language==="ar"?"rtl":"ltr"}>
+                    {chapterWorkspaceOpen && active?.id===c.id && <div className="chapter-flow-body">
+                      <details className="chapter-flow-plan" dir={draft.language==="ar"?"rtl":"ltr"}>
+                        <summary>{tr(locale,"Chapter title and plan","عنوان الفصل ومخططه","Kapitelrubrik och plan")}</summary>
                         <label>{tr(locale,"Chapter title","عنوان الفصل","Kapitelrubrik")}
                           <input maxLength={160} value={c.title} disabled={disabled}
                             onChange={e=>change(b=>({...b,outline:b.outline.map(x=>x.id===c.id?{...x,title:e.target.value}:x)}))}/>
@@ -1613,9 +1660,10 @@ export function Editor({
                           <button type="button" className="button button-outline button-small" disabled={disabled||draft.outline.length<=1}
                             onClick={()=>deleteChapter(c.id)}><Trash2 size={14}/>{tr(locale,"Delete","حذف","Ta bort")}</button>
                         </div>
-                      </div>
+                      </details>
                       <div className="chapter-flow-workspace">
-                        <p className="chapter-flow-tip">{tr(locale,"Edit the chapter below. Select a passage for AI suggestions, or insert an image.","حرّر الفصل أدناه. حدد فقرة لاقتراحات AI أو أضف صورة.","Redigera kapitlet nedan. Markera text för AI-förslag eller infoga en bild.")}</p>
+
+                <details className="chapter-workspace-extra"><summary>{tr(locale,"More chapter options","المزيد من خيارات الفصل","Fler kapitelalternativ")}</summary>
                 {(["novel","short_story","children_story"] as const).some(kind=>kind===draft.kind) && <details className="studio-story-notes">
                   <summary>{tr(locale,"Story notebook","دفتر القصة والشخصيات","Berättelsens anteckningsbok")}</summary>
                   <label>{tr(locale,"Characters, setting and continuity notes","الشخصيات والمكان وتسلسل الأحداث","Karaktärer, miljö och kontinuitet")}
@@ -1646,6 +1694,7 @@ export function Editor({
                  {importError && <p className="error-message" role="alert">{importError}</p>}
                </div>
               </details>
+               </details>
                {book.text_edit_candidate?.chapter_id === active?.id && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -1661,6 +1710,7 @@ export function Editor({
                    </div>
                  </section>
                )}
+               <details className="chapter-workspace-modes"><summary>{tr(locale,"Reading and advanced editing","القراءة والتحرير المتقدم","Läsning och avancerad redigering")}</summary>
                <div className="chapter-toolbar">
                 <div className="segmented studio-edit-modes" role="group" aria-label={tr(locale,"Editing mode","وضع التحرير","Redigeringsläge")}>
                   <button type="button" className={!read && visualMode ? "selected" : ""}
@@ -1674,7 +1724,7 @@ export function Editor({
                     {tr(locale,"Advanced text","نص متقدم","Avancerad text")}
                   </button>
                 </div>
-              </div>
+              </div></details>
               {current && showIllustrations && (
                 <Dialog title={tr(locale,"Insert image or logo","إدراج صورة أو شعار","Infoga bild eller logotyp")}
                   closeLabel={tr(locale,"Close","إغلاق","Stäng")}
@@ -1836,6 +1886,7 @@ export function Editor({
                       }}));return true;
                     }}
                     onSaveImage={(imageId,size,caption)=>{void changeExistingImage(imageId,false,{size,caption});}}
+                    onDeleteImage={imageId=>{void changeExistingImage(imageId,true);}}
                     onInsertImage={(position,canonicalContent,replaceId)=>{
                       if (canonicalContent !== current?.content && active)
                         change(b=>({...b,chapters:{...b.chapters,[active.id]:{
@@ -1957,26 +2008,27 @@ export function Editor({
               )}
 
                       </div>
-                      <div className="chapter-flow-next">
-                        <span>{dirty?tr(locale,"Changes are being saved","يجري حفظ التعديلات","Ändringar sparas"):tr(locale,"Automatic cloud saving is enabled","الحفظ التلقائي مفعّل","Automatisk molnsparning är aktiv")}</span>
-                        <button type="button" className="button button-primary" disabled={disabled || saving || !draft.title.trim()}
-                          onClick={async()=>{
-                            if(dirtyRef.current && !(await save(true)))return;
-                            const next=draftRef.current?.outline[i+1] || draftRef.current?.outline.find(x=>!draftRef.current?.chapters[x.id]?.content?.trim());
-                            if(next){setChapterId(next.id);setRead(false);setVisualMode(true);
-                              requestAnimationFrame(()=>document.getElementById(`chapter-${next.id}`)?.scrollIntoView({behavior:"smooth",block:"start"}));}
-                            else setTab("design");
-                          }}>
-                          <Save size={16}/>{i===draft.outline.length-1
-                            ?tr(locale,"Save and continue","حفظ والمتابعة","Spara och fortsätt")
-                            :tr(locale,"Save and next chapter","حفظ والفصل التالي","Spara och nästa kapitel")}
+                      <nav className="chapter-flow-next chapter-workspace-dock" aria-label={tr(locale,"Chapter navigation","التنقل بين الفصول","Kapitelnavigering")}>
+                        <button type="button" className="chapter-workspace-dock-side" disabled={disabled || saving || i===0}
+                          onClick={()=>void openChapterWorkspace(draft.outline[i-1].id)}>
+                          <ChevronRight size={19}/><span>{tr(locale,"Previous","السابق","Föregående")}</span>
                         </button>
-                      </div>
+                        <button type="button" className="chapter-workspace-dock-overview" onClick={()=>void leaveChapterWorkspace()}
+                          aria-label={tr(locale,"All chapters","كل الفصول","Alla kapitel")}><ListTree size={20}/></button>
+                        <span className="chapter-workspace-dock-count">{i+1} / {draft.outline.length}</span>
+                        <button type="button" className="chapter-workspace-dock-next" disabled={disabled || saving}
+                          onClick={async()=>{
+                            if(i<draft.outline.length-1) await openChapterWorkspace(draft.outline[i+1].id);
+                            else if((!dirtyRef.current && !savingRef.current) || await save(true)){setTab("design");setChapterWorkspaceOpen(false);}
+                          }}>
+                          <span>{i<draft.outline.length-1?tr(locale,"Next chapter","الفصل التالي","Nästa kapitel"):tr(locale,"Design","التصميم","Design")}</span><ChevronRight size={19}/>
+                        </button>
+                      </nav>
                     </div>}
                   </article>
                 ))}
               </div>
-              <div className="chapter-flow-footer">
+              {!chapterWorkspaceOpen && <div className="chapter-flow-footer">
                 <button type="button" className="button button-outline" disabled={disabled||draft.outline.length>=30}
                   onClick={()=>addChapter()}><Plus size={16}/>{tr(locale,"Add chapter","إضافة فصل","Lägg till kapitel")}</button>
                 <label className="button button-outline">{tr(locale,"Import full manuscript (Word/TXT/MD)","استيراد كتاب كامل (Word/TXT/MD)","Importera helt manus (Word/TXT/MD)")}
@@ -1991,7 +2043,7 @@ export function Editor({
                     ?tr(locale,"Continue unfinished chapters","استكمال الفصول الناقصة","Fortsätt ofärdiga kapitel")
                     :tr(locale,"Next: Design the book","التالي: تصميم الكتاب","Nästa: Designa boken")}<ChevronRight size={16}/>
                 </button>
-              </div>
+              </div>}
             </section>
           )}
           {tab === "design" && (
