@@ -1320,7 +1320,16 @@ export function Editor({
                 <ChevronRight size={18}/>
               </button>
               {draft.outline.length>0 && <button type="button" className="button button-outline"
-                onClick={()=>setTab("write")}>{tr(locale,"Continue writing","متابعة كتابة الكتاب","Fortsätt skriva")}</button>}
+                disabled={disabled}
+                onClick={async()=>{
+                  if(dirtyRef.current && !(await save(true)))return;
+                  const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
+                  if(missing){setChapterId(missing.id);setRead(false);setTab("write");}
+                  else setTab(!draft.back_blurb?.trim()?"design":"preview");
+                }}>
+                {tr(locale,"Continue where I left off","تابع من حيث توقفت","Fortsätt där jag slutade")}
+                <ChevronRight size={17}/>
+              </button>}
             </div>
             <details className="guided-project-management">
               <summary>{tr(locale,"Project management · restart, restore or delete","إدارة المشروع · البدء من جديد أو الاستعادة أو الحذف","Projekthantering · omstart, återställning, radering")}</summary>
@@ -2379,17 +2388,16 @@ export function Editor({
               <p className="review-note">{t.reviewNote}</p>
             </section>
           )}
-          {tab!=="preview" && tab!=="brief" && <div className="studio-next-step">
+          {(tab==="write" || tab==="design") && <div className="studio-next-step">
             <span>{tr(locale,"Continue one step at a time. Your changes save automatically.","تقدّم خطوة بخطوة. تُحفظ تعديلاتك تلقائيًا.","Fortsätt stegvis. Ändringarna sparas automatiskt.")}</span>
             <button type="button" className="button button-primary"
-              disabled={disabled || (tab==="outline"&&!draft.outline.length) || (tab==="outline"&&!draft.title.trim())}
+              disabled={disabled}
               onClick={()=>{
                 const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
                 if(tab==="write" && missing){setChapterId(missing.id);setRead(false);setVisualMode(true);}
-                else setTab(tab==="outline"?"write":tab==="write"?"design":"preview");
+                else setTab(tab==="write"?"design":"preview");
               }}>
-              {tab==="outline"?tr(locale,"Approve chapters · start writing","اعتماد الفصول · ابدأ الكتابة","Godkänn kapitel · börja skriva")
-               :tab==="write" && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
+              {tab==="write" && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
                  ?tr(locale,"Finish missing chapters","استكمل الفصول الناقصة","Skriv färdigt kapitlen")
                :tab==="write"?tr(locale,"Next: Design the cover","التالي: تصميم الغلاف","Nästa: Omslag")
                :tr(locale,"Next: Review and export","التالي: مراجعة وتنزيل","Nästa: Granska och exportera")}
