@@ -100,7 +100,7 @@ export async function pdfHtml(
   .book-quote{border-inline-start:3px solid #b3a082;padding:4mm 6mm;margin:6mm 0;background:#f9f6f0;font-style:italic;break-inside:avoid}
   .book-note{border:1px solid #c9d7e5;border-inline-start:4px solid #577a9f;padding:4mm 5mm;margin:6mm 0;background:#f4f7fa;break-inside:avoid}
   .page-break{break-before:page;page-break-before:always;height:0;clear:both}
-  </style></head><body class="theme-${layout}">${book.include_cover !== false ? `<section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>` : ""}${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}${thanksPage}${book.include_cover !== false ? `<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section>` : ""}</body></html>`;
+  </style></head><body class="theme-${layout}"><section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}${thanksPage}<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section></body></html>`;
 }
 export async function makePdf(
   book: Book,
@@ -170,7 +170,7 @@ export async function makeDocx(
     text: run.text, bold: bold || !!run.bold, italics: !!run.italic, font,
     rightToLeft: rtl, size: rtl ? 26 : 22,
   }));
-  const children: Paragraph[] = book.include_cover === false ? [] : [
+  const children: Paragraph[] = [
     new Paragraph({
       ...base,
       heading: HeadingLevel.TITLE,
@@ -180,7 +180,6 @@ export async function makeDocx(
     new Paragraph({ ...base, children: [text(book.author)] }),
   ];
   if (
-    book.include_cover !== false &&
     artwork &&
     book.use_artwork &&
     ["image/png", "image/jpeg"].includes(artwork.type)
@@ -223,7 +222,7 @@ export async function makeDocx(
     }
   }
   children.push(
-    ...(book.include_cover === false && !children.length ? [] : [new Paragraph({ children: [new PageBreak()] })]),
+    new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
       ...base,
       heading: HeadingLevel.HEADING_1,

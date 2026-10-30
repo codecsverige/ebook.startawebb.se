@@ -24,7 +24,7 @@ export function matchesBookLanguage(value: string, language: Locale): boolean {
   return language === "ar" ? arabic / letters >= 0.52 : arabic / letters < 0.45;
 }
 
-export const kinds = ["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"] as const;
+export const kinds = ["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as const;
 export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
 export const coverStyles = [
   "cobalt", "sage", "clay", "midnight", "plum", "ivory",
@@ -41,7 +41,6 @@ export function recommendedCoverStyles(kind: (typeof kinds)[number]): CoverStyle
     case "children_story": return ["sky", "sunrise", "berry", "rose", "lagoon"];
     case "workbook": return ["sage", "sand", "teal", "ivory", "cobalt"];
     case "guide": return ["cobalt", "teal", "ivory", "ink", "lagoon"];
-    case "report": case "research": return ["ivory", "cobalt", "ink", "sage", "sand"];
     default: return ["ivory", "lagoon", "gold", "plum", "sand"];
   }
 }
@@ -90,7 +89,6 @@ export const editBookSchema = z
     chapter_count: z.number().int().min(1).max(30).optional(),
     cover_style: z.enum(coverStyles),
     use_artwork: z.boolean(),
-    include_cover: z.boolean().default(true),
     cover_direction: z.string().trim().max(800).default(""),
     back_blurb: z.string().trim().max(1800).default(""),
     author_bio: z.string().trim().max(800).default(""),
@@ -190,8 +188,6 @@ export type Book = Brief & {
   story_notes?: string;
   cover_candidate_path?: string | null;
   use_artwork: boolean;
-  /** Existing books default to a cover; reports can omit it at export. */
-  include_cover?: boolean;
   unlocked: boolean;
   revision: number;
   created_at: string;

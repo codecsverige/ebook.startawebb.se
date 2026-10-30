@@ -126,11 +126,11 @@ export function makeEpub(
       '<link rel="stylesheet" type="text/css" href="style.css" /><title>' + title +
       '</title></head><body>' + body + '</body></html>',
   });
-  const hasImage = Boolean(book.include_cover !== false && artwork && book.use_artwork &&
+  const hasImage = Boolean(artwork && book.use_artwork &&
     ["image/png", "image/jpeg"].includes(artwork.type));
   const extension = artwork?.type === "image/png" ? "png" : "jpg";
   if (hasImage) content.push({ name: "OEBPS/images/cover." + extension, body: artwork!.data });
-  if (book.include_cover !== false) content.push(xhtml("cover.xhtml",
+  content.push(xhtml("cover.xhtml",
     '<section class="cover">' +
     (hasImage ? '<img src="images/cover.' + extension + '" alt="" />' : "") +
     '<div><h1>' + title + '</h1><p>' + subtitle + '</p></div>' +
@@ -149,7 +149,7 @@ export function makeEpub(
     '</h1>' + markdownHtml(book.acknowledgments) + '</section>'));
   const backImageType = backArtwork?.type === "image/png" ? "png" : "jpg";
   const hasBackArtwork = Boolean(backArtwork && ["image/png", "image/jpeg"].includes(backArtwork.type));
-  if (book.include_cover !== false && hasBackArtwork) content.push({ name: "OEBPS/images/back." + backImageType, body: backArtwork!.data });
+  if (hasBackArtwork) content.push({ name: "OEBPS/images/back." + backImageType, body: backArtwork!.data });
   const imageMarkup = Object.fromEntries(Object.entries(images)
     .filter(([, asset]) => ["image/png", "image/jpeg"].includes(asset.type))
     .map(([id, asset]) => {
@@ -159,7 +159,7 @@ export function makeEpub(
         '<img src="images/' + id + '.' + ext + '" alt="' + escapeHtml(asset.meta.alt) +
         '"/>' + (asset.meta.caption ? '<figcaption>' + escapeHtml(asset.meta.caption) + '</figcaption>' : '') + '</figure>'];
     }));
-  if (book.include_cover !== false) content.push(xhtml("back.xhtml",
+  content.push(xhtml("back.xhtml",
     '<section class="back-cover">' + (hasBackArtwork ? '<img class="back-illustration" src="images/back.' + backImageType + '" alt=""/>' : '') + '<div><h1>' + title + '</h1><p class="blurb">' +
     escapeHtml(book.back_blurb?.trim() || book.idea) + '</p></div>' +
     (book.author_bio?.trim() ? '<div class="bio"><strong>' + author + '</strong><p>' +
@@ -186,15 +186,15 @@ export function makeEpub(
   const manifest = [
     '<item id="style" href="style.css" media-type="text/css"/>',
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
-    ...(book.include_cover !== false ? ['<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'] : []),
-    ...(book.include_cover !== false ? ['<item id="back" href="back.xhtml" media-type="application/xhtml+xml"/>'] : []),
+    '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>',
+    '<item id="back" href="back.xhtml" media-type="application/xhtml+xml"/>',
     ...(book.copyright_notice?.trim() ? ['<item id="copyright" href="copyright.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...(book.acknowledgments?.trim() ? ['<item id="acknowledgments" href="acknowledgments.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...(book.dedication?.trim() ? ['<item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...(book.preface?.trim() ? ['<item id="preface" href="preface.xhtml" media-type="application/xhtml+xml"/>'] : []),
     ...book.outline.map((_, i) => '<item id="ch' + (i + 1) + '" href="chapter-' +
       (i + 1) + '.xhtml" media-type="application/xhtml+xml"/>'),
-    ...(book.include_cover !== false && hasBackArtwork ? ['<item id="back-img" href="images/back.' + backImageType +
+    ...(hasBackArtwork ? ['<item id="back-img" href="images/back.' + backImageType +
       '" media-type="image/' + (backImageType === "jpg" ? "jpeg" : "png") + '"/>'] : []),
     ...Object.entries(images).filter(([,asset]) => ["image/png","image/jpeg"].includes(asset.type)).map(([id,asset]) =>
       '<item id="img-' + id + '" href="images/' + id + '.' + (asset.type === "image/png" ? "png" : "jpg") +
@@ -203,13 +203,13 @@ export function makeEpub(
       '" media-type="image/' + (extension === "jpg" ? "jpeg" : "png") +
       '" properties="cover-image"/>'] : []),
   ].join("");
-  const spine = (book.include_cover !== false ? '<itemref idref="cover"/>' : "") +
+  const spine = '<itemref idref="cover"/>' +
     (book.copyright_notice?.trim() ? '<itemref idref="copyright"/>' : '') +
     (book.dedication?.trim() ? '<itemref idref="dedication"/>' : '') +
     (book.preface?.trim() ? '<itemref idref="preface"/>' : '') +
     book.outline.map((_, i) => '<itemref idref="ch' + (i + 1) + '"/>').join("") +
     (book.acknowledgments?.trim() ? '<itemref idref="acknowledgments"/>' : '') +
-    (book.include_cover !== false ? '<itemref idref="back"/>' : "");
+    '<itemref idref="back"/>';
   const opf = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" ' +
     'unique-identifier="pub-id" xml:lang="' + lang + '">' +

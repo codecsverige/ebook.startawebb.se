@@ -67,31 +67,3 @@ test("EPUB includes cover, optional front matter, chapters and back in order", (
   assert.match(xml, /A useful guide for everyone/);
   assert.match(xml, /<itemref idref="cover"\/>.*<itemref idref="dedication"\/>.*<itemref idref="preface"\/>.*<itemref idref="ch1"\/>.*<itemref idref="back"\/>/);
 });
-
-
-test("report and research documents can omit covers without losing their chapters", async () => {
-  const report = {...manuscript,kind:"report" as const,include_cover:false};
-  const parsed = editBookSchema.parse({
-    revision:1,title:report.title,subtitle:report.subtitle,author:report.author,
-    cover_style:report.cover_style,use_artwork:false,include_cover:false,
-    kind:"report",outline:validOutline,chapters:report.chapters,
-  });
-  assert.equal(parsed.include_cover,false);
-  const html = await pdfHtml(report);
-  assert.doesNotMatch(html, /<section class="cover(?:\s|")/);
-  assert.doesNotMatch(html, /<section class="back-cover/);
-  assert.match(html, /<section class="toc"/);
-  assert.match(html, /Practical steps/);
-  const xml = makeEpub(report).toString("utf8");
-  assert.doesNotMatch(xml, /OEBPS\/cover.xhtml/);
-  assert.doesNotMatch(xml, /OEBPS\/back.xhtml/);
-  assert.match(xml, /OEBPS\/chapter-1.xhtml/);
-});
-
-test("pre-existing books retain their cover unless explicitly disabled", () => {
-  const value = editBookSchema.parse({
-    revision:1,title:manuscript.title,subtitle:manuscript.subtitle,author:manuscript.author,
-    cover_style:manuscript.cover_style,use_artwork:false,outline:validOutline,chapters:manuscript.chapters,
-  });
-  assert.equal(value.include_cover,true);
-});

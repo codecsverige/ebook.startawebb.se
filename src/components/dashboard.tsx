@@ -68,7 +68,7 @@ export function Dashboard({
         idea: typeof saved.idea === "string" ? saved.idea.slice(0, 2000) : current.idea,
         audience: typeof saved.audience === "string" ? saved.audience.slice(0, 300) : current.audience,
         author: typeof saved.author === "string" ? saved.author.slice(0, 100) : current.author,
-        kind: (["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"] as string[]).includes(saved.kind || "") ? saved.kind! : current.kind,
+        kind: (["guide", "ebook", "workbook", "novel", "short_story", "children_story"] as string[]).includes(saved.kind || "") ? saved.kind! : current.kind,
         language: (["ar", "en", "sv"] as string[]).includes(saved.language || "") ? saved.language! : current.language,
         tone: (["clear", "friendly", "professional", "literary", "dramatic", "playful"] as string[]).includes(saved.tone || "") ? saved.tone! : current.tone,
         chapter_count: typeof saved.chapter_count === "number" && saved.chapter_count >= 3 && saved.chapter_count <= 10 ? Math.floor(saved.chapter_count) : current.chapter_count,
@@ -351,7 +351,7 @@ export function Dashboard({
                       field("kind", e.target.value as Brief["kind"])
                     }
                   >
-                    {["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"].map((k) => (
+                    {["guide", "ebook", "workbook", "novel", "short_story", "children_story"].map((k) => (
                       <option key={k} value={k}>
                         {t[k as Brief["kind"]]}
                       </option>

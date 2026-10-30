@@ -41,9 +41,7 @@ export function chapterGenerationPrompt(
   );
   const writing = fiction
     ? "Write a vivid, original 650–1000 word narrative chapter. Use scenes, natural dialogue, character actions and sensory details. Preserve character names, viewpoint, chronology and unresolved threads. No Markdown headings or bullet points within the story. For children use age-appropriate language."
-    : ["report","research"].includes(book.kind)
-      ? "Write a structured, original 700–1100 word report or research section with specific reasoning, evidence-aware claims and logical subheadings. NEVER invent citations, sources, links, quotations, statistics or study results. If sources are not supplied, identify claims requiring verification and clearly label them as unverified. Write conclusions carefully, without fabricated bibliography."
-      : "Write a substantial 700–1100 word chapter. Use Markdown subheadings, short paragraphs and concrete examples as appropriate. Include exercises for workbooks. Avoid repetition.";
+    : "Write a substantial 700–1100 word chapter. Use Markdown subheadings, short paragraphs and concrete examples as appropriate. Include exercises for workbooks. Avoid repetition.";
   const previous = book.outline.slice(0, index);
   const previousChapter = previous.at(-1);
   const previousDraft = previousChapter && book.chapters[previousChapter.id];
