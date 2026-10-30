@@ -135,6 +135,8 @@ export function Editor({
   const visualSelectedRef = useRef("");
   const visualRangeRef = useRef<VisualSelection | null>(null);
   const [showIllustrations, setShowIllustrations] = useState(false);
+  const [imageFocusId,setImageFocusId]=useState<string | null>(null);
+  const imageStartedRef=useRef<string | null>(null);
   const [imageSource, setImageSource] = useState<"library"|"upload"|"ai">("library");
   const [imageCaption, setImageCaption] = useState("");
   const [imageEdits, setImageEdits] = useState<Record<string, { caption: string; size: "small" | "medium" | "full" }>>({});
@@ -167,6 +169,18 @@ export function Editor({
   const [modal, setModal] = useState<"credits" | "history" | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const busy = !!job && ["queued", "running"].includes(job.status);
+  useEffect(()=>{
+    if(!imageFocusId)return;
+    const focus=()=>{
+      const figure=Array.from(document.querySelectorAll<HTMLElement>(".rich-studio [data-book-image-id]"))
+        .find(element=>element.dataset.bookImageId===imageFocusId);
+      if(!figure)return;
+      figure.scrollIntoView({behavior:"smooth",block:"center"});
+      setImageFocusId(null);
+    };
+    requestAnimationFrame(()=>requestAnimationFrame(focus));
+  },[imageFocusId,draft?.chapters,chapterWorkspaceOpen]);
+
   const disabled = busy || !!pending || !!recoveryDraft;
   const persistDraft = useCallback((value: BookWithCover) => {
     try { writeDraft(localStorage, value); setLocalSaved(true); }
@@ -193,6 +207,13 @@ export function Editor({
         } catch {
           // Private mode or malformed browser storage: cloud save continues normally.
         }
+      }
+      if(d.job?.kind==="illustration" && d.job.status==="completed" &&
+          imageStartedRef.current===d.job.chapter_id){
+        const inserted=Object.keys(d.book.illustrations||{}).find(assetId=>!draftRef.current?.illustrations?.[assetId]);
+        if(inserted)setImageFocusId(inserted);
+        imageStartedRef.current=null;
+        setShowIllustrations(false);
       }
       setBook(d.book);
       setLastSavedAt(d.book.updated_at);
@@ -384,6 +405,8 @@ export function Editor({
           size: imageSize, caption: imageCaption,
         }),
       });
+      const newAsset=Object.keys(d.book.illustrations||{}).find(assetId=>!draftRef.current?.illustrations?.[assetId]);
+      if(newAsset)setImageFocusId(newAsset);
       if (draftRef.current) undoHistory.current.record(draftRef.current, d.book);
       setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
       setBook(d.book); setDraft(d.book); clearBackup(); setReplaceImageId(null);
@@ -412,6 +435,8 @@ export function Editor({
       });
       const payload = await response.json().catch(() => ({ error: "service_error" }));
       if (!response.ok) throw new Error(payload.error || "service_error");
+      const newAsset=Object.keys(payload.book.illustrations||{}).find(assetId=>!draftRef.current?.illustrations?.[assetId]);
+      if(newAsset)setImageFocusId(newAsset);
       if (draftRef.current) undoHistory.current.record(draftRef.current, payload.book);
       setHistoryState({ canUndo: undoHistory.current.canUndo, canRedo: undoHistory.current.canRedo });
       setBook(payload.book); setDraft(payload.book); clearBackup(); setReplaceImageId(null);
@@ -698,6 +723,7 @@ export function Editor({
     generatingRef.current = true;
     setPending("generate");
     setError("");
+    if(kind==="illustration"){imageStartedRef.current=chapter||null;}
     try {
       const d = await request<{ job: Job }>(`/api/books/${id}/generate`, {
         method: "POST",
@@ -717,6 +743,7 @@ export function Editor({
       });
       try { sessionStorage.removeItem(requestKey); } catch {}
       setJob(d.job);
+      if(kind==="illustration")setShowIllustrations(false);
       await load();
     } catch (e) {
       const code = codeOf(e);
@@ -1234,14 +1261,14 @@ export function Editor({
             </div>
           )}
           {busy && (
-            <div className="generation-banner" role="status">
+            <div className="generation-banner studio-generation-dock" role="status">
               <div>
                 <span className="generation-icon">
-                  <Sparkles size={19} />
+                  <Loader2 size={19} className="spin" />
                 </span>
                 <div>
-                  <strong>{t.generating}</strong>
-                  <p>{t.background}</p>
+                  <strong>{job.kind==="illustration"?tr(locale,"Creating image at the chosen position","جارٍ إنشاء الصورة في مكانها المحدد","Skapar bild på vald plats"):t.generating}</strong>
+                  <p>{tr(locale,"The chapter remains safe while this finishes.","يبقى نص الفصل محفوظًا أثناء هذه العملية.","Kapitlet förblir sparat under arbetet.")}</p>
                 </div>
                 <b>{job.progress}%</b>
               </div>
@@ -1304,7 +1331,7 @@ export function Editor({
                 <label>{tr(locale,"Book type","نوع الكتاب","Boktyp")}
                   <select disabled={disabled} value={draft.kind}
                     onChange={e=>change(b=>({...b,kind:e.target.value as Book["kind"]}))}>
-                    {(["guide","ebook","workbook","novel","short_story","children_story"] as const).map(k=>
+                    {(["guide","ebook","workbook","report","research","novel","short_story","children_story"] as const).map(k=>
                       <option key={k} value={k}>{t[k]}</option>)}
                   </select>
                 </label>
@@ -1887,6 +1914,8 @@ export function Editor({
                     }}
                     onSaveImage={(imageId,size,caption)=>{void changeExistingImage(imageId,false,{size,caption});}}
                     onDeleteImage={imageId=>{void changeExistingImage(imageId,true);}}
+                    imageDialogOpen={showIllustrations}
+                    imageOperationPending={pending==="illustration" || (busy && job?.kind==="illustration")}
                     onInsertImage={(position,canonicalContent,replaceId)=>{
                       if (canonicalContent !== current?.content && active)
                         change(b=>({...b,chapters:{...b.chapters,[active.id]:{
@@ -2053,6 +2082,17 @@ export function Editor({
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
               </div>
+              <div className="studio-cover-option">
+                <label className="studio-cover-option-label">
+                  <input type="checkbox" checked={draft.include_cover !== false} disabled={disabled}
+                    onChange={e=>change(b=>({...b,include_cover:e.target.checked}))}/>
+                  <span><strong>{tr(locale,"Include front and back covers","تضمين الغلاف الأمامي والخلفي","Inkludera fram- och baksida")}</strong>
+                    <small>{tr(locale,"Turn off for reports or research. Designs remain saved and can be restored later.","يمكن إيقافه للتقارير والبحوث. تبقى تصاميم الغلاف محفوظة ويمكن إعادتها لاحقًا.","Stäng av för rapporter. Omslagen sparas och kan återaktiveras senare.")}</small></span>
+                </label>
+              </div>
+              {draft.include_cover === false && <p className="notice" role="status">
+                {tr(locale,"This document will export without front or back covers. Its body, sections, images and styles remain intact.","سيُصدّر هذا المستند دون غلاف أمامي أو خلفي، مع الاحتفاظ بالنص والأقسام والصور وتنسيقها.","Dokumentet exporteras utan omslag, men med innehåll, bilder och formatering.")}
+              </p>}
               <div className="studio-design-steps">
                 <div><span>01</span><strong>{tr(locale,"Describe the mood and visual idea","صف الجو والفكرة البصرية","Beskriv känsla och motiv")}</strong></div>
                 <div><span>02</span><strong>{tr(locale,"Choose one of the suggested covers","اختر تصميم الغلاف المناسب","Välj omslag")}</strong></div>
@@ -2341,7 +2381,7 @@ export function Editor({
                     [Boolean(draft.title.trim()),tr(locale,"Book title","عنوان الكتاب","Boktitel"),"outline"],
                     [Boolean(draft.outline.length && draft.outline.every(c=>draft.chapters[c.id]?.content.trim())),tr(locale,"All chapters finished","كتابة جميع الفصول","Alla kapitel klara"),"write"],
                     [Boolean(draft.author.trim()),tr(locale,"Author's name (recommended)","اسم المؤلف (مستحسن)","Författarnamn (rekommenderas)"),"design"],
-                    [Boolean(draft.back_blurb?.trim()),tr(locale,"Back cover description (recommended)","نبذة الغلاف الخلفي (مستحسنة)","Baksidestext (rekommenderas)"),"design"],
+                    [draft.include_cover===false || Boolean(draft.back_blurb?.trim()),tr(locale,"Back cover description when enabled","نبذة الغلاف الخلفي عند تفعيله","Baksidestext när omslag används"),"design"],
                     [!dirty && !pending,tr(locale,"All changes saved","حفظ جميع التعديلات","Alla ändringar sparade"),"preview"],
                   ] as const).map(([done,label,step],i)=>
                     <button type="button" key={i} className={done?"is-ready":"needs-attention"}

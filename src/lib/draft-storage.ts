@@ -12,9 +12,9 @@ export type SavedDraft = { version: 2; savedAt: string; book: BookWithCover };
 
 /** Only author-editable data may be restored; server ownership, media and credits stay authoritative. */
 export function editableBook(book: BookWithCover) {
-  const { revision, title, subtitle, author, cover_style, use_artwork, outline, chapters, idea, audience, kind, tone, chapter_count } = book;
+  const { revision, title, subtitle, author, cover_style, use_artwork, include_cover, outline, chapters, idea, audience, kind, tone, chapter_count } = book;
   return {
-    revision, title, subtitle, author, cover_style, use_artwork, outline, chapters,
+    revision, title, subtitle, author, cover_style, use_artwork, include_cover: include_cover !== false, outline, chapters,
     idea, audience, kind, tone, ...(outline.length ? {} : {chapter_count}),
     cover_direction: book.cover_direction || "", back_blurb: book.back_blurb || "",
     author_bio: book.author_bio || "", dedication: book.dedication || "",

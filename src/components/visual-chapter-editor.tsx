@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, useEditorState, type NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { NodeSelection, Plugin, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { ArrowUp, ArrowDown, Bold, Italic, Plus, Copy, Trash2, Undo2, Redo2, Sparkles, Search, Maximize2, Minimize2, SlidersHorizontal, ArrowUpToLine, ArrowDownToLine, MoreHorizontal } from "lucide-react";
 import type { Illustration, Locale } from "@/lib/domain";
 import { tr } from "@/lib/i18n";
@@ -19,13 +20,15 @@ type Props = {
   onSelection?: (selection: VisualSelection) => void;
   onSaveImage?: (id: string, size: "small" | "medium" | "full", caption: string) => void;
   onDeleteImage?: (id: string) => void;
+  imageDialogOpen?: boolean;
+  imageOperationPending?: boolean;
   onUndo?: () => void; onRedo?: () => void; canUndo?: boolean; canRedo?: boolean;
   onAI?: (selection: VisualSelection, action: "improve" | "proofread" | "shorten" | "expand" | "simplify") => void;
   aiEnabled?: boolean; chapters?: { id: string; title: string }[];
   onMoveToChapter?: (block: string, remaining: string, target: string) => boolean;
 };
 function ImageView({ node, selected }: NodeViewProps) {
-  return <NodeViewWrapper as="figure" className={`manuscript-figure figure-${node.attrs.size || "medium"}${selected ? " is-selected" : ""}`} contentEditable={false} data-drag-handle>
+  return <NodeViewWrapper as="figure" className={`manuscript-figure figure-${node.attrs.size || "medium"}${selected ? " is-selected" : ""}`} contentEditable={false} data-book-image-id={node.attrs.id} data-drag-handle>
     {node.attrs.src ? <img src={node.attrs.src} alt={node.attrs.alt || node.attrs.caption || ""} draggable={false}/> : <span>▧</span>}
     {node.attrs.caption && <figcaption>{node.attrs.caption}</figcaption>}
   </NodeViewWrapper>;
@@ -41,6 +44,40 @@ const PageBreak = Node.create({
   name:"bookPageBreak",group:"block",atom:true,
   parseHTML:()=>[{tag:"div[data-book-page-break]"}],
   renderHTML:()=>["div",{"data-book-page-break":"",class:"rich-page-break"},"✂"],
+});
+
+/** UI-only insertion marker. The chapter text is never changed until an image is committed. */
+const imageAnchorKey = new PluginKey<number | null>("ebook-image-anchor");
+const imageAnchorExtension = Extension.create({
+  name:"bookImageAnchor",
+  addProseMirrorPlugins(){
+    return [new Plugin<number | null>({
+      key:imageAnchorKey,
+      state:{
+        init:()=>null,
+        apply(transaction,position){
+          const next=transaction.getMeta(imageAnchorKey);
+          if(next!==undefined)return next;
+          return position!==null && transaction.docChanged
+            ?transaction.mapping.map(position,-1):position;
+        }
+      },
+      props:{
+        decorations(state){
+          const position=imageAnchorKey.getState(state);
+          if(position===null||position===undefined||position>state.doc.content.size)return null;
+          return DecorationSet.create(state.doc,[Decoration.widget(position,()=>{
+            const mark=document.createElement("span");
+            mark.className="rich-image-anchor";
+            mark.setAttribute("role","status");
+            mark.setAttribute("contenteditable","false");
+            mark.textContent="▧";
+            return mark;
+          },{side:-1})]);
+        },
+      },
+    })];
+  },
 });
 const BookNote = Node.create({
   name:"bookNote",group:"block",content:"inline*",defining:true,
@@ -95,7 +132,7 @@ export function VisualChapterEditor(props:Props){
     return false;
   }})];}}),[]);
   const editor=useEditor({
-    extensions:[StarterKit.configure({code:false,codeBlock:false,link:false,underline:false,strike:false,hardBreak:false,undoRedo:false,listItem:false,heading:{levels:[1,2,3,4]}}),FlatListItem,BookImage,PageBreak,BookNote,Alignment,limit],
+    extensions:[StarterKit.configure({code:false,codeBlock:false,link:false,underline:false,strike:false,hardBreak:false,undoRedo:false,listItem:false,heading:{levels:[1,2,3,4]}}),FlatListItem,BookImage,PageBreak,BookNote,Alignment,imageAnchorExtension,limit],
     content:withMedia(manuscriptDocument(content),props),immediatelyRender:false,editable:!disabled,
     editorProps:{
       attributes:{class:"rich-book-document",dir:language==="ar"?"rtl":"ltr",role:"textbox","aria-multiline":"true","aria-label":tr(locale,"Chapter text","نص الفصل","Kapiteltext"),spellcheck:"true"},
@@ -124,6 +161,10 @@ export function VisualChapterEditor(props:Props){
   }:null});
   useEffect(()=>{editor?.setEditable(!disabled);},[disabled,editor]);
   useEffect(()=>{
+    if(editor && !props.imageDialogOpen && !props.imageOperationPending)
+      editor.view.dispatch(editor.state.tr.setMeta(imageAnchorKey,null));
+  },[editor,props.imageDialogOpen,props.imageOperationPending]);
+  useEffect(()=>{
     if(!editor||content.trimEnd()===lastEmitted.current.trimEnd())return;
     lastEmitted.current=content;const selection=editor.state.selection.from;
     editor.commands.setContent(withMedia(manuscriptDocument(content),latest.current),{emitUpdate:false});
@@ -146,13 +187,12 @@ export function VisualChapterEditor(props:Props){
   const run=(fn:()=>void)=>{if(!editor||disabled)return;discrete.current=true;fn();discrete.current=false;setError("");};
   const prepareImage=(replaceId?:string)=>{
     if(!editor||!active)return;
-    run(()=>{
-      if(!replaceId&&["paragraph","heading","bookNote"].includes(active.json.type||"")&&editor.state.selection.$from.parent.content.size)
-        editor.chain().focus().setTextSelection(editor.state.selection.to).splitBlock().run();
-      const items=blocks(editor),selected=items[editor.state.selection.$from.index(0)]||items[items.length-1];
-      const serialized=serializeRichDocument(editor.getJSON()),pos=replaceId?active.pos:selected.pos;
-      latest.current.onInsertImage(serialized.range(pos,pos).start,serialized.text,replaceId);
-    });setInsertOpen(false);setToolsOpen(false);
+    const position=replaceId?active.pos:editor.state.selection.to;
+    const serialized=serializeRichDocument(editor.getJSON());
+    // Capture the real cursor position without splitting or altering any paragraph.
+    editor.view.dispatch(editor.state.tr.setMeta(imageAnchorKey,position));
+    latest.current.onInsertImage(serialized.range(position,position).start,serialized.text,replaceId);
+    setInsertOpen(false);setToolsOpen(false);
   };
   const insert=(type:string)=>{
     if(type==="bookImage"){prepareImage();return;}
@@ -238,6 +278,14 @@ export function VisualChapterEditor(props:Props){
       <button type="button" className="rich-delete" aria-label={tr(locale,"Delete selected text","حذف النص المحدد","Ta bort markerad text")}
         disabled={disabled} onMouseDown={e=>e.preventDefault()}
         onClick={()=>run(()=>editor.chain().focus().deleteRange({from:state.from,to:state.to}).run())}><Trash2 size={16}/></button>
+    </div>}
+    {asset && active && <div className="rich-selection-actions rich-image-actions" role="toolbar" aria-label={tr(locale,"Image tools","أدوات الصورة","Bildverktyg")}>
+      <span>{tr(locale,"Image","صورة","Bild")}</span>
+      <button type="button" disabled={disabled||index===0} onClick={()=>move(index-1)}><ArrowUp size={16}/>{tr(locale,"Up","أعلى","Upp")}</button>
+      <button type="button" disabled={disabled||index===all.length-1} onClick={()=>move(index+1)}><ArrowDown size={16}/>{tr(locale,"Down","أسفل","Ner")}</button>
+      <button type="button" disabled={disabled} onClick={()=>prepareImage(asset.id)}>{tr(locale,"Replace","استبدال","Ersätt")}</button>
+      <button type="button" disabled={disabled} onClick={()=>setToolsOpen(open=>!open)}>{tr(locale,"Size / caption","الحجم والوصف","Storlek / bildtext")}</button>
+      <button type="button" className="rich-delete" disabled={disabled||!props.onDeleteImage} onClick={()=>props.onDeleteImage?.(asset.id)}><Trash2 size={16}/>{tr(locale,"Delete","حذف","Ta bort")}</button>
     </div>}
     {aiOpen&&<div className="rich-ai-actions" role="group" aria-label={tr(locale,"Improve this passage","تحسين هذا النص","Förbättra texten")}>
       <p>{tr(locale,"Selected text, or the current paragraph. Review the suggestion before applying.","سيُعدّل النص المحدد، أو الفقرة الحالية. راجع الاقتراح قبل اعتماده.","Markerad text eller aktuellt stycke. Granska förslaget innan du använder det.")}</p>

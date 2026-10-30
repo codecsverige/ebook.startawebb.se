@@ -10,14 +10,14 @@ type Part = { id: string; title: string; type: "cover"|"back"|"text"|"toc"|"chap
 export function BookSectionReader({book, bookId}:{book:BookWithCover;bookId:string}) {
   const [index,setIndex]=useState(0);
   const parts = useMemo<Part[]>(()=>{
-    const list:Part[]=[{id:"front",title:book.title,type:"cover"}];
+    const list:Part[]=book.include_cover === false ? [] : [{id:"front",title:book.title,type:"cover"}];
     if(book.copyright_notice?.trim())list.push({id:"rights",title:tr(book.language,"Copyright","حقوق النشر","Upphovsrätt"),type:"text",content:book.copyright_notice});
     if(book.dedication?.trim())list.push({id:"dedication",title:tr(book.language,"Dedication","الإهداء","Dedikation"),type:"text",content:book.dedication});
     if(book.preface?.trim())list.push({id:"preface",title:tr(book.language,"Preface","المقدمة","Förord"),type:"text",content:book.preface});
     list.push({id:"toc",title:tr(book.language,"Contents","الفهرس","Innehåll"),type:"toc"});
     book.outline.forEach(c=>list.push({id:c.id,title:c.title,type:"chapter",chapterId:c.id,content:book.chapters[c.id]?.content || ""}));
     if(book.acknowledgments?.trim())list.push({id:"thanks",title:tr(book.language,"Acknowledgments","الشكر والتقدير","Tack"),type:"text",content:book.acknowledgments});
-    list.push({id:"back",title:tr(book.language,"Back cover","الغلاف الخلفي","Baksida"),type:"back"});
+    if (book.include_cover !== false) list.push({id:"back",title:tr(book.language,"Back cover","الغلاف الخلفي","Baksida"),type:"back"});
     return list;
   },[book]);
   const current=parts[Math.min(index,parts.length-1)];
