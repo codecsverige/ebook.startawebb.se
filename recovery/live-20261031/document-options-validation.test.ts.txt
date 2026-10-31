@@ -1,0 +1,36 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { documentOptions, documentPreset } from "../src/lib/document-options";
+
+type Options = Parameters<typeof documentOptions>[0];
+const draft = (values: Record<string, unknown>): Options => values as Options;
+
+test("existing books keep their saved cover settings and paper size", () => {
+  const options = documentOptions(draft({
+    document_type: "book", front_cover_enabled: false,
+    back_cover_enabled: true, title_page_enabled: true,
+    toc_enabled: false, page_size: "A4",
+  }));
+  assert.deepEqual(options, {
+    document_type: "book", front_cover_enabled: false,
+    back_cover_enabled: true, title_page_enabled: true,
+    toc_enabled: false, page_size: "A4",
+  });
+});
+
+test("reports and school research default to A4 and optional covers", () => {
+  for (const type of ["report", "school_research"] as const) {
+    assert.deepEqual(documentOptions(draft({document_type:type})), documentPreset(type));
+  }
+});
+
+test("invalid draft options are normalized without mutating the draft", () => {
+  const corrupt = draft({
+    document_type: "unsupported", front_cover_enabled: "false",
+    back_cover_enabled: null, title_page_enabled: 1,
+    toc_enabled: null, page_size: "invalid",
+  });
+  const snapshot = JSON.stringify(corrupt);
+  assert.deepEqual(documentOptions(corrupt), documentPreset("book"));
+  assert.equal(JSON.stringify(corrupt), snapshot);
+});
