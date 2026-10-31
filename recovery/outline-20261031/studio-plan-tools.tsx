@@ -29,7 +29,7 @@ export function StudioPlanTools({
   const missing = chapters.filter(ch => !book.chapters[ch.id]?.content?.trim());
   const overview = useMemo(() => {
     const summaries = chapters.map(ch => ch.summary.trim()).filter(Boolean);
-    return summaries.length ? summaries.join(" ").slice(0, 860) : book.idea;
+    return summaries.length ? summaries.join(" ").slice(0, 560) : book.idea;
   }, [book.idea, chapters]);
   if (!chapters.length) return null;
   const available = showAll ? chapters : chapters.slice(0, 4);
@@ -64,6 +64,9 @@ export function StudioPlanTools({
             "En ändring påverkar kommande AI-text, inte redan skrivna kapitel.")}</small>
         </details>
       </div>
+      <details className={styles.chapterCollapse}>
+        <summary className={styles.chapterCollapseToggle}>{tr(locale,
+          "Read or edit every chapter summary", "عرض ملخصات الفصول وتعديلها", "Läs eller redigera kapitelsammanfattningarna")}</summary>
       <div className={styles.chapterList}>
         {available.map((chapter, index) => {
           const written = Boolean(book.chapters[chapter.id]?.content?.trim());
@@ -108,6 +111,7 @@ export function StudioPlanTools({
           ? tr(locale, "Show fewer chapters", "عرض فصول أقل", "Visa färre kapitel")
           : tr(locale, "Show all chapters", "عرض جميع الفصول", "Visa alla kapitel")}
       </button>}
+      </details>
       <div className={styles.footer}>
         <button type="button" className={styles.primary} disabled={disabled || !missing.length}
           onClick={() => onChapterOpen((missing[0] || chapters[0]).id)}>
