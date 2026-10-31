@@ -1,0 +1,49 @@
+import type { Book, DocumentType } from "./domain";
+
+type Options = Pick<
+  Book,
+  | "document_type"
+  | "front_cover_enabled"
+  | "back_cover_enabled"
+  | "title_page_enabled"
+  | "toc_enabled"
+  | "page_size"
+>;
+
+export function documentPreset(type: DocumentType) {
+  return {
+    document_type: type,
+    front_cover_enabled: type === "book",
+    back_cover_enabled: type === "book",
+    title_page_enabled: type !== "book",
+    toc_enabled: true,
+    page_size: (type === "book" ? "A5" : "A4") as "A4" | "A5",
+  };
+}
+
+function isDocumentType(value: unknown): value is DocumentType {
+  return value === "book" || value === "report" || value === "school_research";
+}
+
+function savedBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+/**
+ * Preserve legitimate choices (including intentionally disabled covers).
+ * Protect old/imported drafts against invalid persisted document options.
+ * Hiding a cover never deletes its saved artwork.
+ */
+export function documentOptions(book: Options) {
+  const type = isDocumentType(book.document_type) ? book.document_type : "book";
+  const preset = documentPreset(type);
+
+  return {
+    document_type: type,
+    front_cover_enabled: savedBoolean(book.front_cover_enabled, preset.front_cover_enabled),
+    back_cover_enabled: savedBoolean(book.back_cover_enabled, preset.back_cover_enabled),
+    title_page_enabled: savedBoolean(book.title_page_enabled, preset.title_page_enabled),
+    toc_enabled: savedBoolean(book.toc_enabled, preset.toc_enabled),
+    page_size: book.page_size === "A4" || book.page_size === "A5" ? book.page_size : preset.page_size,
+  };
+}
