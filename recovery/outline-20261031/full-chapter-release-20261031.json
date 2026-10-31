@@ -1,0 +1,604 @@
+{
+  "currentProduction": "dpl_baM6EtgYxJkU4paFsJwBwg7UYytM",
+  "previousProduction": "dpl_2A6RzWX6vnTS1yVyQ49RGcuerQ3g",
+  "testedPreview": "dpl_9DP9fiJe6ZnqAbwy32JjqbjKxevQ",
+  "date": "2026-10-31",
+  "sourceFiles": 146,
+  "delivered": [
+    "Prompt explicitly requests complete full chapter rather than synopsis",
+    "Quality guard rejects obvious synopsis-like chapter openings for fiction",
+    "Empty chapter editor shows clear full-chapter AI action"
+  ],
+  "remaining": [
+    "Bulk book generation blank chapter skip: unverified and not deployed after failed previews",
+    "Full end-to-end authenticated AI generation was not exercised",
+    "Legacy GitHub main does not contain full deployed source"
+  ],
+  "warning": "Deployment source manifest only; do not deploy GitHub main over production.",
+  "files": [
+    {
+      "file": ".env.example",
+      "sha": "1536f369a4d2eeb351201b34509c874cb83b8f34"
+    },
+    {
+      "file": ".github/workflows/quality.yml",
+      "sha": "2f2132c76a53982ae3f77c7333aaffb3f030cef5"
+    },
+    {
+      "file": ".gitignore",
+      "sha": "66a8305b65d149c64bdacdc288c3cfafb4fc2fb0"
+    },
+    {
+      "file": ".prettierignore",
+      "sha": "468b433494bdce0499fcbd4543a54aec14cae9a5"
+    },
+    {
+      "file": "firebase.emulators.json",
+      "sha": "78e9588ee7bcfb7d12fb25e726074fc6b1122891"
+    },
+    {
+      "file": "firebase/emulator.firestore.rules",
+      "sha": "2fd39118c9a11e055f71f1ee3ccfa005c0d4fd86"
+    },
+    {
+      "file": "next-env.d.ts",
+      "sha": "915946e261450f4fb6aab2ca862c8b440b748240"
+    },
+    {
+      "file": "next.config.ts",
+      "sha": "8dc384c135e2a5301281f21a965be39bdd5b4099"
+    },
+    {
+      "file": "package-lock.json",
+      "sha": "d452cd2c06b5c0dc8afd39f693951bd114a017af"
+    },
+    {
+      "file": "package.json",
+      "sha": "acb75360b05eace0334ded0fcf24b7416aec16a1"
+    },
+    {
+      "file": "public/icon.svg",
+      "sha": "7bdc88433b98dc95c4ac8ee6fb5c438e9b3f2cd3"
+    },
+    {
+      "file": "public/illustrations/botanical.png",
+      "sha": "35c239a8c3fe4bdef2edcc967f112b9dfdcfaed9"
+    },
+    {
+      "file": "public/illustrations/botanical.svg",
+      "sha": "0bafcb9ee337862628d362e2e4fa38e5f412fdaf"
+    },
+    {
+      "file": "public/illustrations/mountain.png",
+      "sha": "0d5f98d19b286e746cb28dc3a3bdba53fb4ae796"
+    },
+    {
+      "file": "public/illustrations/mountain.svg",
+      "sha": "406cf2b5fd39cfba834ef92e0d1a6cb3e41f0f1b"
+    },
+    {
+      "file": "public/illustrations/stars.png",
+      "sha": "20ca42f11ab468850d6dfff5aa7e4eb3dab751c3"
+    },
+    {
+      "file": "public/illustrations/stars.svg",
+      "sha": "5db623552c20677d0bb54e18f1d54589291fcfb3"
+    },
+    {
+      "file": "public/illustrations/waves.png",
+      "sha": "df0b5054e33230a73d4ffcd7e08f3fcb69cdeb9b"
+    },
+    {
+      "file": "public/illustrations/waves.svg",
+      "sha": "a7ea7918ccf12d5d3d0fb2231cbee4180ffb89b7"
+    },
+    {
+      "file": "README.md",
+      "sha": "409cb47cc99bf0198863b9080a83fdde95324193"
+    },
+    {
+      "file": "scripts/dev.mjs",
+      "sha": "70ccbd7080cacc2b962925815cb30251da999246"
+    },
+    {
+      "file": "scripts/patch-chapter-only.mjs",
+      "sha": "0438ec1cbdad301f9b6017ef53f294a593fe32e2"
+    },
+    {
+      "file": "scripts/patch-editor.mjs",
+      "sha": "7cf5381fa3fe4b9f125162fee6a38204fc0564f4"
+    },
+    {
+      "file": "scripts/patch-layout.mjs",
+      "sha": "f237b84e70b7e973ec3328e29577b855fbb7da2c"
+    },
+    {
+      "file": "scripts/patch-reading.mjs",
+      "sha": "89d18f5643c85837241b6f6d7cac47cd1799e140"
+    },
+    {
+      "file": "scripts/patch-status.mjs",
+      "sha": "e480e0b159308d2654cf8df807f96d0acc9da2ca"
+    },
+    {
+      "file": "scripts/verify-export.ts",
+      "sha": "bc1ef3d038c4877ae18c82e5358112a42f68ae2a"
+    },
+    {
+      "file": "src/app/(entry)/layout.tsx",
+      "sha": "67303228d9fadcebe82ae2274d0b95cd9f397fe1"
+    },
+    {
+      "file": "src/app/(entry)/page.tsx",
+      "sha": "1518f5a5bfb74d82fc74651c8df6dba9b0306875"
+    },
+    {
+      "file": "src/app/[locale]/[legal]/page.tsx",
+      "sha": "1284b700ea83c6c8745126b7f0e1f375023eda32"
+    },
+    {
+      "file": "src/app/[locale]/chatgpt/complete/page.tsx",
+      "sha": "5ca972f7750c63e3f2d7c940dc7bf63408cd4c1a"
+    },
+    {
+      "file": "src/app/[locale]/error.tsx",
+      "sha": "8a952d24e2c65d82aae5047806f4b3975708be47"
+    },
+    {
+      "file": "src/app/[locale]/examples/[kind]/page.tsx",
+      "sha": "1e7ca7578e3ca096fe2ae25e2624b4ae4a7a1554"
+    },
+    {
+      "file": "src/app/[locale]/examples/page.tsx",
+      "sha": "3c090e1b8d80846b78f958a953ad762c5b6762dc"
+    },
+    {
+      "file": "src/app/[locale]/layout.tsx",
+      "sha": "dd7b2cba6a05723b8fd70560c031b34f471d2f8b"
+    },
+    {
+      "file": "src/app/[locale]/login/page.tsx",
+      "sha": "23e001085edfc60ad76c78d53f4bf42c03c4cf19"
+    },
+    {
+      "file": "src/app/[locale]/not-found.tsx",
+      "sha": "f3ece0f46f4e61f0e663c7dae942187614df126b"
+    },
+    {
+      "file": "src/app/[locale]/page.tsx",
+      "sha": "59e21b95ab959aaa47acef2a4a18aed8f45220f7"
+    },
+    {
+      "file": "src/app/[locale]/studio/[id]/page.tsx",
+      "sha": "67f9e84a9795b10d1d5017ff49ec022636766dc6"
+    },
+    {
+      "file": "src/app/[locale]/studio/page.tsx",
+      "sha": "8335437f53f9e1efdc132fc97a5cbfd19e15fe61"
+    },
+    {
+      "file": "src/app/api/account/route.ts",
+      "sha": "f91965405e1e98ffd8c7de04d9ac0e2203f29f2a"
+    },
+    {
+      "file": "src/app/api/ai/diagnostics/route.ts",
+      "sha": "1c2b0a59a67705c17bfd3f5d2095a6d9a63c02f7"
+    },
+    {
+      "file": "src/app/api/auth/chatgpt/callback/route.ts",
+      "sha": "e8f5855469fe3ee6c52f7dff5815bd065990cea4"
+    },
+    {
+      "file": "src/app/api/auth/chatgpt/complete/route.ts",
+      "sha": "25575f2260a1b7bdc7cc17e60594ed44823766f5"
+    },
+    {
+      "file": "src/app/api/auth/chatgpt/start/route.ts",
+      "sha": "cf395c570f58de2148e6633d2c1ab72376c6b083"
+    },
+    {
+      "file": "src/app/api/auth/route.ts",
+      "sha": "cac9451bc7af08455b97b88d00e3e1aa5d86dd08"
+    },
+    {
+      "file": "src/app/api/auth/session/route.ts",
+      "sha": "dc96f8794bf452eda88119126705ea848b503c80"
+    },
+    {
+      "file": "src/app/api/billing/checkout/route.ts",
+      "sha": "488fa3f5a93f17e83915818a2715ffb6e31a3e81"
+    },
+    {
+      "file": "src/app/api/books/[id]/cover/route.ts",
+      "sha": "5dfdee72506108b2d833ca7270e11cdfe32a8e26"
+    },
+    {
+      "file": "src/app/api/books/[id]/cover/upload/route.ts",
+      "sha": "98dac1219241649b15372c0de672756f54a572f6"
+    },
+    {
+      "file": "src/app/api/books/[id]/export/route.ts",
+      "sha": "f34fc9ff0bf827d8eb21f0ed680b3e3ed9be8339"
+    },
+    {
+      "file": "src/app/api/books/[id]/generate/route.ts",
+      "sha": "8c2e6b9a0ade37e4de2e691a4ba63f91669877b7"
+    },
+    {
+      "file": "src/app/api/books/[id]/illustrations/[imageId]/route.ts",
+      "sha": "cdb22c3243d8469043b384934fdda350a4053705"
+    },
+    {
+      "file": "src/app/api/books/[id]/illustrations/route.ts",
+      "sha": "682b35b6a13aa08c1128e5c6b1e527c7ca555a82"
+    },
+    {
+      "file": "src/app/api/books/[id]/illustrations/upload/route.ts",
+      "sha": "ba0d078a39f50d4b59c335c5e98680b9eb997465"
+    },
+    {
+      "file": "src/app/api/books/[id]/import/route.ts",
+      "sha": "430eea98f21a888da26df64106d1c90170cf3f20"
+    },
+    {
+      "file": "src/app/api/books/[id]/route.ts",
+      "sha": "d2fc9a24e2c7f3ad40390ca08ac9bf73ce015079"
+    },
+    {
+      "file": "src/app/api/books/[id]/text-edit/route.ts",
+      "sha": "64c4d78cc015659be8340778cadd5bcbe444025b"
+    },
+    {
+      "file": "src/app/api/books/[id]/versions/route.ts",
+      "sha": "1286e3bbe0d8ca7375beeb6be4cc799141cda1d8"
+    },
+    {
+      "file": "src/app/api/books/route.ts",
+      "sha": "7257b72d5c563b06774ba39705d7ac359fa311f9"
+    },
+    {
+      "file": "src/app/api/webhooks/lemonsqueezy/route.ts",
+      "sha": "55fc9caf4a7f6ad10e40cfab80d7d725440c1115"
+    },
+    {
+      "file": "src/app/auth/callback/page.tsx",
+      "sha": "3bcd05f1768481cce84ecd2256f32630c5410e06"
+    },
+    {
+      "file": "src/app/auth/layout.tsx",
+      "sha": "7d167c0318b2aedff26a264b11f0b79c807fcdeb"
+    },
+    {
+      "file": "src/app/globals.css",
+      "sha": "a3f943671a16d5f48e084541f5a841195ed160c5"
+    },
+    {
+      "file": "src/app/robots.ts",
+      "sha": "861ae80c37ac9aab1d44f00e79242541c0973429"
+    },
+    {
+      "file": "src/app/sitemap.ts",
+      "sha": "759a72754ecb259fa1a7fedb85d37ad31ab23a7d"
+    },
+    {
+      "file": "src/components/ai-activity.tsx",
+      "sha": "af88ae7b72c81870560f48afca96eff701645270"
+    },
+    {
+      "file": "src/components/ai-edit-review.tsx",
+      "sha": "75c552ce51f64b2fda99bb124649f3669f3e33ba"
+    },
+    {
+      "file": "src/components/ai-result-status.module.css",
+      "sha": "cb71f0869d569b9cee1d987a6e6f11d19834132e"
+    },
+    {
+      "file": "src/components/ai-result-status.tsx",
+      "sha": "c5f1b0e4bba872e612bf412a3f90c0ca5ee54577"
+    },
+    {
+      "file": "src/components/book-contents.tsx",
+      "sha": "6e4240f4027f2b1346fd68f45684ca4e0828cf6a"
+    },
+    {
+      "file": "src/components/book-cover.tsx",
+      "sha": "5b8ffd9b2175fdf6b1eeab128154a0b6285a8dcc"
+    },
+    {
+      "file": "src/components/book-reading-switcher.module.css",
+      "sha": "3070092b4cd0e99c797da92016bacddbd85acf17"
+    },
+    {
+      "file": "src/components/book-reading-switcher.tsx",
+      "sha": "1571940a774e72677c4959ea06e6b6bb390ea752"
+    },
+    {
+      "file": "src/components/book-section-reader.tsx",
+      "sha": "abd6ebc4f19cd6b5152587191f26ce1f28afe669"
+    },
+    {
+      "file": "src/components/brand.tsx",
+      "sha": "57012ac174a91ebe15c76e092faafd092dfdf53a"
+    },
+    {
+      "file": "src/components/chatgpt-complete.tsx",
+      "sha": "a2a6293ddb7f8c39f24bbf2a77ee10a60942d106"
+    },
+    {
+      "file": "src/components/credit-packs.tsx",
+      "sha": "20ba20b06a71009783342df17b899f38b992e3af"
+    },
+    {
+      "file": "src/components/dashboard.tsx",
+      "sha": "a53cfbf1a0be4d4306b654d9806d36af7b0987d8"
+    },
+    {
+      "file": "src/components/dialog.tsx",
+      "sha": "407dbb43f500bb2d31093760490391c212da102c"
+    },
+    {
+      "file": "src/components/document-settings.tsx",
+      "sha": "9b2eac74d6301ef108222edd4da3e1e57d34be6d"
+    },
+    {
+      "file": "src/components/editor.tsx",
+      "sha": "1a94c696b394963975e99b3fbc4e0b1fbe342a2a"
+    },
+    {
+      "file": "src/components/email-callback.tsx",
+      "sha": "e033a37cd07edd013a2f54ecdb0622096fd0245f"
+    },
+    {
+      "file": "src/components/language-switch.tsx",
+      "sha": "de1902396ff919bfeed76f9f83c3ad3d81faaca4"
+    },
+    {
+      "file": "src/components/login-form.tsx",
+      "sha": "257b2687d32986939b003ace52037d1b78c2d4e3"
+    },
+    {
+      "file": "src/components/markdown.tsx",
+      "sha": "40609a653a818a55b5af36f4bbe845d45759ed87"
+    },
+    {
+      "file": "src/components/page-chapter-editor.tsx",
+      "sha": "b1081984803aff0249b33109ad8b0797e0163d6a"
+    },
+    {
+      "file": "src/components/studio-plan-tools.module.css",
+      "sha": "c9548b90273ed35e3f586fbdaf90dc7509dbe0b3"
+    },
+    {
+      "file": "src/components/studio-plan-tools.tsx",
+      "sha": "1c810339882004297995da1665978f97ef255b14"
+    },
+    {
+      "file": "src/components/visual-chapter-editor.tsx",
+      "sha": "14227e4e84dac655870b4b0403405e5ab9c41d96"
+    },
+    {
+      "file": "src/lib/ai-errors.ts",
+      "sha": "a7f02e3aa328c25a71cb8d0de555f995ab3360e0"
+    },
+    {
+      "file": "src/lib/ai-models.ts",
+      "sha": "598cbfda588cd47ad550c0947f79246281fc6fdd"
+    },
+    {
+      "file": "src/lib/ai-routing.ts",
+      "sha": "7f983717b60f88043d64b072155f3c9e64f36202"
+    },
+    {
+      "file": "src/lib/book-pages.ts",
+      "sha": "8f21d2161fc24695a34c5aa090315bbc895393be"
+    },
+    {
+      "file": "src/lib/books.ts",
+      "sha": "78b78e13db749555f55f33a1b2ba8be8b968c17c"
+    },
+    {
+      "file": "src/lib/chapter-generation.ts",
+      "sha": "b5a099676445a61be97bff4945d088947232ef3f"
+    },
+    {
+      "file": "src/lib/client.ts",
+      "sha": "3ae497976c3970a93f03537636f1aac203f2ecad"
+    },
+    {
+      "file": "src/lib/commerce.ts",
+      "sha": "3049b8344bf8640dc005f4e0e7a40e0ad2602320"
+    },
+    {
+      "file": "src/lib/config.ts",
+      "sha": "a11cef96ddce8977533c0352c1c5d132cb24b8ac"
+    },
+    {
+      "file": "src/lib/direct-openai.ts",
+      "sha": "ff4b10cceacb5e1deeed9ebc5b4b2f53dce36772"
+    },
+    {
+      "file": "src/lib/document-options.ts",
+      "sha": "71802b141637087415ed9c21ba9857b10a8ead04"
+    },
+    {
+      "file": "src/lib/document-parts.ts",
+      "sha": "9e729adbc1737751ef737da81869d739905935d9"
+    },
+    {
+      "file": "src/lib/docx-import.ts",
+      "sha": "ae7d653250e1de5dfd5621bd70d3b0dd48b9ef0a"
+    },
+    {
+      "file": "src/lib/domain.ts",
+      "sha": "024b2d8f9b3ae7171e1d2529ca762d2ac8bea82e"
+    },
+    {
+      "file": "src/lib/draft-history.ts",
+      "sha": "90822fcc7dbfff7b282ff2ee9d071962d18a15e4"
+    },
+    {
+      "file": "src/lib/draft-storage.ts",
+      "sha": "bd2bb8aad595cb45c5a92ed47db6a99c0b83f636"
+    },
+    {
+      "file": "src/lib/epub.ts",
+      "sha": "8eda7797b450f575d95c65109517977817ce51d2"
+    },
+    {
+      "file": "src/lib/export-text.ts",
+      "sha": "fc6217ff14196c236087c5b269ca5f1e2bb4c289"
+    },
+    {
+      "file": "src/lib/export.ts",
+      "sha": "dfb872f9b1144d06ff9bd9f283bc74cffa4ef470"
+    },
+    {
+      "file": "src/lib/firebase-admin.ts",
+      "sha": "8c08fd2c11312508463e7b7a978bcb2aedae4ebd"
+    },
+    {
+      "file": "src/lib/firebase-browser.ts",
+      "sha": "227fb0ba40243871289b29f49e208b832e493cdd"
+    },
+    {
+      "file": "src/lib/firebase-config.ts",
+      "sha": "90c5f5d8d43fa7ea3be8c2903d7fba7077302586"
+    },
+    {
+      "file": "src/lib/firebase-session.ts",
+      "sha": "9e44667e5c2525bad6f403f19628bacdc1a67093"
+    },
+    {
+      "file": "src/lib/firestore-store.ts",
+      "sha": "9f2aa0105033a4535a9fc41b720bcb57082b6bce"
+    },
+    {
+      "file": "src/lib/http.ts",
+      "sha": "db8f8d6d51404529e94cb631f1ff89ae0ac155af"
+    },
+    {
+      "file": "src/lib/i18n.ts",
+      "sha": "c90f4bbe6f96d78ed2685a39a6756622c394303a"
+    },
+    {
+      "file": "src/lib/illustration-export.ts",
+      "sha": "4631facdcff833c3e44ac7c239052627073a91c2"
+    },
+    {
+      "file": "src/lib/jobs.ts",
+      "sha": "86b7570267d9656d5b678694ece83d4746a876d2"
+    },
+    {
+      "file": "src/lib/manuscript.ts",
+      "sha": "b52567a5ffd308669afb7c00ef6322d6c45b1bb0"
+    },
+    {
+      "file": "src/lib/navigation.ts",
+      "sha": "bcb91998be545d033556a9dadeeb5d307512196f"
+    },
+    {
+      "file": "src/lib/rich-manuscript.ts",
+      "sha": "c3dda004e9b427a330a310d7e138d858bc42667f"
+    },
+    {
+      "file": "src/lib/samples.ts",
+      "sha": "6ba70fab82c28e0fb6ba0be311b39e597e93c05a"
+    },
+    {
+      "file": "src/lib/siwc.ts",
+      "sha": "2be162bf9533c9ee95cd61f9852628a8f3c7f1d3"
+    },
+    {
+      "file": "src/lib/text-edit-range.ts",
+      "sha": "b694e4402ac1aa47810baf9d7b0cf1fb36bdf735"
+    },
+    {
+      "file": "src/lib/webhook.ts",
+      "sha": "bf0e2e7f77c3784e0e5be8b671289e5f93fac559"
+    },
+    {
+      "file": "src/workflows/generate-book.ts",
+      "sha": "9a35eed6021b003a524c0920b2f420ce84f6ed09"
+    },
+    {
+      "file": "src/workflows/steps.ts",
+      "sha": "0c9fe73096a83ec7561a1912e67611e02ba8acbd"
+    },
+    {
+      "file": "tests/ai-models.test.ts",
+      "sha": "b8afb5d0e01f9963d17f4e6b5d08fd310f3d1fb1"
+    },
+    {
+      "file": "tests/ai-routing.test.ts",
+      "sha": "66a477a5e0487791413ad9e7d5c1b84569729a60"
+    },
+    {
+      "file": "tests/authoring-v2.test.ts",
+      "sha": "39f21b2a992c552bb7516bd6611bb25e629311f4"
+    },
+    {
+      "file": "tests/book-pages.test.ts",
+      "sha": "d2efe365a379f5065a94b3b981109a3dba87b2e7"
+    },
+    {
+      "file": "tests/chapter-generation.test.ts",
+      "sha": "01a7f1455e77c60084ce79ca401c88d7a0b01be6"
+    },
+    {
+      "file": "tests/cover-studio.test.ts",
+      "sha": "bb7c0aa35594b64543d8214dfb7b8cf0abdd3fbe"
+    },
+    {
+      "file": "tests/direct-openai.test.ts",
+      "sha": "c460684797fd17623b4d409028d88c1ab165477a"
+    },
+    {
+      "file": "tests/document-workspace.test.ts",
+      "sha": "489eab9e2c61cc591573755d0e129351a73cbc16"
+    },
+    {
+      "file": "tests/domain.test.ts",
+      "sha": "d2cdccd4a87ca7e4bd8383b064922970188deee5"
+    },
+    {
+      "file": "tests/editor-placement.test.ts",
+      "sha": "1a5e4f29ea471e74f56313d27a3d5cbcf7a15a1a"
+    },
+    {
+      "file": "tests/epub.test.ts",
+      "sha": "c7332e4921585374a475772aa54fd06a85b28993"
+    },
+    {
+      "file": "tests/firebase.test.ts",
+      "sha": "5d569bada01f2224f3c9533bf9a2b6040ee18ecb"
+    },
+    {
+      "file": "tests/guided-book-journey.test.ts",
+      "sha": "c9284d557aee0787500aa5909d54d735dd08a957"
+    },
+    {
+      "file": "tests/guided-studio.test.ts",
+      "sha": "3d4075130a6af67a8dd8c2fda36a48864ef3a276"
+    },
+    {
+      "file": "tests/illustrations.test.ts",
+      "sha": "ea261d9ca757e8ca05076db86831bcdf3ecdd78d"
+    },
+    {
+      "file": "tests/manuscript.test.ts",
+      "sha": "a216a4b899cdde8a2c30a9a81a5531f4200ea050"
+    },
+    {
+      "file": "tests/rich-editor.test.ts",
+      "sha": "95339a53fc0f379daae68c54ca0e54e6746e4f04"
+    },
+    {
+      "file": "tests/studio-plan-patch.test.ts",
+      "sha": "7bf2fd15c4ac9a75138ea77d3d6af7e7c7f5de7a"
+    },
+    {
+      "file": "tsconfig.json",
+      "sha": "c2ec3391feee64256a9ab2fe32b161ab8278caa0"
+    }
+  ]
+}
