@@ -31,3 +31,7 @@
 .field textarea:focus-visible,.action:focus-visible,.expand:focus-visible,.primary:focus-visible,.secondary:focus-visible,.danger:focus-visible{outline:3px solid #77b9d5;outline-offset:2px}
 .action:disabled,.primary:disabled,.secondary:disabled,.danger:disabled{opacity:.55;cursor:not-allowed}
 @media (max-width:620px){.panel{margin:12px 0}.chapter{padding:12px}.footer{display:grid}.primary,.secondary{width:100%}.heading{align-items:center}}
+
+.chapterCollapse{border:1px solid #e4e9ef;border-radius:12px;padding:12px 14px;background:#fff}
+.chapterCollapseToggle{cursor:pointer;font-weight:600;font-size:.92rem;line-height:1.5}
+.chapterCollapse[open] .chapterList{margin-top:13px}
