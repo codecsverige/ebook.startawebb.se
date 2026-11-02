@@ -123,6 +123,7 @@ export const jobKinds = [
   "sample",
   "book",
   "chapter",
+  "chapter_continue",
   "cover",
   "back_cover",
   "illustration",
