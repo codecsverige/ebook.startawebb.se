@@ -38,6 +38,7 @@ type BookState = {
   ai_calls: number;
   covers: number;
   rewrites: Record<string, number>;
+  continuations?: Record<string, number>;
   deleting: boolean;
 };
 type StoredBook = Book & { state: BookState };
@@ -266,10 +267,16 @@ export class FirestoreStudio {
         ...book,
         ...input,
         chapter_count: input.outline.length || input.chapter_count || book.chapter_count,
-        state: { ...book.state, rewrites: Object.fromEntries(
-          Object.entries(book.state.rewrites).filter(([id]) =>
-            input.outline.some((item) => item.id === id)),
-        ) },
+        state: { ...book.state,
+          rewrites: Object.fromEntries(
+            Object.entries(book.state.rewrites).filter(([id]) =>
+              input.outline.some((item) => item.id === id)),
+          ),
+          continuations: Object.fromEntries(
+            Object.entries(book.state.continuations || {}).filter(([id]) =>
+              input.outline.some((item) => item.id === id)),
+          ),
+        },
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
       };
@@ -697,6 +704,11 @@ export class FirestoreStudio {
         fail("invalid_input");
       if (kind === "chapter" && !book.outline.some((c) => c.id === chapter))
         fail("invalid_input");
+      if (kind === "chapter_continue" && (!chapter || !book.unlocked ||
+          !book.outline.some((c) => c.id === chapter) ||
+          !book.chapters[chapter]?.content?.trim() ||
+          book.chapters[chapter].content.length > 26_000))
+        fail("invalid_input");
       if (kind === "illustration") {
         const draft = chapter ? book.chapters[chapter] : undefined;
         if (!image || image.prompt.trim().length < 10 || image.prompt.length > 700 ||
@@ -715,6 +727,9 @@ export class FirestoreStudio {
       }
       if (!ownerTrial && ["cover", "back_cover"].includes(kind) && book.state.covers >= 5) fail("rate_limit");
       if (!ownerTrial && kind === "chapter" && (book.state.rewrites[chapter!] || 0) >= 3)
+        fail("rate_limit");
+      if (!ownerTrial && kind === "chapter_continue" &&
+          (book.state.continuations?.[chapter!] || 0) >= 8)
         fail("rate_limit");
       let credits = profile.credits,
         free = profile.free_book_id;
@@ -956,7 +971,19 @@ export class FirestoreStudio {
           (!book.unlocked && patch.chapter_id !== book.outline[0].id)
         )
           fail("invalid_input");
-        next.chapters[patch.chapter_id] = patch.chapter;
+        if (job.kind === "chapter_continue") {
+          const old = book.chapters[patch.chapter_id];
+          if (!old?.content?.trim() || old.content.length > 26_000 ||
+              !patch.chapter.content.trim() ||
+              old.content.length + 2 + patch.chapter.content.length > 30_000)
+            fail("too_large");
+          next.chapters[patch.chapter_id] = {
+            content: old.content.trimEnd() + "\n\n" + patch.chapter.content.trim(),
+            summary: [old.summary, patch.chapter.summary].filter(Boolean).join(" ").slice(-1000),
+          };
+        } else {
+          next.chapters[patch.chapter_id] = patch.chapter;
+        }
       } else if (patch.text_replacement && job.kind === "text_edit") {
         const content = job.chapter_id ? book.chapters[job.chapter_id]?.content : undefined;
         if (!content || !job.text_action || job.text_start === undefined || job.text_end === undefined ||
@@ -1027,6 +1054,11 @@ export class FirestoreStudio {
           state.rewrites = {
             ...state.rewrites,
             [job.chapter_id!]: (state.rewrites[job.chapter_id!] || 0) + 1,
+          };
+        if (!error && job.kind === "chapter_continue")
+          state.continuations = {
+            ...(state.continuations || {}),
+            [job.chapter_id!]: (state.continuations?.[job.chapter_id!] || 0) + 1,
           };
         tx.update(bRef, { state });
         if (profile)
