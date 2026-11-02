@@ -1286,7 +1286,7 @@ export function Editor({
           )}
           {tab==="brief" && <section className="editor-panel guided-brief-panel">
             <div className="panel-heading">
-              <span className="eyebrow">{tr(locale,"Step 1 of 5","المرحلة 1 من 5","Steg 1 av 5")}</span>
+              <span className="eyebrow">{tr(locale,"Step 1 of 4","المرحلة 1 من 4","Steg 1 av 4")}</span>
               <h2>{tr(locale,"What book do you want to make?","ما الكتاب الذي تريد صنعه؟","Vilken bok vill du skapa?")}</h2>
               <p>{tr(locale,"Describe your book. You can change the idea without automatically deleting any chapter.",
                 "عرّف كتابك. يمكنك تغيير الفكرة دون أن تُحذف الفصول الموجودة تلقائيًا.",
