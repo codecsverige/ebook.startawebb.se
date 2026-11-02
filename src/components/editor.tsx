@@ -1695,6 +1695,19 @@ export function Editor({
                </div>
               </details>
                </details>
+
+               {current?.content?.trim() && (
+                 <div className="chapter-continue-action">
+                   <button type="button" className="button button-outline button-small"
+                     disabled={disabled || !config.ai || !book.unlocked || current.content.length > 26000}
+                     title={tr(locale,"Append new prose after this chapter without replacing it","إضافة نص جديد بعد الفصل دون استبداله","Fortsätt kapitlet utan att ersätta text")}
+                     onClick={() => void generate("chapter_continue", active!.id)}>
+                     <Sparkles size={15}/>
+                     {tr(locale,"Continue this chapter with AI","أكمل هذا الفصل بالذكاء الاصطناعي","Fortsätt kapitlet med AI")}
+                   </button>
+                   <small>{tr(locale,"Existing text stays unchanged.","النص السابق يبقى محفوظًا.","Befintlig text bevaras.")}</small>
+                 </div>
+               )}
                {book.text_edit_candidate?.chapter_id === active?.id && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
