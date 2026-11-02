@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
 import { VisualChapterEditor, type VisualSelection } from "./visual-chapter-editor";
 import { DraftHistory } from "@/lib/draft-history";
+import { reviewManuscript, reviewIssueLabel } from "@/lib/manuscript-review";
 import { draftKey, editableBook, readDraft, restoreDraft, writeDraft } from "@/lib/draft-storage";
 import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
@@ -168,6 +169,7 @@ export function Editor({
   const [versions, setVersions] = useState<Version[]>([]);
   const busy = !!job && ["queued", "running"].includes(job.status);
   const disabled = busy || !!pending || !!recoveryDraft;
+  const reviewIssues = useMemo(() => draft ? reviewManuscript(draft) : [], [draft]);
   const persistDraft = useCallback((value: BookWithCover) => {
     try { writeDraft(localStorage, value); setLocalSaved(true); }
     catch { setLocalSaved(false); try { writeDraft(sessionStorage, value); } catch {} }
@@ -1269,7 +1271,7 @@ export function Editor({
               <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
                 {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
               </p>
-              {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
+              {config.ai && ["chapter", "chapter_continue", "book", "sample", "outline"].includes(job.kind) && (
                 <button
                   type="button"
                   className="button button-small button-outline"
@@ -1284,7 +1286,7 @@ export function Editor({
           )}
           {tab==="brief" && <section className="editor-panel guided-brief-panel">
             <div className="panel-heading">
-              <span className="eyebrow">{tr(locale,"Step 1 of 5","المرحلة 1 من 5","Steg 1 av 5")}</span>
+              <span className="eyebrow">{tr(locale,"Step 1 of 4","المرحلة 1 من 4","Steg 1 av 4")}</span>
               <h2>{tr(locale,"What book do you want to make?","ما الكتاب الذي تريد صنعه؟","Vilken bok vill du skapa?")}</h2>
               <p>{tr(locale,"Describe your book. You can change the idea without automatically deleting any chapter.",
                 "عرّف كتابك. يمكنك تغيير الفكرة دون أن تُحذف الفصول الموجودة تلقائيًا.",
@@ -1695,6 +1697,19 @@ export function Editor({
                </div>
               </details>
                </details>
+
+               {current?.content?.trim() && (
+                 <div className="chapter-continue-action">
+                   <button type="button" className="button button-outline button-small"
+                     disabled={disabled || !config.ai || !book.unlocked || current.content.length > 26000}
+                     title={tr(locale,"Append new prose after this chapter without replacing it","إضافة نص جديد بعد الفصل دون استبداله","Fortsätt kapitlet utan att ersätta text")}
+                     onClick={() => void generate("chapter_continue", active!.id)}>
+                     <Sparkles size={15}/>
+                     {tr(locale,"Continue this chapter with AI","أكمل هذا الفصل بالذكاء الاصطناعي","Fortsätt kapitlet med AI")}
+                   </button>
+                   <small>{tr(locale,"Existing text stays unchanged.","النص السابق يبقى محفوظًا.","Befintlig text bevaras.")}</small>
+                 </div>
+               )}
                {book.text_edit_candidate?.chapter_id === active?.id && (
                  <section className="ai-edit-candidate" aria-label={tr(locale,"AI edit proposal","اقتراح AI","AI-förslag")}>
                    <strong>{tr(locale,"AI rewrite to review","راجع النص المقترح من AI","Granska AI-förslaget")}</strong>
@@ -2347,6 +2362,27 @@ export function Editor({
                     <button type="button" key={i} className={done?"is-ready":"needs-attention"}
                       onClick={()=>setTab(step)}><span>{done?<Check size={15}/>:i+1}</span>{label}</button>)}
                 </div>
+              </div>
+              <div className="studio-readiness" aria-label={tr(locale,"Manuscript quality review","فحص جودة المخطوط","Manusgranskning")}>
+                <div className="studio-readiness-heading">
+                  <BookOpen size={18}/>
+                  <strong>{tr(locale,"Manuscript review","مراجعة جودة المخطوط","Manusgranskning")}</strong>
+                  <span>{reviewIssues.length} {tr(locale,"warnings","ملاحظة","anmärkningar")}</span>
+                </div>
+                <p className="muted">{tr(locale,
+                  "Free checks for empty or unusually short chapters, repeated paragraphs, oversized paragraphs and missing images. This does not verify factual accuracy.",
+                  "فحص مجاني للفصول الناقصة أو القصيرة جدًا، وتكرار الفقرات وطولها والصور المفقودة. لا يتحقق هذا الفحص من صحة المعلومات.",
+                  "Kostnadsfri kontroll av tomma eller korta kapitel, upprepningar, långa stycken och saknade bilder. Faktauppgifter verifieras inte.")}</p>
+                {reviewIssues.length ? <div className="studio-readiness-items">
+                  {reviewIssues.slice(0, 16).map(issue => <button type="button"
+                    key={issue.chapterId + issue.kind} className="needs-attention"
+                    onClick={() => { setTab("write"); void openChapterWorkspace(issue.chapterId); }}>
+                    <span>!</span><b>{issue.chapterTitle}:</b> {reviewIssueLabel(issue.kind, locale)}
+                  </button>)}
+                </div> : <p className="muted">{tr(locale,
+                  "No structural warnings detected. Please still proofread your book before publishing.",
+                  "لم يُكتشف خلل بنيوي واضح. راجع النص يدويًا قبل النشر.",
+                  "Inga strukturella varningar hittades. Korrekturläs ändå före publicering.")}</p>}
               </div>
               <div className="export-buttons">
                 <button

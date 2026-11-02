@@ -3929,3 +3929,9 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
  .rich-studio.is-fullscreen .rich-toolbar{top:0;}
 }
 @media(prefers-reduced-motion:reduce){.chapter-flow-track>span{transition:none;}}
+
+/* Scoped continuation control: stays legible in narrow chapter workspaces. */
+.chapter-continue-action{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 0 12px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+.chapter-continue-action .button{min-height:40px;max-width:100%;white-space:normal;text-align:start;}
+.chapter-continue-action small{flex:1 1 190px;color:var(--muted);font-size:12px;line-height:1.5;}
+@media(max-width:560px){.chapter-continue-action{align-items:stretch;flex-direction:column;}.chapter-continue-action .button{justify-content:center;width:100%;}}

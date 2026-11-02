@@ -6,7 +6,7 @@ import { coverPrefix, illustrationPrefix } from "@/lib/books";
 import { AppError } from "@/lib/http";
 import { availableAiBackends, aiErrorCode, callWithAiFallback } from "@/lib/ai-routing";
 import { resolveAiTextModels } from "@/lib/ai-models";
-import { generateCompleteChapter } from "@/lib/chapter-generation";
+import { generateCompleteChapter, generateChapterContinuation } from "@/lib/chapter-generation";
 import { directModelFor, generateDirectStructured, generateDirectCover } from "@/lib/direct-openai";
 import {
   outlineSchema,
@@ -146,7 +146,7 @@ export async function loadPlan(jobId: string) {
     chapters:
       job.kind === "sample"
         ? [book.outline[0].id]
-        : job.kind === "chapter"
+        : ["chapter", "chapter_continue"].includes(job.kind)
           ? [job.chapter_id!]
           : book.outline.filter((c) => !book.chapters[c.id]).map((c) => c.id),
   };
@@ -220,7 +220,7 @@ export async function createChapter(
   const { job, book } = await context(jobId);
   if (
     job.result_units[chapterId] ||
-    (job.kind !== "chapter" && book.chapters[chapterId])
+    (!["chapter", "chapter_continue"].includes(job.kind) && book.chapters[chapterId])
   )
     return;
   const chapter = book.outline.find((c) => c.id === chapterId);
@@ -230,7 +230,8 @@ export async function createChapter(
   console.info("chapter_started", { jobId, chapterId });
   let result;
   try {
-    result = await generateCompleteChapter(
+    result = await (job.kind === "chapter_continue"
+      ? generateChapterContinuation : generateCompleteChapter)(
       book,
       chapterId,
       (operation, prompt, tokens) => structured(jobId, operation, chapterSchema, prompt, tokens),
