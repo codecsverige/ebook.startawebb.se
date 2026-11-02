@@ -158,6 +158,26 @@ test(
       );
       assert.equal("state" in (await store.ownedBook(book, uid)), false);
       await store.finishJob(resumed.id);
+      // A duplicate or retried AI step must never append its text twice.
+      const beforeContinue = (await store.ownedBook(book, uid)).chapters[outline[0].id];
+      const continuation = await store.prepareJob(uid, book, "chapter_continue", outline[0].id, randomUUID());
+      assert.equal(await store.claimJob(continuation.id, "continuation-run"), true);
+      const extension = {
+        content: "More useful detail continues the chapter safely. ".repeat(65),
+        summary: "The chapter now also describes another practical exercise.",
+      };
+      await Promise.all([
+        store.commitGenerated(continuation.id, { chapter_id: outline[0].id, chapter: extension }, 95),
+        store.commitGenerated(continuation.id, { chapter_id: outline[0].id, chapter: extension }, 95),
+      ]);
+      const afterContinue = (await store.ownedBook(book, uid)).chapters[outline[0].id];
+      assert.equal(afterContinue.content, beforeContinue.content.trimEnd() + "\n\n" + extension.content.trim());
+      assert.ok(afterContinue.summary.includes(extension.summary));
+      await store.finishJob(continuation.id);
+      await assert.rejects(
+        store.prepareJob(other, book, "chapter_continue", outline[0].id, randomUUID()),
+        /not_found/,
+      );
       // A generated cover is a suggestion, not automatically published artwork.
       const coverJob = await store.prepareJob(uid, book, "cover", null, randomUUID());
       const candidatePath = "test/covers/" + randomUUID() + ".png";
