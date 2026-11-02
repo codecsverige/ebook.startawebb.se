@@ -4,6 +4,7 @@ import {
   languageNames,
   matchesBookLanguage,
   usableGeneratedChapter,
+  wordCount,
 } from "./domain";
 
 export type ChapterBook = Pick<
@@ -126,5 +127,64 @@ export async function generateCompleteChapter(
         8500,
       ),
     );
+  }
+}
+
+
+/**
+ * Continue the saved manuscript rather than regenerating it.
+ * The response contains ONLY new prose; the existing text remains authoritative.
+ * Keep each extension bounded so a single AI call cannot exceed Firestore limits.
+ */
+export function chapterContinuationPrompt(book: ChapterBook, chapterId: string): string {
+  const existing = book.chapters[chapterId]?.content?.trim();
+  if (!existing || existing.length > 26_000) throw new Error("invalid_input");
+  const base = chapterGenerationPrompt(book, chapterId);
+  const context = base.slice(base.indexOf("Data: ") + 6);
+  const fiction = ["novel", "short_story", "children_story"].includes(book.kind);
+  return [
+    fiction
+      ? "Write 400–650 NEW words continuing the current narrative scene. Maintain the narrator, time, setting, characters and their motives. Continue naturally instead of restarting or summarizing."
+      : "Write 400–650 NEW words expanding the unfinished material with specific explanations, examples or exercises. Do not restart the chapter or duplicate existing sections.",
+    "Return ONLY the additional prose in content, followed by a brief factual summary of the NEW material in summary.",
+    "Never return the previous manuscript, a chapter description, an outline, a proposal, a preface, an introductory greeting or a promise to write later.",
+    "Start at the precise stopping point of the existing text, without repeating its last sentences, and end with complete sentences.",
+    "Use the exact language and tone of the existing manuscript. Do not invent citations, quotes, sources or factual statistics.",
+    "EXISTING CHAPTER END (authoritative; DO NOT output again): " + existing.slice(-6000),
+    "EXISTING CHAPTER OPENING (context only): " + existing.slice(0, 800),
+    "Data: " + context,
+  ].join("\n\n");
+}
+
+export async function generateChapterContinuation(
+  book: ChapterBook,
+  chapterId: string,
+  write: WriteChapter,
+  onRecovery?: (reason: string) => void,
+): Promise<Chapter> {
+  const existing = book.chapters[chapterId]?.content || "";
+  const prompt = chapterContinuationPrompt(book, chapterId);
+  function validate(next: Chapter): Chapter {
+    if (wordCount(next.content) < 220 || next.content.length + existing.length + 2 > 30_000)
+      throw new Error("ai_generation_incomplete");
+    if (!matchesBookLanguage(next.content + " " + next.summary, book.language))
+      throw new Error("ai_wrong_language");
+    const beginning = next.content.trim().slice(0, 140).replace(/\s+/gu, " ");
+    if (beginning.length >= 90 && existing.replace(/\s+/gu, " ").includes(beginning))
+      throw new Error("ai_generation_invalid");
+    return next;
+  }
+  try {
+    return validate(await write("chapter", prompt, 4500));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "";
+    if (!repairable.has(reason)) throw error;
+    onRecovery?.(reason);
+    return validate(await write(
+      "chapter_recovery",
+      "The extension failed validation: " + reason +
+        ". Write only NEW continuation text, do not repeat or replace any saved material. " + prompt,
+      5200,
+    ));
   }
 }
