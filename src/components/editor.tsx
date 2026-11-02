@@ -1269,7 +1269,7 @@ export function Editor({
               <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
                 {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
               </p>
-              {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
+              {config.ai && ["chapter", "chapter_continue", "book", "sample", "outline"].includes(job.kind) && (
                 <button
                   type="button"
                   className="button button-small button-outline"
