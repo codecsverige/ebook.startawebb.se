@@ -197,7 +197,7 @@ test(
       const restored = await store.restoreBookVersion(uid, book, versionsAfterRestart[0].id, restarted.revision);
       assert.equal(restored.language, "en");
       assert.equal(restored.outline.length, 3);
-      assert.equal(restored.chapters[outline[0].id].content, chapter.content);
+      assert.equal(restored.chapters[outline[0].id].content, afterContinue.content);
       await assert.rejects(store.restoreBookVersion(other, book, versionsAfterRestart[0].id, restored.revision), /not_found/);
       // Fast background saves keep a useful history window instead of pruning it every few seconds.
       let mediaBook = await store.saveBook(uid, book, { ...restored, story_notes: "The protagonist keeps the same name." });
