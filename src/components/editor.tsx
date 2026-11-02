@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
 import { VisualChapterEditor, type VisualSelection } from "./visual-chapter-editor";
 import { DraftHistory } from "@/lib/draft-history";
+import { reviewManuscript, reviewIssueLabel } from "@/lib/manuscript-review";
 import { draftKey, editableBook, readDraft, restoreDraft, writeDraft } from "@/lib/draft-storage";
 import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
@@ -168,6 +169,7 @@ export function Editor({
   const [versions, setVersions] = useState<Version[]>([]);
   const busy = !!job && ["queued", "running"].includes(job.status);
   const disabled = busy || !!pending || !!recoveryDraft;
+  const reviewIssues = useMemo(() => draft ? reviewManuscript(draft) : [], [draft]);
   const persistDraft = useCallback((value: BookWithCover) => {
     try { writeDraft(localStorage, value); setLocalSaved(true); }
     catch { setLocalSaved(false); try { writeDraft(sessionStorage, value); } catch {} }
@@ -2360,6 +2362,27 @@ export function Editor({
                     <button type="button" key={i} className={done?"is-ready":"needs-attention"}
                       onClick={()=>setTab(step)}><span>{done?<Check size={15}/>:i+1}</span>{label}</button>)}
                 </div>
+              </div>
+              <div className="studio-readiness" aria-label={tr(locale,"Manuscript quality review","فحص جودة المخطوط","Manusgranskning")}>
+                <div className="studio-readiness-heading">
+                  <BookOpen size={18}/>
+                  <strong>{tr(locale,"Manuscript review","مراجعة جودة المخطوط","Manusgranskning")}</strong>
+                  <span>{reviewIssues.length} {tr(locale,"warnings","ملاحظة","anmärkningar")}</span>
+                </div>
+                <p className="muted">{tr(locale,
+                  "Free checks for empty or unusually short chapters, repeated paragraphs, oversized paragraphs and missing images. This does not verify factual accuracy.",
+                  "فحص مجاني للفصول الناقصة أو القصيرة جدًا، وتكرار الفقرات وطولها والصور المفقودة. لا يتحقق هذا الفحص من صحة المعلومات.",
+                  "Kostnadsfri kontroll av tomma eller korta kapitel, upprepningar, långa stycken och saknade bilder. Faktauppgifter verifieras inte.")}</p>
+                {reviewIssues.length ? <div className="studio-readiness-items">
+                  {reviewIssues.slice(0, 16).map(issue => <button type="button"
+                    key={issue.chapterId + issue.kind} className="needs-attention"
+                    onClick={() => { setTab("write"); void openChapterWorkspace(issue.chapterId); }}>
+                    <span>!</span><b>{issue.chapterTitle}:</b> {reviewIssueLabel(issue.kind, locale)}
+                  </button>)}
+                </div> : <p className="muted">{tr(locale,
+                  "No structural warnings detected. Please still proofread your book before publishing.",
+                  "لم يُكتشف خلل بنيوي واضح. راجع النص يدويًا قبل النشر.",
+                  "Inga strukturella varningar hittades. Korrekturläs ändå före publicering.")}</p>}
               </div>
               <div className="export-buttons">
                 <button
