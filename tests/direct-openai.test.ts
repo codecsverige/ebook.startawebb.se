@@ -6,9 +6,9 @@ import {
   classifyOpenAiHttpFailure, generateDirectStructured, generateDirectCover,
 } from "../src/lib/direct-openai";
 
-test("uses the same proven economical model as BokaNära for planning and writing", () => {
+test("uses current GPT-6 Luna with structured output for planning and writing", () => {
   for (const operation of ["outline", "outline_recovery", "chapter", "chapter_recovery"]) {
-    assert.equal(directModelFor(operation), "gpt-5-mini");
+    assert.equal(directModelFor(operation), "gpt-6-luna");
   }
 });
 
@@ -89,14 +89,14 @@ test("keeps one paid attempt and preserves the exact reason of model refusal", a
     globalThis.fetch = async (_url, init) => {
       calls++;
       const request = JSON.parse(String(init?.body));
-      assert.equal(request.model, ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"][calls - 1]);
+      assert.equal(request.model, ["gpt-6-luna", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"][calls - 1]);
       return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 403 });
     };
     await assert.rejects(
       generateDirectStructured("outline", z.object({ allowed: z.boolean() }), "Editor", "An outline", 1000),
       (error: unknown) => error instanceof DirectOpenAiError && error.message === "ai_model_unavailable",
     );
-    assert.equal(calls, 3); // Only known model-access errors trigger bounded direct API retries.
+    assert.equal(calls, 4); // Only known model-access errors trigger bounded direct API retries.
   } finally {
     globalThis.fetch = saved;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
@@ -112,7 +112,7 @@ test("separates invalid keys, restricted models, project permissions and exhaust
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
 });
 
-test("direct OpenAI recovers 403/404 model access with previously configured 4.1-mini", async () => {
+test("direct OpenAI recovers new-model access denial with the existing mini fallback", async () => {
   const savedFetch = globalThis.fetch;
   const previousKey = process.env.OPENAI_API_KEY;
   const models: string[] = [];
@@ -121,9 +121,9 @@ test("direct OpenAI recovers 403/404 model access with previously configured 4.1
     globalThis.fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       models.push(body.model);
-      if (body.model === "gpt-5-mini")
+      if (body.model === "gpt-6-luna")
         return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
-      assert.equal(body.model, "gpt-4.1-mini");
+      assert.equal(body.model, "gpt-5-mini");
       return new Response(JSON.stringify({
         status: "completed",
         output: [{ type: "message", content: [{
@@ -134,7 +134,7 @@ test("direct OpenAI recovers 403/404 model access with previously configured 4.1
     const result = await generateDirectStructured("chapter",
       z.object({ content: z.string(), summary: z.string() }), "Editor", "Arabic story", 500);
     assert.equal(result.output.content, "قصة عربية");
-    assert.deepEqual(models, ["gpt-5-mini", "gpt-4.1-mini"]);
+    assert.deepEqual(models, ["gpt-6-luna", "gpt-5-mini"]);
   } finally {
     globalThis.fetch = savedFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
@@ -165,7 +165,7 @@ test("direct OpenAI never tries a different model for invalid credentials", asyn
   }
 });
 
-test("direct OpenAI tries gpt-4o-mini when two confirmed models are unavailable", async () => {
+test("direct OpenAI tries gpt-4o-mini when three confirmed models are unavailable", async () => {
   const saved = globalThis.fetch;
   const previousKey = process.env.OPENAI_API_KEY;
   const previousModel = process.env.OPENAI_TEXT_MODEL;
@@ -176,7 +176,7 @@ test("direct OpenAI tries gpt-4o-mini when two confirmed models are unavailable"
     globalThis.fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       models.push(body.model);
-      if (models.length < 3)
+      if (models.length < 4)
         return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
       return new Response(JSON.stringify({
         status: "completed",
@@ -189,7 +189,7 @@ test("direct OpenAI tries gpt-4o-mini when two confirmed models are unavailable"
     const result = await generateDirectStructured("chapter",
       z.object({ content: z.string(), summary: z.string() }), "editor", "scene", 3000);
     assert.equal(result.output.content, "A safe scene");
-    assert.deepEqual(models, ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]);
+    assert.deepEqual(models, ["gpt-6-luna", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]);
   } finally {
     globalThis.fetch = saved;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
