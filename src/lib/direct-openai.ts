@@ -39,7 +39,7 @@ export function classifyOpenAiHttpFailure(
   status: number,
   errorBody?: unknown,
 ): "ai_auth_failed" | "ai_credits_exhausted" | "ai_model_unavailable" |
-   "ai_provider_busy" | "ai_provider_unavailable" {
+   "ai_permission_denied" | "ai_provider_busy" | "ai_provider_unavailable" {
   const outer = errorBody && typeof errorBody === "object" && !Array.isArray(errorBody)
     ? errorBody as { error?: { code?: unknown; type?: unknown } } : {};
   const data = outer.error;
@@ -48,7 +48,9 @@ export function classifyOpenAiHttpFailure(
   if (status === 401 || code === "invalid_api_key") return "ai_auth_failed";
   if (status === 402 || /insufficient_quota|billing_hard_limit|billing_not_active|credits_exhausted|budget_exceeded/.test(code + " " + type))
     return "ai_credits_exhausted";
-  if (status === 403 || status === 404 || /model_not_found|model_not_available|model_unavailable|permission_denied|verification_required/.test(code + " " + type))
+  if (status === 403 && /permission_denied|insufficient_permissions|verification_required|organization_verification_required/.test(code + " " + type))
+    return "ai_permission_denied";
+  if (status === 403 || status === 404 || /model_not_found|model_not_available|model_unavailable/.test(code + " " + type))
     return "ai_model_unavailable";
   if (status === 429 || status >= 500) return "ai_provider_busy";
   return "ai_provider_unavailable";
