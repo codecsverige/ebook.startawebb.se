@@ -15,10 +15,12 @@ export function directModelFor(_operation: string): string {
   const configured = process.env.OPENAI_TEXT_MODEL?.trim();
   return configured && /^[a-z0-9][a-z0-9._-]{1,79}$/i.test(configured)
     ? configured
-    : "gpt-5-mini";
+    : "gpt-6-luna";
 }
 export function directModelCandidates(operation: string): string[] {
-  return [...new Set([directModelFor(operation), "gpt-4.1-mini", "gpt-4o-mini"])];
+  // Prefer the currently documented Responses + Structured Outputs model.
+  // Retain legacy fallbacks for projects that still expose them.
+  return [...new Set([directModelFor(operation), "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"])];
 }
 
 function providerErrorCode(body: unknown): string {
