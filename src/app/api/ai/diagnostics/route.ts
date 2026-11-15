@@ -26,11 +26,30 @@ export async function GET() {
     });
     const headers = { "Cache-Control": "no-store" };
     if (!response.ok) {
+      // Only return provider error *codes*, never raw error messages, API keys,
+      // request bodies or manuscript content. This endpoint is owner-only.
+      let providerCode = "unknown";
+      let providerType = "unknown";
+      try {
+        const body = await response.json() as {
+          error?: { code?: unknown; type?: unknown };
+        };
+        const code = body.error?.code;
+        const type = body.error?.type;
+        if (typeof code === "string" && /^[a-z0-9_]{1,90}$/i.test(code)) providerCode = code;
+        if (typeof type === "string" && /^[a-z0-9_]{1,90}$/i.test(type)) providerType = type;
+      } catch { /* Unexpected provider response; do not reveal it. */ }
       const status = response.status === 401 ? "invalid_api_key"
         : response.status === 403 ? "model_catalog_forbidden"
         : response.status === 429 ? "rate_limited" : "provider_error";
       return NextResponse.json({
-        status, httpStatus: response.status, billingTestPerformed: false,
+        status,
+        httpStatus: response.status,
+        providerCode,
+        providerType,
+        keyLastFour: key.slice(-4),
+        gatewayDisabled: true,
+        billingTestPerformed: false,
       }, { status: 503, headers });
     }
     const result = await response.json() as { data?: Array<{ id?: unknown }> };
@@ -41,6 +60,7 @@ export async function GET() {
       status: "api_key_accepted_for_model_listing",
       listedCompatibleModels: candidates.filter(name => catalog.has(name)),
       preferredModel: candidates[0],
+      keyLastFour: key.slice(-4),
       modelListingIsNotProofOfGenerationAccess: true,
       gatewayDisabled: true,
       billingTestPerformed: false,
