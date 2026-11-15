@@ -89,14 +89,14 @@ test("keeps one paid attempt and preserves the exact reason of model refusal", a
     globalThis.fetch = async (_url, init) => {
       calls++;
       const request = JSON.parse(String(init?.body));
-      assert.equal(request.model, calls === 1 ? "gpt-5-mini" : "gpt-4.1-mini");
+      assert.equal(request.model, ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"][calls - 1]);
       return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 403 });
     };
     await assert.rejects(
       generateDirectStructured("outline", z.object({ allowed: z.boolean() }), "Editor", "An outline", 1000),
       (error: unknown) => error instanceof DirectOpenAiError && error.message === "ai_model_unavailable",
     );
-    assert.equal(calls, 2); // Primary refused, one bounded existing-model fallback.
+    assert.equal(calls, 3); // Only known model-access errors trigger bounded direct API retries.
   } finally {
     globalThis.fetch = saved;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
@@ -104,9 +104,10 @@ test("keeps one paid attempt and preserves the exact reason of model refusal", a
   }
 });
 
-test("separates invalid keys, restricted models and exhausted API quota", () => {
+test("separates invalid keys, restricted models, project permissions and exhausted API quota", () => {
   assert.equal(classifyOpenAiHttpFailure(401, { error: { code: "invalid_api_key" } }), "ai_auth_failed");
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "permission_denied" } }), "ai_permission_denied");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
 });
@@ -161,5 +162,73 @@ test("direct OpenAI never tries a different model for invalid credentials", asyn
     globalThis.fetch = savedFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("direct OpenAI tries gpt-4o-mini when two confirmed models are unavailable", async () => {
+  const saved = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  const previousModel = process.env.OPENAI_TEXT_MODEL;
+  const models: string[] = [];
+  process.env.OPENAI_API_KEY = "test-only";
+  delete process.env.OPENAI_TEXT_MODEL;
+  try {
+    globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      models.push(body.model);
+      if (models.length < 3)
+        return new Response(JSON.stringify({ error: { code: "model_not_found" } }), { status: 404 });
+      return new Response(JSON.stringify({
+        status: "completed",
+        output: [{ type: "message", content: [{
+          type: "output_text",
+          text: JSON.stringify({ content: "A safe scene", summary: "Scene summary" }),
+        }] }],
+      }), { status: 200 });
+    };
+    const result = await generateDirectStructured("chapter",
+      z.object({ content: z.string(), summary: z.string() }), "editor", "scene", 3000);
+    assert.equal(result.output.content, "A safe scene");
+    assert.deepEqual(models, ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]);
+  } finally {
+    globalThis.fetch = saved;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+    if (previousModel === undefined) delete process.env.OPENAI_TEXT_MODEL;
+    else process.env.OPENAI_TEXT_MODEL = previousModel;
+  }
+});
+
+test("403 project permission denied stops immediately and never calls another model or Gateway", async () => {
+  const saved = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  let calls = 0;
+  process.env.OPENAI_API_KEY = "test-only";
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(JSON.stringify({ error: { code: "permission_denied" } }), { status: 403 });
+    };
+    await assert.rejects(
+      generateDirectStructured("chapter", z.object({ content: z.string() }),
+        "editor", "scene", 3000),
+      /ai_permission_denied/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = saved;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("explicit OpenAI text model override never enables Vercel AI Gateway", () => {
+  const previousModel = process.env.OPENAI_TEXT_MODEL;
+  try {
+    process.env.OPENAI_TEXT_MODEL = "gpt-4o-mini";
+    assert.equal(directModelFor("chapter"), "gpt-4o-mini");
+  } finally {
+    if (previousModel === undefined) delete process.env.OPENAI_TEXT_MODEL;
+    else process.env.OPENAI_TEXT_MODEL = previousModel;
   }
 });
