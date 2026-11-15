@@ -108,6 +108,10 @@ test("separates invalid keys, restricted models, project permissions and exhaust
   assert.equal(classifyOpenAiHttpFailure(401, { error: { code: "invalid_api_key" } }), "ai_auth_failed");
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "permission_denied" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "unsupported_country_region_territory" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { type: "forbidden" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(404, { error: { code: "not_found" } }), "ai_provider_unavailable");
+  assert.equal(classifyOpenAiHttpFailure(404, { error: { code: "model_not_found" } }), "ai_model_unavailable");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
   for (const code of [
     "credit_balance_exhausted", "organization_usage_limit_exceeded",
