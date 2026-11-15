@@ -19,7 +19,6 @@ const failoverErrors = new Set([
   "ai_auth_failed",
   "ai_credits_exhausted",
   "ai_model_unavailable",
-  "ai_permission_denied",
   "ai_provider_busy",
   "ai_provider_unavailable",
   "ai_generation_invalid",
@@ -28,6 +27,7 @@ const failoverErrors = new Set([
 
 const known = new Set([
   ...failoverErrors,
+  "ai_permission_denied",
   "content_not_allowed",
   "ai_wrong_language",
   "not_configured",
