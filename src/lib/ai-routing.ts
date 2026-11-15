@@ -1,30 +1,20 @@
 import { classifyAiFailure } from "./ai-errors";
-import { resolveAiTextModels } from "./ai-models";
 
 export type AiBackend = "gateway" | "direct";
 type Configuration = Readonly<Record<string, string | undefined>>;
 
 /**
- * Gateway goes first, then a truly independent direct OpenAI endpoint.
- * A model error in one service must not disable the other.
- * Never race two paid providers or make both calls on the happy path.
+ * Temporary direct-OpenAI-only test for Ebook Studio.
+ * Ignore all configured Vercel AI Gateway models.
+ * This applies to outlines, chapters, edits, covers and illustrations.
  */
 export function availableAiBackends(
-  operation: string,
+  _operation: string,
   env: Configuration = process.env,
 ): AiBackend[] {
-  const isCover = operation === "cover";
-  const gatewayModel = isCover
-    ? env.AI_GATEWAY_IMAGE_MODEL?.trim()
-    : resolveAiTextModels(operation, env).model;
-  const backends: AiBackend[] = [];
-  if (gatewayModel) backends.push("gateway");
-  if (env.OPENAI_API_KEY?.trim()) backends.push("direct");
-  return backends;
+  return env.OPENAI_API_KEY?.trim() ? ["direct"] : [];
 }
-
-const failoverErrors = new Set([
-  "ai_auth_failed",
+",
   "ai_credits_exhausted",
   "ai_model_unavailable",
   "ai_provider_busy",
