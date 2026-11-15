@@ -5,27 +5,22 @@ import {
   mayUseAiBackup,
 } from "../src/lib/ai-routing";
 
-test("Gateway is primary and the pre-existing OpenAI key is an independent fallback", () => {
-  assert.deepEqual(availableAiBackends("outline", {
-    AI_GATEWAY_MODEL: "openai/gpt-5.4",
-    OPENAI_API_KEY: "test-only",
-  }), ["gateway", "direct"]);
-  assert.deepEqual(availableAiBackends("chapter", {
-    AI_GATEWAY_MODEL: "openai/gpt-5.4",
-    OPENAI_API_KEY: "test-only",
-  }), ["gateway", "direct"]);
-  assert.deepEqual(availableAiBackends("cover", {
-    AI_GATEWAY_IMAGE_MODEL: "openai/gpt-image-1-mini",
-    OPENAI_API_KEY: "test-only",
-  }), ["gateway", "direct"]);
-  assert.deepEqual(availableAiBackends("outline", {
-    AI_GATEWAY_MODEL: "openai/gpt-5.4",
-  }), ["gateway"]);
-  assert.deepEqual(availableAiBackends("outline", {
-    OPENAI_API_KEY: "test-only",
-  }), ["direct"]);
+test("Ebook Studio uses direct OpenAI only even when Gateway is configured", () => {
+  for (const operation of ["outline", "chapter", "text_edit", "cover", "illustration"]) {
+    assert.deepEqual(availableAiBackends(operation, {
+      AI_GATEWAY_MODEL: "openai/gpt-5.4",
+      AI_GATEWAY_IMAGE_MODEL: "openai/gpt-image-1-mini",
+      OPENAI_API_KEY: "test-only",
+    }), ["direct"]);
+    assert.deepEqual(availableAiBackends(operation, {
+      AI_GATEWAY_MODEL: "openai/gpt-5.4",
+      AI_GATEWAY_IMAGE_MODEL: "openai/gpt-image-1-mini",
+    }), []);
+  }
+  assert.deepEqual(availableAiBackends("outline", { OPENAI_API_KEY: "test-only" }), ["direct"]);
   assert.deepEqual(availableAiBackends("outline", {}), []);
 });
+
 
 test("successful Gateway generation never calls or bills the direct API", async () => {
   const calls: string[] = [];
