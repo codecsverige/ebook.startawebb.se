@@ -52,10 +52,14 @@ export function classifyOpenAiHttpFailure(
   // and must not be misreported as a model failure or a transient rate limit.
   if (status === 402 || /credit_balance_exhausted|insufficient_quota|organization_usage_limit_exceeded|organization_spend_limit_exceeded|project_spend_limit_exceeded|billing_hard_limit|billing_not_active|credits_exhausted|budget_exceeded/.test(code + " " + type))
     return "ai_credits_exhausted";
-  if (status === 403 && /permission_denied|insufficient_permissions|verification_required|organization_verification_required/.test(code + " " + type))
-    return "ai_permission_denied";
-  if (status === 403 || status === 404 || /model_not_found|model_not_available|model_unavailable/.test(code + " " + type))
+  if (/model_not_found|model_not_available|model_unavailable|model_access_denied|model_not_enabled/.test(code + " " + type))
     return "ai_model_unavailable";
+  // HTTP 403 can also mean project/API permissions or unsupported region;
+  // HTTP 404 can refer to an endpoint/resource rather than a model.
+  // Do not misreport those generic statuses as a missing model.
+  if (status === 403 || /permission_denied|insufficient_permissions|verification_required|organization_verification_required/.test(code + " " + type))
+    return "ai_permission_denied";
+  if (status === 404) return "ai_provider_unavailable";
   if (status === 429 || status >= 500) return "ai_provider_busy";
   return "ai_provider_unavailable";
 }
