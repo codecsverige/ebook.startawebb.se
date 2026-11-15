@@ -630,9 +630,14 @@ export function errorMessage(code: string, l: Locale): string {
       "OpenAI nekade API-nyckeln (HTTP 401). Kontrollera nyckeln i OpenAI-projektet.",
     ],
     ai_model_unavailable: [
-      "The OpenAI project cannot access the requested model (403/404). The API key is not necessarily invalid.",
-      "رفض OpenAI الوصول إلى النموذج (403/404). هذا لا يعني بالضرورة أن المفتاح أو الرصيد غير صالح.",
-      "OpenAI-projektet har inte tillgång till modellen (403/404). API-nyckeln kan vara giltig.",
+      "No compatible text model is available to this OpenAI API project. Check project model access and the API key's project.",
+      "لم يجد OpenAI نموذجًا متاحًا لهذا المشروع. تحقق من صلاحيات النماذج في مشروع OpenAI المرتبط بالمفتاح.",
+      "Ingen kompatibel textmodell är tillgänglig i OpenAI-projektet. Kontrollera projektets modellåtkomst.",
+    ],
+    ai_permission_denied: [
+      "OpenAI denied this API project's permissions or verification (HTTP 403). Check project API key permissions and model access.",
+      "رفض OpenAI صلاحيات المشروع أو التحقق منه (403). تحقق من صلاحيات مفتاح API وإمكانية استخدام النماذج.",
+      "OpenAI nekade projektets API-behörighet eller verifiering (403). Kontrollera API-nyckelns rättigheter och modellåtkomst.",
     ],
     ai_provider_busy: [
       "The AI provider is temporarily busy or timed out. Retry this chapter.",
