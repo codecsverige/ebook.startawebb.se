@@ -7,11 +7,31 @@ export class DirectOpenAiError extends Error {
   }
 }
 
-/** Confirmed, cost-conscious default already used by BokaNära.
- * One provider request per generation. No model probing via paid requests.
+/** Direct OpenAI only. A project-specific model can be configured server-side.
+ * Fallback models are tried ONLY on a provider-confirmed model access denial.
+ * Never use AI Gateway or another provider.
  */
 export function directModelFor(_operation: string): string {
-  return "gpt-5-mini";
+  const configured = process.env.OPENAI_TEXT_MODEL?.trim();
+  return configured && /^[a-z0-9][a-z0-9._-]{1,79}$/i.test(configured)
+    ? configured
+    : "gpt-5-mini";
+}
+export function directModelCandidates(operation: string): string[] {
+  return [...new Set([directModelFor(operation), "gpt-4.1-mini", "gpt-4o-mini"])];
+}
+
+function providerErrorCode(body: unknown): string {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "";
+  const error = (body as { error?: unknown }).error;
+  if (!error || typeof error !== "object" || Array.isArray(error)) return "";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code.toLowerCase().slice(0, 80) : "";
+}
+
+function isModelSpecificDenial(status: number, body: unknown): boolean {
+  if (status !== 403 && status !== 404) return false;
+  return /^(model_not_found|model_not_available|model_unavailable|model_access_denied|model_not_enabled)$/.test(providerErrorCode(body));
 }
 
 /** Convert OpenAI HTTP errors to accurate, non-sensitive UI codes. */
@@ -73,7 +93,6 @@ export async function generateDirectStructured<T>(
 ): Promise<{ output: T; usage: { inputTokens: number; outputTokens: number }; finishReason: string }> {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new DirectOpenAiError(401, "ai_auth_failed");
-  const primaryModel = directModelFor(operation);
   const request = (model: string) => fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
@@ -88,28 +107,26 @@ export async function generateDirectStructured<T>(
     signal: AbortSignal.timeout(120_000),
     cache: "no-store",
   });
-  let response = await request(primaryModel);
-  // API project model permissions differ from Gateway permissions.
-  // 403/404 does not necessarily mean a bad API key. Retry once using the
-  // ALREADY configured Gateway model (4.1-mini), never an untested new model.
-  // Refused model requests cannot produce billable generations; a successful
-  // primary attempt never triggers a second paid request.
-  if ((response.status === 403 || response.status === 404) &&
-      primaryModel !== "gpt-4.1-mini") {
-    let refusal: unknown;
-    try { refusal = await response.clone().json(); } catch { /* no body */ }
-    if (classifyOpenAiHttpFailure(response.status, refusal) === "ai_model_unavailable") {
-      console.warn("direct_model_access_fallback", {
-        from: primaryModel, to: "gpt-4.1-mini", status: response.status,
-      });
-      response = await request("gpt-4.1-mini");
-    }
-  }
-  if (!response.ok) {
+  const candidates = directModelCandidates(operation);
+  let response: Response | undefined;
+  for (let i = 0; i < candidates.length; i++) {
+    const model = candidates[i];
+    response = await request(model);
+    if (response.ok) break;
     let errorBody: unknown;
     try { errorBody = await response.json(); } catch { /* no response body */ }
-    throw new DirectOpenAiError(response.status, classifyOpenAiHttpFailure(response.status, errorBody));
+    const code = providerErrorCode(errorBody);
+    const canTryAnotherModel = i < candidates.length - 1 &&
+      isModelSpecificDenial(response.status, errorBody);
+    // Log only short provider error codes and HTTP status, never prompts or keys.
+    console.warn("direct_openai_request_rejected", {
+      model, status: response.status, providerCode: code || "unknown",
+      tryingAnotherModel: canTryAnotherModel,
+    });
+    if (!canTryAnotherModel)
+      throw new DirectOpenAiError(response.status, classifyOpenAiHttpFailure(response.status, errorBody));
   }
+  if (!response || !response.ok) throw new DirectOpenAiError(503, "ai_provider_unavailable");
   const data = await response.json() as {
     status?: string;
     incomplete_details?: { reason?: string };
