@@ -48,7 +48,9 @@ export function classifyOpenAiHttpFailure(
   const code = typeof data?.code === "string" ? data.code.toLowerCase() : "";
   const type = typeof data?.type === "string" ? data.type.toLowerCase() : "";
   if (status === 401 || code === "invalid_api_key") return "ai_auth_failed";
-  if (status === 402 || /insufficient_quota|billing_hard_limit|billing_not_active|credits_exhausted|budget_exceeded/.test(code + " " + type))
+  // Billing and spend-limit errors can arrive as 429 (or sometimes 403)
+  // and must not be misreported as a model failure or a transient rate limit.
+  if (status === 402 || /credit_balance_exhausted|insufficient_quota|organization_usage_limit_exceeded|organization_spend_limit_exceeded|project_spend_limit_exceeded|billing_hard_limit|billing_not_active|credits_exhausted|budget_exceeded/.test(code + " " + type))
     return "ai_credits_exhausted";
   if (status === 403 && /permission_denied|insufficient_permissions|verification_required|organization_verification_required/.test(code + " " + type))
     return "ai_permission_denied";
