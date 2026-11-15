@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sessionUser } from "@/lib/firebase-session";
+import { directModelCandidates } from "@/lib/direct-openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,24 +17,34 @@ export async function GET() {
     status: 503, headers: { "Cache-Control": "no-store" },
   });
   try {
-    // Read-only model metadata, no generation and no token usage.
-    const response = await fetch("https://api.openai.com/v1/models/gpt-5-mini", {
+    // Read-only model catalog: no prompt, no image request, no billing.
+    const response = await fetch("https://api.openai.com/v1/models", {
       method: "GET",
       headers: { Authorization: "Bearer " + key },
       signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
-    let status = "upstream_error";
-    if (response.ok) status = "api_key_and_model_access_ok";
-    else if (response.status === 401) status = "invalid_api_key";
-    else if (response.status === 403 || response.status === 404) status = "model_access_denied";
-    else if (response.status === 429) status = "rate_limited";
+    const headers = { "Cache-Control": "no-store" };
+    if (!response.ok) {
+      const status = response.status === 401 ? "invalid_api_key"
+        : response.status === 403 ? "model_catalog_forbidden"
+        : response.status === 429 ? "rate_limited" : "provider_error";
+      return NextResponse.json({
+        status, httpStatus: response.status, billingTestPerformed: false,
+      }, { status: 503, headers });
+    }
+    const result = await response.json() as { data?: Array<{ id?: unknown }> };
+    const catalog = new Set((result.data || []).map(item => item.id)
+      .filter((id): id is string => typeof id === "string"));
+    const candidates = directModelCandidates("chapter");
     return NextResponse.json({
-      status,
-      httpStatus: response.status,
-      checkedModel: "gpt-5-mini",
+      status: "api_key_accepted_for_model_listing",
+      listedCompatibleModels: candidates.filter(name => catalog.has(name)),
+      preferredModel: candidates[0],
+      modelListingIsNotProofOfGenerationAccess: true,
+      gatewayDisabled: true,
       billingTestPerformed: false,
-    }, { status: response.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+    }, { headers });
   } catch {
     return NextResponse.json({ status: "provider_unreachable", billingTestPerformed: false },
       { status: 503, headers: { "Cache-Control": "no-store" } });
