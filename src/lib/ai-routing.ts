@@ -14,7 +14,9 @@ export function availableAiBackends(
 ): AiBackend[] {
   return env.OPENAI_API_KEY?.trim() ? ["direct"] : [];
 }
-",
+
+const failoverErrors = new Set([
+  "ai_auth_failed",
   "ai_credits_exhausted",
   "ai_model_unavailable",
   "ai_provider_busy",
