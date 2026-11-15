@@ -109,6 +109,13 @@ test("separates invalid keys, restricted models, project permissions and exhaust
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "permission_denied" } }), "ai_permission_denied");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
+  for (const code of [
+    "credit_balance_exhausted", "organization_usage_limit_exceeded",
+    "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
+  ]) {
+    assert.equal(classifyOpenAiHttpFailure(429, { error: { code } }), "ai_credits_exhausted");
+    assert.equal(classifyOpenAiHttpFailure(403, { error: { code } }), "ai_credits_exhausted");
+  }
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
 });
 
@@ -135,6 +142,32 @@ test("direct OpenAI recovers new-model access denial with the existing mini fall
       z.object({ content: z.string(), summary: z.string() }), "Editor", "Arabic story", 500);
     assert.equal(result.output.content, "قصة عربية");
     assert.deepEqual(models, ["gpt-6-luna", "gpt-5-mini"]);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("direct OpenAI stops on missing prepaid credits without trying models or Gateway", async () => {
+  const savedFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  let calls = 0;
+  process.env.OPENAI_API_KEY = "unit-test-only";
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(JSON.stringify({
+        error: { code: "credit_balance_exhausted", type: "insufficient_quota" },
+      }), { status: 429 });
+    };
+    await assert.rejects(
+      generateDirectStructured("chapter", z.object({ content: z.string() }),
+        "Editor", "Test content", 1000),
+      (error: unknown) => error instanceof DirectOpenAiError
+        && error.code === "ai_credits_exhausted",
+    );
+    assert.equal(calls, 1);
   } finally {
     globalThis.fetch = savedFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
