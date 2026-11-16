@@ -296,6 +296,8 @@ export async function createCover(jobId: string) {
     short_story: "A thoughtful literary illustration with one arresting symbol or scene and strong negative space.",
     children_story: "Whimsical, joyful and age-appropriate illustrated characters and scenery. Warm and imaginative, not a photo.",
     workbook: "A refined geometric editorial composition expressing learning and progress, with elegant shapes and visual rhythm.",
+    report: "A restrained, professional report title-page background with subtle abstract geometry.",
+    research: "A restrained academic title-page illustration, free of fabricated charts or statistics.",
     guide: "A restrained, authoritative nonfiction editorial illustration that expresses the actual topic through a clear visual metaphor.",
     ebook: "An elegant contemporary publishing design with a memorable visual concept and simple hierarchy.",
   };
