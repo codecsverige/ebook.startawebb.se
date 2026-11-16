@@ -1,23 +1,35 @@
 import { classifyAiFailure } from "./ai-errors";
 
-export type AiBackend = "gateway" | "direct";
+export type AiBackend = "relay" | "direct";
 type Configuration = Readonly<Record<string, string | undefined>>;
+const relayOperations = new Set([
+  "outline", "outline_recovery", "chapter", "chapter_recovery",
+  "cover", "back_cover",
+]);
 
-/**
- * Temporary direct-OpenAI-only test for Ebook Studio.
- * Ignore all configured Vercel AI Gateway models.
- * This applies to outlines, chapters, edits, covers and illustrations.
+/** The BokaNära relay was deployed independently and authenticates EbookStudio
+ * with the existing HyrNära service-account private key. Vercel AI Gateway
+ * stays disabled; text edits and landscape illustrations remain direct-only.
  */
 export function availableAiBackends(
-  _operation: string,
+  operation: string,
   env: Configuration = process.env,
 ): AiBackend[] {
-  return env.OPENAI_API_KEY?.trim() ? ["direct"] : [];
+  const backends: AiBackend[] = [];
+  const signerPresent = Boolean(
+    env.EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON?.trim() ||
+    env.FIREBASE_SERVICE_ACCOUNT_HYRNARA?.trim() ||
+    (env.EBOOK_FIREBASE_CLIENT_EMAIL?.trim() && env.EBOOK_FIREBASE_PRIVATE_KEY?.trim()),
+  );
+  if (relayOperations.has(operation) &&
+      env.EBOOK_BOKANARA_RELAY_DISABLED !== "true" && signerPresent)
+    backends.push("relay");
+  if (env.OPENAI_API_KEY?.trim()) backends.push("direct");
+  return backends;
 }
 
 const failoverErrors = new Set([
   "ai_auth_failed",
-  "ai_credits_exhausted",
   "ai_model_unavailable",
   "ai_provider_busy",
   "ai_provider_unavailable",
@@ -27,6 +39,7 @@ const failoverErrors = new Set([
 
 const known = new Set([
   ...failoverErrors,
+  "ai_credits_exhausted",
   "ai_permission_denied",
   "content_not_allowed",
   "ai_wrong_language",
