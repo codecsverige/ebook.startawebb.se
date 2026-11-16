@@ -2,7 +2,9 @@
 export type AiFailureCode =
   | "ai_credits_exhausted"
   | "ai_auth_failed"
+  | "ai_permission_denied"
   | "ai_model_unavailable"
+  | "ai_request_invalid"
   | "ai_provider_busy"
   | "ai_generation_invalid"
   | "ai_provider_unavailable";
@@ -35,9 +37,11 @@ export function classifyAiFailure(error: unknown): AiFailureCode {
   const message = messages.join(" ").toLowerCase();
   if (statuses.includes(402) || /insufficient.funds|quota_for_entity_exceeded|payment required|billing.*(limit|exhaust)|budget.*(exhaust|exceed)|credit.*(exhaust|balance)|no funds/.test(message))
     return "ai_credits_exhausted";
-  if (statuses.includes(401) || statuses.includes(403) ||
+  if (statuses.includes(401) ||
       /invalid (api )?key|unauthori[sz]ed|invalid.*token|authentication.*failed/.test(message))
     return "ai_auth_failed";
+  if (statuses.includes(403)) return "ai_permission_denied";
+  if (statuses.includes(400) || statuses.includes(422)) return "ai_request_invalid";
   if (statuses.includes(429) || statuses.some((s) => s >= 500) ||
       /rate.?limit|too many requests|timeout|timed out|abort|network|fetch failed|connection.*(lost|reset)/.test(message))
     return "ai_provider_busy";
