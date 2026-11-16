@@ -1,40 +1,28 @@
 import { classifyAiFailure } from "./ai-errors";
-import { resolveAiTextModels } from "./ai-models";
 
-export type AiBackend = "gateway" | "direct";
 type Configuration = Readonly<Record<string, string | undefined>>;
 
 /**
- * Gateway goes first, then a truly independent direct OpenAI endpoint.
- * A model error in one service must not disable the other.
- * Never race two paid providers or make both calls on the happy path.
+ * EbookStudio runs AI exclusively through its server-side OpenAI API key.
+ * Never inspect or call Vercel AI Gateway, even if legacy env vars are present.
  */
 export function availableAiBackends(
-  operation: string,
+  _operation: string,
   env: Configuration = process.env,
-): AiBackend[] {
-  const isCover = operation === "cover";
-  const gatewayModel = isCover
-    ? env.AI_GATEWAY_IMAGE_MODEL?.trim()
-    : resolveAiTextModels(operation, env).model;
-  const backends: AiBackend[] = [];
-  if (gatewayModel) backends.push("gateway");
-  if (env.OPENAI_API_KEY?.trim()) backends.push("direct");
-  return backends;
+): Array<"direct"> {
+  return env.OPENAI_API_KEY?.trim() ? ["direct"] : [];
 }
 
-const failoverErrors = new Set([
+const known = new Set([
   "ai_auth_failed",
+  "ai_permission_denied",
   "ai_credits_exhausted",
   "ai_model_unavailable",
+  "ai_request_invalid",
   "ai_provider_busy",
   "ai_provider_unavailable",
   "ai_generation_invalid",
   "ai_generation_incomplete",
-]);
-
-const known = new Set([
-  ...failoverErrors,
   "content_not_allowed",
   "ai_wrong_language",
   "not_configured",
@@ -46,32 +34,8 @@ const known = new Set([
   "ai_image_daily_limit",
 ]);
 
+/** Return an approved public error code, never an upstream response or secret. */
 export function aiErrorCode(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
   return known.has(code) ? code : classifyAiFailure(error);
-}
-
-export function mayUseAiBackup(error: unknown): boolean {
-  return failoverErrors.has(aiErrorCode(error));
-}
-
-/**
- * One paid request on success; at most one other backend on provider failure.
- * Never spend another request on an account quota or unsafe-content refusal.
- */
-export async function callWithAiFallback<T>(
-  backends: readonly AiBackend[],
-  invoke: (backend: AiBackend) => Promise<T>,
-  onFallback?: (from: AiBackend, code: string) => void,
-): Promise<T> {
-  if (backends.length === 0) throw new Error("not_configured");
-  for (let i = 0; i < backends.length; i++) {
-    try {
-      return await invoke(backends[i]);
-    } catch (error) {
-      if (i === backends.length - 1 || !mayUseAiBackup(error)) throw error;
-      onFallback?.(backends[i], aiErrorCode(error));
-    }
-  }
-  throw new Error("ai_provider_unavailable");
 }
