@@ -3960,3 +3960,67 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
  .studio-progress-steps.guided-four button.active span:last-child{color:#244e94;}
 }
 @media(prefers-reduced-motion:reduce){.rich-image-anchor::after{animation:none;}}
+
+/* Clean chapter index: the chapter row itself is the only action.
+   AI generation lives inside the opened chapter workspace, not the index. */
+.chapter-flow-list:not(.is-workspace){gap:10px;}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-card{
+  border-color:#d9e4f3;border-radius:15px;
+  box-shadow:0 3px 13px rgba(36,62,103,.045);
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-head{
+  display:block;padding:0;background:#fff;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-open{
+  width:100%;min-height:75px;padding:14px 17px;gap:13px;
+  text-align:start;border-radius:15px;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-open:hover{
+  background:#f5f8ff;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-open:focus-visible{
+  outline:2px solid #3764c6;outline-offset:-3px;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-num{
+  border-radius:11px;width:37px;height:37px;background:#e8effb;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-title strong{
+  font-size:15px;color:#253a58;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-title small{
+  color:#75859b;
+}
+.chapter-flow-chevron{
+  flex:none;color:#3565b6;
+}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-chevron{
+  display:grid;place-items:center;box-sizing:content-box;
+  padding:8px;background:#eff4fd;border-radius:10px;
+}
+.chapter-flow-chevron.is-rtl{transform:rotate(180deg);}
+.chapter-flow-list.is-workspace .chapter-flow-chevron{display:none;}
+.chapter-flow-list:not(.is-workspace) .chapter-flow-check{color:#148064;}
+.chapter-workspace-ai-tools{
+  display:flex;justify-content:flex-start;align-items:center;
+  margin:10px 0 14px;
+}
+.chapter-workspace-generate{
+  min-height:43px;border-radius:11px;display:inline-flex;
+  gap:9px;align-items:center;justify-content:center;
+  white-space:normal;text-align:center;
+}
+.studio-chapter-links .chapter-flow-chevron{flex:none;opacity:.85;}
+@media(max-width:760px){
+  .chapter-flow-list:not(.is-workspace){gap:9px;}
+  .chapter-flow-list:not(.is-workspace) .chapter-flow-open{
+    min-height:69px;padding:12px;gap:10px;
+  }
+  .chapter-flow-list:not(.is-workspace) .chapter-flow-title strong{
+    font-size:14px;line-height:1.55;
+  }
+  .chapter-flow-list:not(.is-workspace) .chapter-flow-chevron{
+    padding:7px;border-radius:9px;
+  }
+  .chapter-workspace-ai-tools{margin:8px 0 12px;}
+  .chapter-workspace-generate{width:100%;min-height:43px;}
+}
