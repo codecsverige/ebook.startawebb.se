@@ -97,15 +97,20 @@ export async function generateRelayStructured<T>(
   operation: string, schema: z.ZodType<T>, system: string,
   prompt: string, maxOutputTokens: number,
 ): Promise<{ output: T; usage: { inputTokens: number; outputTokens: number } }> {
-  if (!/^(outline|outline_recovery|chapter|chapter_recovery)$/.test(operation) ||
-      prompt.length > 28_000 || system.length > 2500 ||
+  if (!/^(outline|outline_recovery|chapter|chapter_recovery|text_edit)$/.test(operation) ||
+      prompt.length > 27_500 || system.length > 2500 ||
       !Number.isInteger(maxOutputTokens) || maxOutputTokens > 8500)
     throw new DirectOpenAiError(400, "ai_generation_invalid");
+  // The existing BokaNära relay accepts chapter/outline schemas. For editing,
+  // adapt its chapter JSON contract without changing BokaNära or the editor.
+  const editing = operation === "text_edit";
   const data = await relayRequest("text", {
     model: directModelFor(operation),
     store: false, instructions: system,
-    input: [{ role: "user", content: prompt }],
-    text: { format: directFormat(operation) },
+    input: [{ role: "user", content: editing
+      ? prompt + "\\nReturn the exact rewritten selection as content and a short summary."
+      : prompt }],
+    text: { format: directFormat(editing ? "chapter" : operation) },
     max_output_tokens: maxOutputTokens,
   }) as {
     status?: string;
@@ -123,7 +128,10 @@ export async function generateRelayStructured<T>(
   let parsed: unknown;
   try { parsed = JSON.parse(text); }
   catch { throw new DirectOpenAiError(502, "ai_generation_invalid"); }
-  const checked = schema.safeParse(parsed);
+  const result = editing && parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? { replacement: (parsed as { content?: unknown }).content }
+    : parsed;
+  const checked = schema.safeParse(result);
   if (!checked.success) throw new DirectOpenAiError(502, "ai_generation_invalid");
   return { output: checked.data, usage: {
     inputTokens: data.usage?.input_tokens ?? 0,
