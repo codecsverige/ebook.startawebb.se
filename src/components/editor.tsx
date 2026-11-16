@@ -1148,8 +1148,10 @@ export function Editor({
             <strong>{tr(locale,"Chapters","الفصول","Kapitel")}</strong>
             <div className="studio-chapter-links">{draft.outline.map((c,i)=><button type="button" key={c.id}
               className={tab==="write" && active?.id===c.id?"active":""}
-              onClick={()=>{setChapterId(c.id);setTab("write");}}>
-              <span>{i+1}</span><span className="studio-chapter-label">{c.title}</span>{draft.chapters[c.id]&&<Check size={14}/>}
+              onClick={async()=>{if((dirtyRef.current||savingRef.current) && !(await save(true)))return;setTab("write");await openChapterWorkspace(c.id);}}>
+              <span>{i+1}</span><span className="studio-chapter-label">{c.title}</span>
+              {draft.chapters[c.id]?.content?.trim() && <Check size={14} className="chapter-flow-check"/>}
+              <ChevronRight size={16} className={locale==="ar"?"chapter-flow-chevron is-rtl":"chapter-flow-chevron"} aria-hidden="true"/>
             </button>)}</div>
           </div>}
           <div className="sidebar-stats">
@@ -1642,26 +1644,21 @@ export function Editor({
               </header>}
               <div className={chapterWorkspaceOpen?"chapter-flow-list is-workspace":"chapter-flow-list"}>
                 {draft.outline.map((c,i)=>(!chapterWorkspaceOpen || active?.id===c.id) && (
-                  <article key={c.id} id={`chapter-${c.id}`} className={`chapter-flow-card ${active?.id===c.id?"is-open":""}`}>
+                  <article key={c.id} id={`chapter-${c.id}`} className={`chapter-flow-card ${chapterWorkspaceOpen && active?.id===c.id?"is-open":""}`}>
                     <div className="chapter-flow-head">
-                      <button type="button" className="chapter-flow-open" aria-expanded={active?.id===c.id}
+                      <button type="button" className="chapter-flow-open"
+                        aria-expanded={chapterWorkspaceOpen && active?.id===c.id}
+                        aria-label={tr(locale,"Open chapter","فتح الفصل","Öppna kapitel")+": "+c.title}
                         onClick={()=>void openChapterWorkspace(c.id)}>
                         <span className="chapter-flow-num">{i+1}</span>
                         <span className="chapter-flow-title">
                           <strong>{c.title}</strong>
                           <small>{draft.chapters[c.id]?.content?.trim()
                             ? draft.chapters[c.id].content.trim().split(/\s+/u).length.toLocaleString(locale)+" "+t.words
-                            : tr(locale,"Not written · AI target ~2–4 pages","لم يُكتب بعد · هدف AI نحو صفحتين إلى أربع","Inte skrivet · AI-mål ca 2–4 sidor")}</small>
+                            : tr(locale,"Not written yet","لم يُكتب بعد","Inte skrivet än")}</small>
                         </span>
-                        {draft.chapters[c.id]?.content?.trim()?<Check size={18} className="chapter-flow-check"/>:<ChevronRight size={18}/>}
-                      </button>
-                      <button type="button" className="button button-outline button-small chapter-flow-ai"
-                        disabled={disabled || !config.ai || !draft.title.trim()}
-                        onClick={()=>{setChapterId(c.id);setChapterWorkspaceOpen(true);setRead(false);if(draft.chapters[c.id]?.content?.trim() && !window.confirm(tr(locale,"Regenerate this chapter? The previous text may be replaced. Save a version first.","هل تريد إعادة توليد هذا الفصل؟ قد يُستبدل النص القديم؛ احفظ نسخة أولًا.","Generera om kapitlet? Texten kan ersättas. Spara en version först.")))return;void generate(
-                          !book.unlocked && i===0 && !draft.chapters[c.id]?"sample":"chapter",c.id);}}>
-                        <Sparkles size={16}/>{draft.chapters[c.id]?.content?.trim()
-                          ? tr(locale,"Regenerate","إعادة التوليد","Generera om")
-                          : tr(locale,"Generate chapter","توليد الفصل AI","Generera kapitel")}
+                        {draft.chapters[c.id]?.content?.trim() && <Check size={17} className="chapter-flow-check" aria-hidden="true"/>}
+                        <ChevronRight size={19} className={locale==="ar"?"chapter-flow-chevron is-rtl":"chapter-flow-chevron"} aria-hidden="true"/>
                       </button>
                     </div>
                     {chapterWorkspaceOpen && active?.id===c.id && <div className="chapter-flow-body">
@@ -1689,7 +1686,15 @@ export function Editor({
                         </div>
                       </details>
                       <div className="chapter-flow-workspace">
-
+                <div className="chapter-workspace-ai-tools">
+                  <button type="button" className="button button-outline button-small chapter-workspace-generate"
+                    disabled={disabled || !config.ai || !draft.title.trim()}
+                    onClick={()=>void generate(!book.unlocked && i===0 && !draft.chapters[c.id]?"sample":"chapter",c.id)}>
+                    <Sparkles size={16}/>{draft.chapters[c.id]?.content?.trim()
+                      ? tr(locale,"Regenerate this chapter","إعادة توليد هذا الفصل","Generera om kapitlet")
+                      : tr(locale,"Generate this chapter","توليد هذا الفصل","Generera kapitlet")}
+                  </button>
+                </div>
                 <details className="chapter-workspace-extra"><summary>{tr(locale,"More chapter options","المزيد من خيارات الفصل","Fler kapitelalternativ")}</summary>
                 {(["novel","short_story","children_story"] as const).some(kind=>kind===draft.kind) && <details className="studio-story-notes">
                   <summary>{tr(locale,"Story notebook","دفتر القصة والشخصيات","Berättelsens anteckningsbok")}</summary>
@@ -2066,7 +2071,7 @@ export function Editor({
                 </label>
                 <button type="button" className="button button-primary" disabled={disabled}
                   onClick={()=>{const missing=draft.outline.find(c=>!draft.chapters[c.id]?.content?.trim());
-                    if(missing){setChapterId(missing.id);requestAnimationFrame(()=>document.getElementById(`chapter-${missing.id}`)?.scrollIntoView({behavior:"smooth",block:"start"}));}
+                    if(missing){void openChapterWorkspace(missing.id);}
                     else setTab("design");}}>
                   {draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim())
                     ?tr(locale,"Continue unfinished chapters","استكمال الفصول الناقصة","Fortsätt ofärdiga kapitel")
