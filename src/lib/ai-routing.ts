@@ -29,7 +29,6 @@ export function availableAiBackends(
 }
 
 const failoverErrors = new Set([
-  "ai_auth_failed",
   "ai_model_unavailable",
   "ai_provider_busy",
   "ai_provider_unavailable",
@@ -40,6 +39,7 @@ const failoverErrors = new Set([
 const known = new Set([
   ...failoverErrors,
   "ai_credits_exhausted",
+  "ai_auth_failed",
   "ai_permission_denied",
   "content_not_allowed",
   "ai_wrong_language",
