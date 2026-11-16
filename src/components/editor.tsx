@@ -37,7 +37,6 @@ import { draftKey, editableBook, readDraft, restoreDraft, writeDraft } from "@/l
 import { BookSectionReader } from "./book-section-reader";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
-import { OwnerAiDiagnostics } from "./owner-ai-diagnostics";
 import { copy, errorMessage, tr } from "@/lib/i18n";
 import { request, codeOf } from "@/lib/client";
 import { allowStudioNavigation } from "@/lib/navigation";
@@ -1270,9 +1269,6 @@ export function Editor({
               <p className="muted" dir="ltr" style={{ fontSize: 12 }}>
                 {tr(locale, "Support reference", "رقم الخطأ للدعم", "Felreferens")}: {job.id.slice(0, 12)}
               </p>
-              {config.ownerTrial && ["ai_model_unavailable", "ai_permission_denied", "ai_auth_failed"].includes(job.error_code || "") && (
-                <OwnerAiDiagnostics jobId={job.id} locale={locale} />
-              )}
               {config.ai && ["chapter", "book", "sample", "outline"].includes(job.kind) && (
                 <button
                   type="button"

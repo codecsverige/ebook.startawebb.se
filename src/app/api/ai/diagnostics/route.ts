@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import { sessionUser } from "@/lib/firebase-session";
-import { directModelCandidates } from "@/lib/direct-openai";
-import { availableAiBackends } from "@/lib/ai-routing";
-import { probeSignedRelayDetails } from "@/lib/bokanara-relay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,75 +11,29 @@ export async function GET() {
   if (!user || !owner || user.email.trim().toLowerCase() !== owner) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
-  // Verify the exact same service-account signature BokaNära requires,
-  // with an invalid payload that is rejected BEFORE any paid OpenAI request.
-  if (availableAiBackends("chapter").includes("relay")) {
-    const probe = await probeSignedRelayDetails();
-    return NextResponse.json({
-      status: probe.status === "authenticated" ? "bokanara_relay_authenticated"
-        : probe.status === "forbidden" ? "bokanara_relay_signature_rejected"
-        : "bokanara_relay_unavailable",
-      // Only a numeric HTTP status and fixed, whitelisted response code.
-      // Never echo the remote response body, provider credentials or JWT.
-      httpStatus: probe.httpStatus,
-      providerCode: probe.responseCode,
-      signedGenerationNotTested: true, gatewayDisabled: true,
-      billingTestPerformed: false,
-    }, { headers: { "Cache-Control": "no-store" } });
-  }
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return NextResponse.json({ status: "key_missing" }, {
     status: 503, headers: { "Cache-Control": "no-store" },
   });
   try {
-    // Read-only model catalog: no prompt, no image request, no billing.
-    const response = await fetch("https://api.openai.com/v1/models", {
+    // Read-only model metadata, no generation and no token usage.
+    const response = await fetch("https://api.openai.com/v1/models/gpt-5-mini", {
       method: "GET",
       headers: { Authorization: "Bearer " + key },
       signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
-    const headers = { "Cache-Control": "no-store" };
-    if (!response.ok) {
-      // Only return provider error *codes*, never raw error messages, API keys,
-      // request bodies or manuscript content. This endpoint is owner-only.
-      let providerCode = "unknown";
-      let providerType = "unknown";
-      try {
-        const body = await response.json() as {
-          error?: { code?: unknown; type?: unknown };
-        };
-        const code = body.error?.code;
-        const type = body.error?.type;
-        if (typeof code === "string" && /^[a-z0-9_]{1,90}$/i.test(code)) providerCode = code;
-        if (typeof type === "string" && /^[a-z0-9_]{1,90}$/i.test(type)) providerType = type;
-      } catch { /* Unexpected provider response; do not reveal it. */ }
-      const status = response.status === 401 ? "invalid_api_key"
-        : response.status === 403 ? "model_catalog_forbidden"
-        : response.status === 429 ? "rate_limited" : "provider_error";
-      return NextResponse.json({
-        status,
-        httpStatus: response.status,
-        providerCode,
-        providerType,
-        keyLastFour: key.slice(-4),
-        gatewayDisabled: true,
-        billingTestPerformed: false,
-      }, { status: 503, headers });
-    }
-    const result = await response.json() as { data?: Array<{ id?: unknown }> };
-    const catalog = new Set((result.data || []).map(item => item.id)
-      .filter((id): id is string => typeof id === "string"));
-    const candidates = directModelCandidates("chapter");
+    let status = "upstream_error";
+    if (response.ok) status = "api_key_and_model_access_ok";
+    else if (response.status === 401) status = "invalid_api_key";
+    else if (response.status === 403 || response.status === 404) status = "model_access_denied";
+    else if (response.status === 429) status = "rate_limited";
     return NextResponse.json({
-      status: "api_key_accepted_for_model_listing",
-      listedCompatibleModels: candidates.filter(name => catalog.has(name)),
-      preferredModel: candidates[0],
-      keyLastFour: key.slice(-4),
-      modelListingIsNotProofOfGenerationAccess: true,
-      gatewayDisabled: true,
+      status,
+      httpStatus: response.status,
+      checkedModel: "gpt-5-mini",
       billingTestPerformed: false,
-    }, { headers });
+    }, { status: response.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ status: "provider_unreachable", billingTestPerformed: false },
       { status: 503, headers: { "Cache-Control": "no-store" } });

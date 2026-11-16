@@ -1,34 +1,31 @@
 import { classifyAiFailure } from "./ai-errors";
+import { resolveAiTextModels } from "./ai-models";
 
-export type AiBackend = "relay" | "direct";
+export type AiBackend = "gateway" | "direct";
 type Configuration = Readonly<Record<string, string | undefined>>;
-const relayOperations = new Set([
-  "outline", "outline_recovery", "chapter", "chapter_recovery",
-  "text_edit", "cover", "back_cover",
-]);
 
-/** The BokaNära relay was deployed independently and authenticates EbookStudio
- * with the existing HyrNära service-account private key. Vercel AI Gateway
- * stays disabled; landscape illustrations remain direct-only.
+/**
+ * Gateway goes first, then a truly independent direct OpenAI endpoint.
+ * A model error in one service must not disable the other.
+ * Never race two paid providers or make both calls on the happy path.
  */
 export function availableAiBackends(
   operation: string,
   env: Configuration = process.env,
 ): AiBackend[] {
+  const isCover = operation === "cover";
+  const gatewayModel = isCover
+    ? env.AI_GATEWAY_IMAGE_MODEL?.trim()
+    : resolveAiTextModels(operation, env).model;
   const backends: AiBackend[] = [];
-  const signerPresent = Boolean(
-    env.EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON?.trim() ||
-    env.FIREBASE_SERVICE_ACCOUNT_HYRNARA?.trim() ||
-    (env.EBOOK_FIREBASE_CLIENT_EMAIL?.trim() && env.EBOOK_FIREBASE_PRIVATE_KEY?.trim()),
-  );
-  if (relayOperations.has(operation) &&
-      env.EBOOK_BOKANARA_RELAY_DISABLED !== "true" && signerPresent)
-    backends.push("relay");
+  if (gatewayModel) backends.push("gateway");
   if (env.OPENAI_API_KEY?.trim()) backends.push("direct");
   return backends;
 }
 
 const failoverErrors = new Set([
+  "ai_auth_failed",
+  "ai_credits_exhausted",
   "ai_model_unavailable",
   "ai_provider_busy",
   "ai_provider_unavailable",
@@ -38,9 +35,6 @@ const failoverErrors = new Set([
 
 const known = new Set([
   ...failoverErrors,
-  "ai_credits_exhausted",
-  "ai_auth_failed",
-  "ai_permission_denied",
   "content_not_allowed",
   "ai_wrong_language",
   "not_configured",
