@@ -1,4 +1,5 @@
 import "server-only";
+import { availableAiBackends } from "./ai-routing";
 
 export function appUrl(): string {
   const raw =
@@ -16,10 +17,10 @@ export function configuration() {
       (process.env.EBOOK_FIREBASE_CLIENT_EMAIL &&
         process.env.EBOOK_FIREBASE_PRIVATE_KEY)
     ),
-    // Direct OpenAI only during the owner's provider test.
-    // Keep availability in sync with availableAiBackends in ai-routing.ts.
-    ai: !!process.env.OPENAI_API_KEY?.trim(),
-    artwork: !!process.env.OPENAI_API_KEY?.trim(),
+    // Existing signed BokaNära OpenAI relay, then optional direct OpenAI.
+    // Vercel AI Gateway is never a generation backend.
+    ai: availableAiBackends("chapter").length > 0,
+    artwork: availableAiBackends("cover").length > 0,
     chatgpt: /^oaiapp_[A-Za-z0-9_-]{8,}$/.test(process.env.OPENAI_SIWC_CLIENT_ID || ""),
     // Payments stay disabled until the owner explicitly enables them.
     billing: process.env.EBOOK_PAYMENTS_ENABLED === "true" && !!(
