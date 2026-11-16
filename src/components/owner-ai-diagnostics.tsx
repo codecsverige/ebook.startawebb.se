@@ -63,6 +63,9 @@ export function OwnerAiDiagnostics({ jobId, locale }: { jobId: string; locale: L
       <div className="muted" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
         <strong>{text}</strong>
         <div>{relayMessage[locale === "ar" ? 0 : locale === "sv" ? 1 : 2]}</div>
+        {result.httpStatus && (
+          <div dir="ltr">HTTP {result.httpStatus}{result.providerCode ? ` · ${result.providerCode}` : ""}</div>
+        )}
       </div>
     );
   }
