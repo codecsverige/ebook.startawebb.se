@@ -1,86 +1,75 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  availableAiBackends, aiErrorCode, callWithAiFallback,
-  mayUseAiBackup,
-} from "../src/lib/ai-routing";
+import { availableAiBackends, aiErrorCode, callWithAiFallback, mayUseAiBackup } from "../src/lib/ai-routing";
 
-test("Ebook Studio uses direct OpenAI only even when Gateway is configured", () => {
-  for (const operation of ["outline", "chapter", "text_edit", "cover", "illustration"]) {
+const signer = { EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON: '{"project_id":"hyrnara"}' };
+
+test("authenticated BokaNära relay is preferred for book work, even with Gateway variables", () => {
+  for (const operation of [
+    "outline", "outline_recovery", "chapter", "chapter_recovery",
+    "text_edit", "cover", "back_cover",
+  ]) {
     assert.deepEqual(availableAiBackends(operation, {
-      AI_GATEWAY_MODEL: "openai/gpt-5.4",
+      ...signer, AI_GATEWAY_MODEL: "openai/gpt-6-luna",
       AI_GATEWAY_IMAGE_MODEL: "openai/gpt-image-1-mini",
-      OPENAI_API_KEY: "test-only",
-    }), ["direct"]);
-    assert.deepEqual(availableAiBackends(operation, {
-      AI_GATEWAY_MODEL: "openai/gpt-5.4",
-      AI_GATEWAY_IMAGE_MODEL: "openai/gpt-image-1-mini",
-    }), []);
+      OPENAI_API_KEY: "different-direct-key",
+    }), ["relay", "direct"]);
+    assert.deepEqual(availableAiBackends(operation, signer), ["relay"]);
   }
-  assert.deepEqual(availableAiBackends("outline", { OPENAI_API_KEY: "test-only" }), ["direct"]);
-  assert.deepEqual(availableAiBackends("outline", {}), []);
 });
-
-
-test("successful Gateway generation never calls or bills the direct API", async () => {
-  const calls: string[] = [];
-  const result = await callWithAiFallback(["gateway", "direct"], async (backend) => {
-    calls.push(backend);
-    return "Arabic outline";
+test("landscape illustrations stay direct-only; Gateway is always disabled", () => {
+  assert.deepEqual(availableAiBackends("illustration", {
+    ...signer, OPENAI_API_KEY: "direct",
+  }), ["direct"]);
+  assert.deepEqual(availableAiBackends("outline", { AI_GATEWAY_MODEL: "gpt-5-mini" }), []);
+  assert.deepEqual(availableAiBackends("chapter", {
+    ...signer, EBOOK_BOKANARA_RELAY_DISABLED: "true", OPENAI_API_KEY: "direct",
+  }), ["direct"]);
+});
+test("successful signed relay does not charge direct fallback", async () => {
+  const seen: string[] = [];
+  const output = await callWithAiFallback(["relay", "direct"], async backend => {
+    seen.push(backend);
+    return "Arabic book";
   });
-  assert.equal(result, "Arabic outline");
-  assert.deepEqual(calls, ["gateway"]);
+  assert.equal(output, "Arabic book");
+  assert.deepEqual(seen, ["relay"]);
 });
-
-test("403 or 404 model access failures switch exactly once to direct OpenAI", async () => {
-  for (const status of [403, 404]) {
-    const calls: string[] = [];
-    const notices: string[] = [];
-    const result = await callWithAiFallback(["gateway", "direct"], async (backend) => {
-      calls.push(backend);
-      if (backend === "gateway") {
-        throw { statusCode: status, message: "Model not available" };
-      }
-      return "Written Arabic chapter";
-    }, (backend, code) => notices.push(backend + ":" + code));
-    assert.equal(result, "Written Arabic chapter");
-    assert.deepEqual(calls, ["gateway", "direct"]);
-    assert.equal(notices.length, 1);
-  }
-});
-
-test("one provider failure and a second provider failure stop without looping", async () => {
+test("transient relay outage tries direct only once", async () => {
   const calls: string[] = [];
-  await assert.rejects(
-    callWithAiFallback(["gateway", "direct"], async (backend) => {
-      calls.push(backend);
-      throw new Error("ai_model_unavailable");
-    }),
-    /ai_model_unavailable/,
-  );
-  assert.deepEqual(calls, ["gateway", "direct"]);
+  const result = await callWithAiFallback(["relay", "direct"], async backend => {
+    calls.push(backend);
+    if (backend === "relay") throw new Error("ai_provider_unavailable");
+    return "chapter";
+  });
+  assert.equal(result, "chapter");
+  assert.deepEqual(calls, ["relay", "direct"]);
 });
-
-test("never retry or spend against account quota, policy, or input errors", async () => {
+test("two rejected providers stop without looping", async () => {
+  const calls: string[] = [];
+  await assert.rejects(callWithAiFallback(["relay", "direct"], async backend => {
+    calls.push(backend);
+    throw new Error("ai_model_unavailable");
+  }), /ai_model_unavailable/);
+  assert.deepEqual(calls, ["relay", "direct"]);
+});
+test("never retry quota, auth, policy, permissions or user limits", async () => {
   for (const code of [
+    "ai_credits_exhausted", "ai_permission_denied", "ai_auth_failed",
     "ai_daily_limit", "ai_book_limit", "ai_image_daily_limit",
     "rate_limit", "content_not_allowed", "invalid_input",
   ]) {
     const calls: string[] = [];
     await assert.rejects(
-      callWithAiFallback(["gateway", "direct"], async (backend) => {
+      callWithAiFallback(["relay", "direct"], async backend => {
         calls.push(backend);
         throw new Error(code);
       }),
       new RegExp(code),
     );
-    assert.deepEqual(calls, ["gateway"]);
+    assert.deepEqual(calls, ["relay"], code);
     assert.equal(mayUseAiBackup(new Error(code)), false);
   }
-});
-
-test("the model refusal shown to the user is classified as recoverable", () => {
   assert.equal(aiErrorCode(new Error("ai_model_unavailable")), "ai_model_unavailable");
   assert.equal(mayUseAiBackup(new Error("ai_model_unavailable")), true);
-  assert.equal(mayUseAiBackup(new Error("ai_credits_exhausted")), true);
 });
