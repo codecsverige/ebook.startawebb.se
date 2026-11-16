@@ -8,7 +8,10 @@ import { DirectOpenAiError, directFormat, directModelFor } from "./direct-openai
  * own server-side OpenAI credential. No OpenAI key crosses between projects.
  * This is NOT Vercel AI Gateway.
  */
-const RELAY_URL = "https://bokanara.se/api/internal/ebook-studio-ai";
+// Official production alias of the *same* BokaNära Vercel project.
+// Avoid domain-level proxies or redirects on bokanara.se for signed POSTs.
+// Identity is still enforced by the existing short-lived RSA proof at BokaNära.
+const RELAY_URL = "https://foretag-riadh-massaoudi-s-projects.vercel.app/api/internal/ebook-studio-ai";
 const AUDIENCE = "bokanara:ebook-studio-openai";
 
 type Settings = Readonly<Record<string, string | undefined>>;
@@ -167,7 +170,13 @@ export async function generateRelayCover(
  * A deliberately invalid payload MUST be rejected after JWT verification,
  * before BokaNära's request budget or OpenAI is called.
  */
-export async function probeSignedRelayAuth(): Promise<"authenticated" | "forbidden" | "unavailable"> {
+export type RelayProbe = {
+  status: "authenticated" | "forbidden" | "unavailable";
+  httpStatus?: number;
+  responseCode?: "invalid_request" | "unauthorized" | "other";
+};
+
+export async function probeSignedRelayDetails(): Promise<RelayProbe> {
   try {
     const { email, key } = serviceAccount();
     const raw = JSON.stringify({ kind: "probe", params: {} });
@@ -186,10 +195,16 @@ export async function probeSignedRelayAuth(): Promise<"authenticated" | "forbidd
       const result = await response.json() as { error?: { code?: unknown } };
       code = result.error?.code;
     } catch { /* Do not expose a provider response. */ }
-    if (response.status === 400 && code === "invalid_request") return "authenticated";
-    if (response.status === 401 || response.status === 403) return "forbidden";
-    return "unavailable";
+    const status = response.status === 400 && code === "invalid_request" ? "authenticated"
+      : response.status === 401 || response.status === 403 ? "forbidden" : "unavailable";
+    const responseCode = code === "invalid_request" ? "invalid_request"
+      : code === "unauthorized" ? "unauthorized" : "other";
+    return { status, httpStatus: response.status, responseCode };
   } catch {
-    return "unavailable";
+    return { status: "unavailable" };
   }
+}
+
+export async function probeSignedRelayAuth(): Promise<RelayProbe["status"]> {
+  return (await probeSignedRelayDetails()).status;
 }
