@@ -40,6 +40,32 @@ export function OwnerAiDiagnostics({ jobId, locale }: { jobId: string; locale: L
     ? "فحص اتصال OpenAI (دون تكلفة توليد)"
     : locale === "sv" ? "OpenAI-kontroll (utan genereringskostnad)"
     : "OpenAI connection check (no generation charge)";
+  const relayStates: Record<string, [string, string, string]> = {
+    bokanara_relay_authenticated: [
+      "اتصال BokaNära الآمن موثّق. لم يُختبر توليد فصل فعلي بعد.",
+      "Säker anslutning till BokaNära verifierad. Ingen faktisk kapitelgenerering har testats.",
+      "Secure BokaNära connection authenticated. Chapter generation has not been tested yet.",
+    ],
+    bokanara_relay_signature_rejected: [
+      "رفض BokaNära توقيع الخادم. لا تُكرر محاولات التوليد حتى يُصحّح الاتصال.",
+      "BokaNära nekade serverns signatur. Generering är inte redo.",
+      "BokaNära rejected the server signature. Generation is not ready.",
+    ],
+    bokanara_relay_unavailable: [
+      "تعذّر فحص الاتصال بخادم BokaNära. التوليد عبره غير مؤكد.",
+      "BokaNära-anslutningen kunde inte kontrolleras. Generering är obekräftad.",
+      "BokaNära connection could not be checked. Generation remains unverified.",
+    ],
+  };
+  const relayMessage = relayStates[result.status];
+  if (relayMessage) {
+    return (
+      <div className="muted" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+        <strong>{text}</strong>
+        <div>{relayMessage[locale === "ar" ? 0 : locale === "sv" ? 1 : 2]}</div>
+      </div>
+    );
+  }
   return (
     <div className="muted" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
       <strong>{text}</strong>
