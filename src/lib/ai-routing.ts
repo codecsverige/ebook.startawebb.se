@@ -4,12 +4,12 @@ export type AiBackend = "relay" | "direct";
 type Configuration = Readonly<Record<string, string | undefined>>;
 const relayOperations = new Set([
   "outline", "outline_recovery", "chapter", "chapter_recovery",
-  "cover", "back_cover",
+  "text_edit", "cover", "back_cover",
 ]);
 
 /** The BokaNära relay was deployed independently and authenticates EbookStudio
  * with the existing HyrNära service-account private key. Vercel AI Gateway
- * stays disabled; text edits and landscape illustrations remain direct-only.
+ * stays disabled; landscape illustrations remain direct-only.
  */
 export function availableAiBackends(
   operation: string,
