@@ -4,7 +4,7 @@ import { createHash, createVerify, generateKeyPairSync } from "node:crypto";
 import { z } from "zod";
 import {
   generateRelayStructured, generateRelayCover, signedRelayProof,
-  relayCredentialsConfigured, probeSignedRelayAuth,
+  relayCredentialsConfigured, probeSignedRelayAuth, probeSignedRelayDetails,
 } from "../src/lib/bokanara-relay";
 import { DirectOpenAiError } from "../src/lib/direct-openai";
 
@@ -61,7 +61,7 @@ test("signed BokaNära proof has intended audience, 60-second expiry, exact body
 
 test("relay uses a private signed server request and validates generated chapters", async () => {
   await withRelay(async (url, options) => {
-    assert.equal(url, "https://bokanara.se/api/internal/ebook-studio-ai");
+    assert.equal(url, "https://foretag-riadh-massaoudi-s-projects.vercel.app/api/internal/ebook-studio-ai");
     assert.equal(options.method, "POST");
     const body = JSON.parse(String(options.body));
     assert.equal(body.kind, "text");
@@ -154,3 +154,20 @@ test("nonbillable relay probe proves JWT acceptance before budget or OpenAI call
     assert.equal(await probeSignedRelayAuth(), "forbidden");
   });
 });
+
+test("relay diagnostic reports safe upstream HTTP status without tokens or user text", async () => {
+  await withRelay(async (_url, _options) =>
+    new Response(JSON.stringify({ error: { code: "invalid_request" } }), { status: 400 }),
+  async () => {
+    assert.deepEqual(await probeSignedRelayDetails(), {
+      status: "authenticated", httpStatus: 400, responseCode: "invalid_request",
+    });
+  });
+  await withRelay(async () => new Response("Not found", { status: 404 }),
+  async () => {
+    assert.deepEqual(await probeSignedRelayDetails(), {
+      status: "unavailable", httpStatus: 404, responseCode: "other",
+    });
+  });
+});
+
