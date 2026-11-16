@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sessionUser } from "@/lib/firebase-session";
 import { directModelCandidates } from "@/lib/direct-openai";
 import { availableAiBackends } from "@/lib/ai-routing";
+import { probeSignedRelayAuth } from "@/lib/bokanara-relay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,29 +14,17 @@ export async function GET() {
   if (!user || !owner || user.email.trim().toLowerCase() !== owner) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
-  // The book now prefers the already deployed, authenticated BokaNära relay.
-  // Its public GET endpoint verifies service configuration without sending a
-  // book, any credentials, or an API request to OpenAI.
+  // Verify the exact same service-account signature BokaNära requires,
+  // with an invalid payload that is rejected BEFORE any paid OpenAI request.
   if (availableAiBackends("chapter").includes("relay")) {
-    try {
-      const probe = await fetch("https://bokanara.se/api/internal/ebook-studio-ai", {
-        method: "GET", cache: "no-store", signal: AbortSignal.timeout(8_000),
-      });
-      const data = await probe.json() as { status?: unknown; service?: unknown };
-      const configured = probe.ok && data.service === "ebook-ai-relay"
-        && data.status === "configured";
-      return NextResponse.json({
-        status: configured ? "bokanara_relay_public_configured" : "bokanara_relay_public_unavailable",
-        signedGenerationNotTested: true, gatewayDisabled: true,
-        billingTestPerformed: false,
-      }, { headers: { "Cache-Control": "no-store" } });
-    } catch {
-      return NextResponse.json({
-        status: "bokanara_relay_public_unreachable",
-        signedGenerationNotTested: true, gatewayDisabled: true,
-        billingTestPerformed: false,
-      }, { headers: { "Cache-Control": "no-store" } });
-    }
+    const status = await probeSignedRelayAuth();
+    return NextResponse.json({
+      status: status === "authenticated" ? "bokanara_relay_authenticated"
+        : status === "forbidden" ? "bokanara_relay_signature_rejected"
+        : "bokanara_relay_unavailable",
+      signedGenerationNotTested: true, gatewayDisabled: true,
+      billingTestPerformed: false,
+    }, { headers: { "Cache-Control": "no-store" } });
   }
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return NextResponse.json({ status: "key_missing" }, {
