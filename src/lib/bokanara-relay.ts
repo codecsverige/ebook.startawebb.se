@@ -162,3 +162,34 @@ export async function generateRelayCover(
     outputTokens: result.usage?.output_tokens ?? 0,
   }};
 }
+
+/** Nonbillable authenticated handshake for the owner-only diagnostics screen.
+ * A deliberately invalid payload MUST be rejected after JWT verification,
+ * before BokaNära's request budget or OpenAI is called.
+ */
+export async function probeSignedRelayAuth(): Promise<"authenticated" | "forbidden" | "unavailable"> {
+  try {
+    const { email, key } = serviceAccount();
+    const raw = JSON.stringify({ kind: "probe", params: {} });
+    const response = await fetch(RELAY_URL, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + signedRelayProof(raw, email, key),
+        "Content-Type": "application/json",
+      },
+      body: raw, cache: "no-store", signal: AbortSignal.timeout(15_000),
+    });
+    // BokaNära checks JWT signature before payload shape. HTTP 400 +
+    // invalid_request proves authentication was accepted without inference.
+    let code: unknown;
+    try {
+      const result = await response.json() as { error?: { code?: unknown } };
+      code = result.error?.code;
+    } catch { /* Do not expose a provider response. */ }
+    if (response.status === 400 && code === "invalid_request") return "authenticated";
+    if (response.status === 401 || response.status === 403) return "forbidden";
+    return "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
