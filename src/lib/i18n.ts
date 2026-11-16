@@ -636,9 +636,19 @@ export function errorMessage(code: string, l: Locale): string {
       "OpenAI nekade API-nyckeln (HTTP 401). Kontrollera nyckeln i OpenAI-projektet.",
     ],
     ai_model_unavailable: [
-      "The OpenAI project cannot access the requested model (403/404). The API key is not necessarily invalid.",
-      "رفض OpenAI الوصول إلى النموذج (403/404). هذا لا يعني بالضرورة أن المفتاح أو الرصيد غير صالح.",
-      "OpenAI-projektet har inte tillgång till modellen (403/404). API-nyckeln kan vara giltig.",
+      "OpenAI did not grant this project access to the selected text model. Check model permissions in the API project.",
+      "نموذج الكتابة غير متاح لمشروع OpenAI المرتبط بمفتاح API. تحقق من صلاحية النموذج داخل المشروع.",
+      "OpenAI-projektet har inte tillgång till den valda textmodellen. Kontrollera modellbehörigheten.",
+    ],
+    ai_permission_denied: [
+      "OpenAI denied this API request (HTTP 403). Check project permissions and organization verification; the API key may still be valid.",
+      "رفض OpenAI صلاحيات الطلب (403). تحقق من صلاحيات مشروع API والتحقق من المؤسسة؛ قد يكون المفتاح صالحًا.",
+      "OpenAI nekade API-behörigheten (HTTP 403). Kontrollera projektbehörighet och organisationsverifiering.",
+    ],
+    ai_request_invalid: [
+      "OpenAI rejected the request format or parameters. The service needs a technical fix; your saved book remains intact.",
+      "رفض OpenAI صيغة الطلب أو إعداداته. يلزم إصلاح تقني، وكتابك المحفوظ لم يتأثر.",
+      "OpenAI nekade begärans format eller parametrar. En teknisk korrigering krävs. Boken är sparad.",
     ],
     ai_provider_busy: [
       "The AI provider is temporarily busy or timed out. Retry this chapter.",
