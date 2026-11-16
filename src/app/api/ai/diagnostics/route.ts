@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sessionUser } from "@/lib/firebase-session";
 import { directModelCandidates } from "@/lib/direct-openai";
 import { availableAiBackends } from "@/lib/ai-routing";
-import { probeSignedRelayAuth } from "@/lib/bokanara-relay";
+import { probeSignedRelayDetails } from "@/lib/bokanara-relay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,11 +17,15 @@ export async function GET() {
   // Verify the exact same service-account signature BokaNära requires,
   // with an invalid payload that is rejected BEFORE any paid OpenAI request.
   if (availableAiBackends("chapter").includes("relay")) {
-    const status = await probeSignedRelayAuth();
+    const probe = await probeSignedRelayDetails();
     return NextResponse.json({
-      status: status === "authenticated" ? "bokanara_relay_authenticated"
-        : status === "forbidden" ? "bokanara_relay_signature_rejected"
+      status: probe.status === "authenticated" ? "bokanara_relay_authenticated"
+        : probe.status === "forbidden" ? "bokanara_relay_signature_rejected"
         : "bokanara_relay_unavailable",
+      // Only a numeric HTTP status and fixed, whitelisted response code.
+      // Never echo the remote response body, provider credentials or JWT.
+      httpStatus: probe.httpStatus,
+      providerCode: probe.responseCode,
       signedGenerationNotTested: true, gatewayDisabled: true,
       billingTestPerformed: false,
     }, { headers: { "Cache-Control": "no-store" } });
