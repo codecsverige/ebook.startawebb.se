@@ -4,7 +4,7 @@ import { createHash, createVerify, generateKeyPairSync } from "node:crypto";
 import { z } from "zod";
 import {
   generateRelayStructured, generateRelayCover, signedRelayProof,
-  relayCredentialsConfigured,
+  relayCredentialsConfigured, probeSignedRelayAuth,
 } from "../src/lib/bokanara-relay";
 import { DirectOpenAiError } from "../src/lib/direct-openai";
 
@@ -135,4 +135,22 @@ test("Relay availability requires a private signer and is explicitly disableable
     EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON: "{test}",
     EBOOK_BOKANARA_RELAY_DISABLED: "true",
   }), false);
+});
+
+test("nonbillable relay probe proves JWT acceptance before budget or OpenAI calls", async () => {
+  await withRelay(async (_url, options) => {
+    const body = JSON.parse(String(options.body));
+    assert.equal(body.kind, "probe");
+    assert.deepEqual(body.params, {});
+    const jwt = String((options.headers as Record<string, string>).Authorization).slice(7);
+    assert.equal(jwt.split(".").length, 3);
+    return new Response(JSON.stringify({ error: { code: "invalid_request" } }), { status: 400 });
+  }, async () => {
+    assert.equal(await probeSignedRelayAuth(), "authenticated");
+  });
+  await withRelay(async () =>
+    new Response(JSON.stringify({ error: { code: "unauthorized" } }), { status: 403 }),
+  async () => {
+    assert.equal(await probeSignedRelayAuth(), "forbidden");
+  });
 });
