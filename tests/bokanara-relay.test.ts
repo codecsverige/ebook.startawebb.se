@@ -35,7 +35,7 @@ function withRelay<T>(handler: (url: string, request: RequestInit) => Promise<Re
       ["EBOOK_FIREBASE_SERVICE_ACCOUNT_JSON", originalJson],
       ["FIREBASE_SERVICE_ACCOUNT_HYRNARA", originalHyr],
       ["OPENAI_TEXT_MODEL", originalModel],
-    ]) {
+    ] as Array<[string, string | undefined]>) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
