@@ -109,6 +109,15 @@ test("separates invalid keys, restricted models and exhausted API quota", () => 
   assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "model_not_found" } }), "ai_model_unavailable");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "insufficient_quota" } }), "ai_credits_exhausted");
   assert.equal(classifyOpenAiHttpFailure(429, { error: { code: "rate_limit_exceeded" } }), "ai_provider_busy");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "permission_denied" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { code: "unsupported_country_region_territory" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(403, { error: { type: "forbidden" } }), "ai_permission_denied");
+  assert.equal(classifyOpenAiHttpFailure(400, { error: { code: "unsupported_parameter" } }), "ai_request_invalid");
+  assert.equal(classifyOpenAiHttpFailure(404, { error: { code: "unknown_route" } }), "ai_provider_unavailable");
+  for (const code of ["credit_balance_exhausted", "organization_usage_limit_exceeded", "project_spend_limit_exceeded"]) {
+    assert.equal(classifyOpenAiHttpFailure(429, { error: { code } }), "ai_credits_exhausted");
+    assert.equal(classifyOpenAiHttpFailure(403, { error: { code } }), "ai_credits_exhausted");
+  }
 });
 
 test("direct OpenAI recovers 403/404 model access with previously configured 4.1-mini", async () => {
@@ -161,5 +170,68 @@ test("direct OpenAI never tries a different model for invalid credentials", asyn
     globalThis.fetch = savedFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+
+test("generic OpenAI 403, bad request and billing errors never trigger model-hopping", async () => {
+  const savedFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "unit-test-only";
+  try {
+    for (const [status, code, expected] of [
+      [403, "permission_denied", "ai_permission_denied"],
+      [403, "unsupported_country_region_territory", "ai_permission_denied"],
+      [400, "unsupported_parameter", "ai_request_invalid"],
+      [429, "insufficient_quota", "ai_credits_exhausted"],
+      [401, "invalid_api_key", "ai_auth_failed"],
+    ] as const) {
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        return new Response(JSON.stringify({ error: { code } }), { status });
+      };
+      await assert.rejects(
+        generateDirectStructured("chapter", z.object({ content: z.string() }),
+          "Editor", "Test a short chapter", 500),
+        (error: unknown) => error instanceof DirectOpenAiError
+          && error.code === expected && error.statusCode === status,
+      );
+      assert.equal(calls, 1, code + " must fail without a second paid request");
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("direct OpenAI image request never uses Vercel Gateway even when legacy variables exist", async () => {
+  const savedFetch = globalThis.fetch;
+  const old = {key:process.env.OPENAI_API_KEY, image:process.env.OPENAI_IMAGE_MODEL,
+    gateway:process.env.AI_GATEWAY_IMAGE_MODEL};
+  process.env.OPENAI_API_KEY = "test-only";
+  delete process.env.OPENAI_IMAGE_MODEL;
+  process.env.AI_GATEWAY_IMAGE_MODEL = "openai/gpt-image-2";
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, "https://api.openai.com/v1/images/generations");
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, "gpt-image-1-mini");
+      assert.equal(body.size, "1536x1024");
+      return new Response(JSON.stringify({
+        data: [{ b64_json: Buffer.from("image bytes").toString("base64") }],
+      }), { status: 200 });
+    };
+    const result = await generateDirectCover("Interior illustration", undefined, "1536x1024");
+    assert.equal(result.image.mediaType, "image/png");
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (old.key === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = old.key;
+    if (old.image === undefined) delete process.env.OPENAI_IMAGE_MODEL;
+    else process.env.OPENAI_IMAGE_MODEL = old.image;
+    if (old.gateway === undefined) delete process.env.AI_GATEWAY_IMAGE_MODEL;
+    else process.env.AI_GATEWAY_IMAGE_MODEL = old.gateway;
   }
 });
