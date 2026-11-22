@@ -18,11 +18,24 @@ import { copy, errorMessage, tr } from "@/lib/i18n";
 import {
   briefSchema,
   isArabicBrief,
+  suggestedSectionUnit,
   type BookshelfBook,
   type Locale,
   type Brief,
 } from "@/lib/domain";
 import { request, codeOf } from "@/lib/client";
+
+function inferIdeaKind(idea: string): Brief["kind"] {
+  const text = idea.toLowerCase();
+  const story = /قصة|قصّة|حكاية|story|tale|saga|berättelse/i.test(text);
+  const young = /طفل|أطفال|الصغار|children|kids|barn/i.test(text);
+  if (story && young) return "children_story";
+  if (/رواية|\bnovel\b|\broman\b/i.test(text)) return "novel";
+  if (/بحث علمي|دراسة بحثية|\bresearch\b|\bforskning\b/i.test(text)) return "research";
+  if (/تقرير|\breport\b|\brapport\b/i.test(text)) return "report";
+  if (story) return "short_story";
+  return "guide";
+}
 
 export function Dashboard({
   locale,
@@ -48,6 +61,8 @@ export function Dashboard({
   );
   const [pending, setPending] = useState(false);
   const [languageTouched, setLanguageTouched] = useState(false);
+  const [kindTouched, setKindTouched] = useState(false);
+  const [unitTouched, setUnitTouched] = useState(false);
   const [brief, setBrief] = useState<Brief>({
     idea: "",
     audience: "",
@@ -56,6 +71,7 @@ export function Dashboard({
     tone: "clear",
     author: "",
     chapter_count: 6,
+    section_unit: "section",
   });
   const draftStorageKey = `ebook-studio:new-book:${locale}`;
   useEffect(() => {
@@ -71,7 +87,8 @@ export function Dashboard({
         kind: (["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"] as string[]).includes(saved.kind || "") ? saved.kind! : current.kind,
         language: (["ar", "en", "sv"] as string[]).includes(saved.language || "") ? saved.language! : current.language,
         tone: (["clear", "friendly", "professional", "literary", "dramatic", "playful"] as string[]).includes(saved.tone || "") ? saved.tone! : current.tone,
-        chapter_count: typeof saved.chapter_count === "number" && saved.chapter_count >= 3 && saved.chapter_count <= 10 ? Math.floor(saved.chapter_count) : current.chapter_count,
+        chapter_count: typeof saved.chapter_count === "number" && saved.chapter_count >= 1 && saved.chapter_count <= 10 ? Math.floor(saved.chapter_count) : current.chapter_count,
+        section_unit: (["chapter", "page", "section"] as string[]).includes(saved.section_unit || "") ? saved.section_unit : current.section_unit,
       }));
     } catch {
       // Browsers that disable session storage still support the cloud editor.
@@ -108,7 +125,10 @@ export function Dashboard({
   }, [checkoutReturned]); // Account is fixed by the server session for this mounted workspace.
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = briefSchema.safeParse(brief);
+    const parsed = briefSchema.safeParse({
+      ...brief,
+      audience: brief.audience.trim() || tr(locale, "General readers", "القراء المهتمون بالموضوع", "Allmänna läsare"),
+    });
     if (!parsed.success) {
       setError("invalid_input");
       return;
@@ -153,12 +173,17 @@ export function Dashboard({
   }
   function field<K extends keyof Brief>(key: K, value: Brief[K]) {
     if (key === "language") setLanguageTouched(true);
+    if (key === "kind") setKindTouched(true);
+    if (key === "section_unit") setUnitTouched(true);
+    const guessed = key === "idea" && !kindTouched ? inferIdeaKind(String(value)) : null;
     setBrief((b) => ({
       ...b,
       [key]: value,
       ...(key === "idea" && !languageTouched
         ? { language: isArabicBrief(String(value)) ? "ar" : locale }
         : {}),
+      ...(guessed ? { kind: guessed, ...(!unitTouched ? {section_unit: suggestedSectionUnit(guessed)} : {}) } : {}),
+      ...(key === "kind" && !unitTouched ? { section_unit: suggestedSectionUnit(value as Brief["kind"]) } : {}),
     }));
   }
   return (
@@ -331,88 +356,61 @@ export function Dashboard({
                 <small className="field-count">{brief.idea.length}/2000</small>
               </label>
               <label>
-                {t.audience}
-                <input
-                  minLength={3}
-                  maxLength={300}
-                  required
-                  placeholder={t.audiencePlaceholder}
-                  value={brief.audience}
-                  onChange={(e) => field("audience", e.target.value)}
-                  disabled={pending}
-                />
+                {t.bookLanguage}
+                <select value={brief.language} onChange={(e) => field("language", e.target.value as Locale)}>
+                  <option value="en">English</option><option value="ar">العربية</option><option value="sv">Svenska</option>
+                </select>
+                {isArabicBrief(brief.idea) && brief.language !== "ar" && <span className="notice" role="alert">
+                  {tr(locale, "Your idea is Arabic. Choose Arabic for the final text.", "فكرتك بالعربية. اختر العربية كي يُكتب المحتوى بالعربية.", "Din idé är på arabiska. Välj arabiska för texten.")}
+                </span>}
               </label>
               <div className="form-grid">
                 <label>
-                  {t.format}
-                  <select
-                    value={brief.kind}
-                    onChange={(e) =>
-                      field("kind", e.target.value as Brief["kind"])
-                    }
-                  >
-                    {["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"].map((k) => (
-                      <option key={k} value={k}>
-                        {t[k as Brief["kind"]]}
-                      </option>
-                    ))}
+                  {tr(locale, "Organize content by", "طريقة تقسيم المحتوى", "Dela upp innehållet i")}
+                  <select value={brief.section_unit || "chapter"} onChange={e=>field("section_unit", e.target.value as Brief["section_unit"])}>
+                    <option value="section">{tr(locale, "Sections", "أقسام", "Avsnitt")}</option>
+                    <option value="chapter">{tr(locale, "Chapters", "فصول", "Kapitel")}</option>
+                    <option value="page">{tr(locale, "Content pages", "صفحات المحتوى", "Innehållssidor")}</option>
                   </select>
                 </label>
                 <label>
-                  {t.bookLanguage}
-                  <select
-                    value={brief.language}
-                    onChange={(e) =>
-                      field("language", e.target.value as Locale)
-                    }
-                  >
-                    <option value="en">English</option>
-                    <option value="ar">العربية</option>
-                    <option value="sv">Svenska</option>
-                  </select>
-                  {isArabicBrief(brief.idea) && brief.language !== "ar" && (
-                    <span className="notice" role="alert">
-                      {tr(locale, "Your brief is Arabic. Choose Arabic for the book or write the brief in the selected language.", "فكرتك بالعربية. اختر العربية كلغة للكتاب حتى لا يُنشأ بالإنجليزية.", "Din bokidé är på arabiska. Välj arabiska som bokens språk.")}
-                    </span>
-                  )}
-                </label>
-                <label>
-                  {t.tone}
-                  <select
-                    value={brief.tone}
-                    onChange={(e) =>
-                      field("tone", e.target.value as Brief["tone"])
-                    }
-                  >
-                    {["clear", "friendly", "professional", "literary", "dramatic", "playful"].map((k) => (
-                      <option key={k} value={k}>
-                        {t[k as Brief["tone"]]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {t.chapters}
-                  <select
-                    value={brief.chapter_count}
-                    onChange={(e) =>
-                      field("chapter_count", Number(e.target.value))
-                    }
-                  >
-                    {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                      <option key={n}>{n}</option>
-                    ))}
+                  {brief.section_unit === "page"
+                    ? tr(locale, "Content pages (covers separate)", "عدد صفحات المحتوى (الغلاف منفصل)", "Innehållssidor (omslag separat)")
+                    : tr(locale, "Number of parts", "عدد الأجزاء", "Antal delar")}
+                  <select value={brief.chapter_count} onChange={e=>field("chapter_count", Number(e.target.value))}>
+                    {Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
                   </select>
                 </label>
               </div>
-              <label>
-                {t.author}
-                <input
-                  maxLength={100}
-                  value={brief.author}
-                  onChange={(e) => field("author", e.target.value)}
-                />
-              </label>
+              <details className="studio-optional-settings">
+                <summary>{tr(locale, "More options (optional)", "تخصيص إضافي (اختياري)", "Fler val (frivilligt)")}</summary>
+                <div className="stack">
+                  <label>
+                    {t.audience}
+                    <input maxLength={300} placeholder={t.audiencePlaceholder}
+                      value={brief.audience} onChange={e=>field("audience",e.target.value)} disabled={pending}/>
+                  </label>
+                  <label>
+                    {t.format}
+                    <select value={brief.kind} onChange={e=>field("kind",e.target.value as Brief["kind"])}>
+                      {(["guide","ebook","workbook","report","research","novel","short_story","children_story"] as const).map(k=>
+                        <option key={k} value={k}>{t[k]}</option>
+                      )}
+                    </select>
+                  </label>
+                  <label>
+                    {t.tone}
+                    <select value={brief.tone} onChange={e=>field("tone",e.target.value as Brief["tone"])}>
+                      {(["clear","friendly","professional","literary","dramatic","playful"] as const).map(k=>
+                        <option key={k} value={k}>{t[k]}</option>
+                      )}
+                    </select>
+                  </label>
+                  <label>{t.author}
+                    <input maxLength={100} value={brief.author} onChange={e=>field("author",e.target.value)}/>
+                  </label>
+                </div>
+              </details>
               {error && (
                 <p className="error-message" role="alert">
                   {errorMessage(error, locale)}

@@ -123,14 +123,18 @@ export async function createOutline(jobId: string) {
     language: book.language,
     tone: book.tone,
     chapters: book.chapter_count,
+    unit: book.section_unit || "chapter",
   };
   console.info("outline_started", { jobId });
   const fiction = ["novel", "short_story", "children_story"].includes(book.kind);
-  const outlineInstruction = fiction
+  const unit = book.section_unit || "chapter";
+  const outlineInstruction = unit === "page"
+    ? `Plan exactly ${book.chapter_count} CONTENT PAGES (cover is separate), each a distinct short scene, idea or activity suitable for the actual intent and audience. Keep each page compact and visual. Don't add chapter labels, a table of contents or irrelevant pages.`
+    : fiction
     ? `Plan an original ${book.chapter_count}-chapter ${book.kind} with memorable characters, clear setting, inciting incident, escalating tension and satisfying resolution. Describe specific scenes and their consequences, not advice or lecture headings. Keep character names, timeline and locations consistent. For children's stories be age-appropriate and warm.`
     : `Develop a coherent practical nonfiction outline for ${book.chapter_count} chapters, with concrete value for the reader. Workbook chapters should include exercises.`;
   const language = languageNames[book.language];
-  const outlinePrompt = `${outlineInstruction} Make exactly ${book.chapter_count} chapters. CRITICAL: Write the title, subtitle, every chapter title and summary entirely in ${language}. Do not translate the user's language preference from the interface; the selected book language is ${language}. Brief: ${JSON.stringify(brief)}`;
+  const outlinePrompt = `${outlineInstruction} Make exactly ${book.chapter_count} ${unit === "page" ? "content pages" : unit === "section" ? "sections" : "chapters"}. Follow the user\'s described intent even for a generic book type. CRITICAL: Write the title, subtitle, every chapter title and summary entirely in ${language}. Do not translate the user's language preference from the interface; the selected book language is ${language}. Brief: ${JSON.stringify(brief)}`;
   const safeOutlinePrompt = `Evaluate the user's actual intent, not keywords. Fiction, history, health awareness, news and educational discussion are allowed even if they mention sensitive subjects. If and only if the user explicitly requests actionable instructions facilitating serious violent wrongdoing, sexual exploitation, hateful violence, fraud, harmful malware, or self-harm, set allowed=false and leave all text fields empty. Otherwise set allowed=true and produce an original, safe outline. ${outlinePrompt}`;
   let result = await structured(jobId, "outline", outlineDecisionSchema, safeOutlinePrompt, 4500);
   const validOutline = (value: typeof result) =>
@@ -147,7 +151,7 @@ export async function createOutline(jobId: string) {
   if (!validOutline(result)) {
     result = await structured(
       jobId, "outline_recovery", outlineDecisionSchema,
-      `Return allowed=true ONLY for safe requests. Rewrite an original ${book.chapter_count}-chapter outline strictly in ${language}. Every chapter title and summary must be in ${language}. For unsafe requests return allowed=false and empty fields. ${safeOutlinePrompt}`,
+      `Return allowed=true ONLY for safe requests. Rewrite an original ${book.chapter_count}-${unit} outline strictly in ${language}. Every chapter title and summary must be in ${language}. For unsafe requests return allowed=false and empty fields. ${safeOutlinePrompt}`,
       4500,
     );
   }

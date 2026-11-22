@@ -179,9 +179,9 @@ export function makeEpub(
   content.push({ name: "OEBPS/nav.xhtml", body: nav });
   book.outline.forEach((chapter, i) => {
     content.push(xhtml("chapter-" + (i + 1) + ".xhtml",
-      '<section><p class="chapter-num">' + (i + 1) + '</p><h1>' +
-      escapeHtml(chapter.title) + '</h1>' +
-      markdownHtml(book.chapters[chapter.id]?.content || "", imageMarkup) + '</section>'));
+      '<section>' + (book.show_section_titles !== false
+        ? '<p class="chapter-num">' + (i + 1) + '</p><h1>' + escapeHtml(chapter.title) + '</h1>'
+        : '') + markdownHtml(book.chapters[chapter.id]?.content || "", imageMarkup) + '</section>'));
   });
   const manifest = [
     '<item id="style" href="style.css" media-type="text/css"/>',

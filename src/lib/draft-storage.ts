@@ -16,6 +16,10 @@ export function editableBook(book: BookWithCover) {
   return {
     revision, title, subtitle, author, cover_style, use_artwork, include_cover: include_cover !== false, outline, chapters,
     idea, audience, kind, tone, ...(outline.length ? {} : {chapter_count}),
+    section_unit: book.section_unit || "chapter",
+    include_toc: book.include_toc !== false,
+    show_section_titles: book.show_section_titles !== false,
+    show_page_numbers: book.show_page_numbers !== false,
     cover_direction: book.cover_direction || "", back_blurb: book.back_blurb || "",
     author_bio: book.author_bio || "", dedication: book.dedication || "",
     preface: book.preface || "", acknowledgments: book.acknowledgments || "",

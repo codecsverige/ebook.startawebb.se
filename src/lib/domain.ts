@@ -26,6 +26,13 @@ export function matchesBookLanguage(value: string, language: Locale): boolean {
 
 export const kinds = ["guide", "ebook", "workbook", "report", "research", "novel", "short_story", "children_story"] as const;
 export const tones = ["clear", "friendly", "professional", "literary", "dramatic", "playful"] as const;
+export const sectionUnits = ["chapter", "page", "section"] as const;
+export type SectionUnit = (typeof sectionUnits)[number];
+export function suggestedSectionUnit(kind: (typeof kinds)[number]): SectionUnit {
+  if (kind === "children_story") return "page";
+  if (["guide", "ebook", "report", "research", "workbook"].includes(kind)) return "section";
+  return "chapter";
+}
 export const coverStyles = [
   "cobalt", "sage", "clay", "midnight", "plum", "ivory",
   "forest", "ember", "lagoon", "rose", "noir", "sky",
@@ -55,7 +62,8 @@ export const briefSchema = z.object({
   language: z.enum(locales),
   tone: z.enum(tones),
   author: z.string().trim().max(100).default(""),
-  chapter_count: z.number().int().min(3).max(10),
+  chapter_count: z.number().int().min(1).max(10),
+  section_unit: z.enum(sectionUnits).optional(),
 });
 export type Brief = z.infer<typeof briefSchema>;
 export const outlineItemSchema = z.object({
@@ -68,12 +76,12 @@ export const outlineSchema = z.object({
   subtitle: z.string().trim().max(240),
   chapters: z
     .array(z.object({ title: cleanText(1, 160), summary: cleanText(1, 600) }))
-    .min(3)
+    .min(1)
     .max(10),
 });
 export type OutlineItem = z.infer<typeof outlineItemSchema>;
 export const chapterSchema = z.object({
-  content: cleanText(150, 30000),
+  content: cleanText(30, 30000),
   summary: cleanText(20, 1000),
 });
 export type Chapter = z.infer<typeof chapterSchema>;
@@ -88,6 +96,10 @@ export const editBookSchema = z
     kind: z.enum(kinds).optional(),
     tone: z.enum(tones).optional(),
     chapter_count: z.number().int().min(1).max(30).optional(),
+    section_unit: z.enum(sectionUnits).optional(),
+    include_toc: z.boolean().optional(),
+    show_section_titles: z.boolean().optional(),
+    show_page_numbers: z.boolean().optional(),
     cover_style: z.enum(coverStyles),
     use_artwork: z.boolean(),
     include_cover: z.boolean().default(true),
@@ -114,7 +126,7 @@ export const editBookSchema = z
     if (
       (v.outline.length>0 && !v.title.trim()) ||
       (v.outline.length===0 && v.chapter_count !== undefined &&
-        (v.chapter_count<3 || v.chapter_count>10)) ||
+        (v.chapter_count<1 || v.chapter_count>10)) ||
       ids.size !== v.outline.length ||
       Object.keys(v.chapters).some((id) => !ids.has(id))
     )
@@ -192,6 +204,10 @@ export type Book = Brief & {
   use_artwork: boolean;
   /** Existing books default to a cover; reports can omit it at export. */
   include_cover?: boolean;
+  /** Legacy books retain their chapter-based structure. */
+  include_toc?: boolean;
+  show_section_titles?: boolean;
+  show_page_numbers?: boolean;
   unlocked: boolean;
   revision: number;
   created_at: string;

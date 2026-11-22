@@ -181,6 +181,7 @@ export class FirestoreStudio {
       if (profile.book_count >= 30) fail("rate_limit");
       const book: StoredBook = {
         ...brief,
+        section_unit: brief.section_unit || (brief.kind === "children_story" ? "page" : ["guide","ebook","report","research","workbook"].includes(brief.kind) ? "section" : "chapter"),
         id,
         user_id: uid,
         title: "",
@@ -204,6 +205,9 @@ export class FirestoreStudio {
         text_edit_candidate: null,
         use_artwork: false,
         include_cover: !["report","research"].includes(brief.kind),
+        include_toc: !["children_story", "short_story"].includes(brief.kind),
+        show_section_titles: !["children_story", "short_story"].includes(brief.kind),
+        show_page_numbers: brief.kind !== "children_story",
         unlocked: false,
         revision: 0,
         created_at: now,
@@ -296,11 +300,11 @@ export class FirestoreStudio {
       if (book.state.active_job) fail("busy");
       if (book.revision !== revision) fail("conflict");
       if (book.outline.length) fail("invalid_input");
-      const labels = {
-        ar: ["الفصل", "اكتب ملخص هذا الفصل، ثم عدّله بحسب قصتك"],
-        en: ["Chapter", "Write and edit the plan for this chapter"],
-        sv: ["Kapitel", "Skriv och redigera planen för detta kapitel"],
-      }[book.language];
+      const labels = ({
+        chapter: {ar: ["الفصل", "ماذا يحتوي هذا الفصل؟"], en: ["Chapter", "What happens in this chapter?"], sv: ["Kapitel", "Vad innehåller kapitlet?"]},
+        page: {ar: ["الصفحة", "ما محتوى هذه الصفحة؟"], en: ["Page", "What belongs on this page?"], sv: ["Sida", "Vad ska finnas på sidan?"]},
+        section: {ar: ["القسم", "ما موضوع هذا القسم؟"], en: ["Section", "What does this section cover?"], sv: ["Avsnitt", "Vad handlar avsnittet om?"]},
+      } as const)[book.section_unit || "chapter"][book.language];
       const outline = Array.from({ length: book.chapter_count }, (_, i) => ({
         id: randomUUID(),
         title: `${labels[0]} ${i + 1}`,
@@ -503,6 +507,10 @@ export class FirestoreStudio {
         text_edit_candidate: null,
         use_artwork: snapshot.use_artwork,
         include_cover: snapshot.include_cover !== false,
+        include_toc: snapshot.include_toc !== false,
+        show_section_titles: snapshot.show_section_titles !== false,
+        show_page_numbers: snapshot.show_page_numbers !== false,
+        section_unit: snapshot.section_unit || "chapter",
         revision: book.revision + 1,
         updated_at: new Date().toISOString(),
         state: { ...book.state, latest_job: null, rewrites: {} },

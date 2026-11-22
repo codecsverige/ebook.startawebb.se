@@ -16,6 +16,7 @@ export type ChapterBook = Pick<
   | "language"
   | "outline"
   | "chapters"
+  | "section_unit"
   | "story_notes"
 >;
 type WriteChapter = (
@@ -36,10 +37,13 @@ export function chapterGenerationPrompt(
 ): string {
   const index = book.outline.findIndex((chapter) => chapter.id === chapterId);
   if (index < 0) throw new Error("invalid_input");
+  const pageMode = book.section_unit === "page";
   const fiction = ["novel", "short_story", "children_story"].includes(
     book.kind,
   );
-  const writing = fiction
+  const writing = pageMode
+    ? "Write ONE concise finished content page, not an entire chapter. Aim for 35–95 words, use short clear paragraphs and leave room for a picture where appropriate. For young children use simple age-appropriate language, a coherent sequence and no headings. Do not include a cover or title page."
+    : fiction
     ? "Write a vivid, original 650–1000 word narrative chapter. Use scenes, natural dialogue, character actions and sensory details. Preserve character names, viewpoint, chronology and unresolved threads. No Markdown headings or bullet points within the story. For children use age-appropriate language."
     : ["report","research"].includes(book.kind)
       ? "Write a structured, original 700–1100 word report or research section with specific reasoning, evidence-aware claims and logical subheadings. NEVER invent citations, sources, links, quotations, statistics or study results. If sources are not supplied, identify claims requiring verification and clearly label them as unverified. Write conclusions carefully, without fabricated bibliography."
@@ -83,7 +87,7 @@ export function chapterGenerationPrompt(
   };
   return [
     writing,
-    "Write only the current chapter. Do not repeat its title or restart the book's introduction.",
+    pageMode ? "Write only the current content page. Do not repeat its title or restart the story." : "Write only the current chapter. Do not repeat its title or restart the book's introduction.",
     "Use the preceding chapter manuscripts and endings for continuity, without copying or recapping them. If older generated summaries conflict with edited chapter text, trust the actual manuscript. Do not bring future outline events forward.",
     "End with a complete sentence at a natural chapter stopping point, never an unfinished paragraph or a promise to continue later.",
     "Return content (the full chapter) and summary (a factual 30–90 word continuity summary).",
@@ -100,7 +104,7 @@ export async function generateCompleteChapter(
 ): Promise<Chapter> {
   const prompt = chapterGenerationPrompt(book, chapterId);
   function validate(chapter: Chapter): Chapter {
-    if (!usableGeneratedChapter(chapter.content))
+    if (book.section_unit === "page" ? chapter.content.trim().split(/\s+/u).filter(Boolean).length < 15 : !usableGeneratedChapter(chapter.content))
       throw new Error("ai_generation_incomplete");
     if (
       !matchesBookLanguage(
@@ -112,7 +116,7 @@ export async function generateCompleteChapter(
     return chapter;
   }
   try {
-    return validate(await write("chapter", prompt, 6500));
+    return validate(await write("chapter", prompt, book.section_unit === "page" ? 2300 : 6500));
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";
     // Authentication, budget, network and policy errors must not trigger another paid request.
@@ -125,7 +129,7 @@ export async function generateCompleteChapter(
           reason +
           ". Return a complete replacement chapter using the original requirements below. Keep the SAME target word count; do not shorten, summarize or replace the chapter with an introduction. " +
           prompt,
-        8500,
+        book.section_unit === "page" ? 3200 : 8500,
       ),
     );
   }

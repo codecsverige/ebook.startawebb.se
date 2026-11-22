@@ -3889,6 +3889,7 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
 [dir=ltr] .chapter-workspace-dock-side svg{transform:rotate(180deg);}
 @media(max-width:760px){
  .editor-shell.is-chapter-workspace .studio-progress-steps.guided-four,
+ .editor-shell.is-chapter-workspace .studio-progress-steps.guided-five,
  .editor-shell.is-chapter-workspace .guided-progress-intro,
  .editor-shell.is-chapter-workspace .studio-document-map{display:none;}
  .editor-shell.is-chapter-workspace .chapter-flow{padding-bottom:96px;}
@@ -4023,4 +4024,18 @@ dialog.modal:has(.studio-image-dialog){overflow-y:auto;max-height:90dvh;padding:
   }
   .chapter-workspace-ai-tools{margin:8px 0 12px;}
   .chapter-workspace-generate{width:100%;min-height:43px;}
+}
+
+/* Progressive book setup: keep advanced choices available without crowding first-time authors. */
+.studio-optional-settings{border:1px solid #dce5ef;border-radius:12px;padding:14px 16px;margin:13px 0;background:#fafbfd;}
+details.studio-optional-settings{padding:0;}
+.studio-optional-settings summary{cursor:pointer;padding:13px 16px;font-weight:650;color:#334967;}
+.studio-optional-settings[open] summary{border-bottom:1px solid #e3e8f1;margin-bottom:13px;}
+.studio-optional-settings .stack{padding:0 16px 16px;}
+.studio-optional-settings legend{font-weight:650;padding:0 6px;color:#334967;}
+.studio-optional-settings>.checkbox-label{display:flex;align-items:center;gap:10px;margin:10px 0;}
+.studio-optional-settings>.checkbox-label input{width:18px;height:18px;flex:none;accent-color:#335fb3;}
+@media(max-width:620px){
+ .studio-optional-settings{padding:12px;}
+ .studio-progress-steps.guided-five button{min-height:48px;font-size:10px;}
 }

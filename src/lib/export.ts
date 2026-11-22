@@ -100,7 +100,7 @@ export async function pdfHtml(
   .book-quote{border-inline-start:3px solid #b3a082;padding:4mm 6mm;margin:6mm 0;background:#f9f6f0;font-style:italic;break-inside:avoid}
   .book-note{border:1px solid #c9d7e5;border-inline-start:4px solid #577a9f;padding:4mm 5mm;margin:6mm 0;background:#f4f7fa;break-inside:avoid}
   .page-break{break-before:page;page-break-before:always;height:0;clear:both}
-  </style></head><body class="theme-${layout}">${book.include_cover !== false ? `<section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>` : ""}${introPages}<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>${book.outline.map((c, i) => `<section class="chapter"><div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}${thanksPage}${book.include_cover !== false ? `<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section>` : ""}</body></html>`;
+  </style></head><body class="theme-${layout}">${book.include_cover !== false ? `<section class="cover${image ? " has-artwork" : ""}">${image}<small aria-hidden="true">✦</small><div><h1>${esc(book.title)}</h1><p class="cover-subtitle">${esc(book.subtitle)}</p></div><p class="cover-author">${esc(book.author)}</p></section>` : ""}${introPages}${book.include_toc !== false ? `<section class="toc"><h2>${toc}</h2>${book.outline.map((c, i) => `<p><span>${i + 1}</span>${esc(c.title)}</p>`).join("")}</section>` : ""}${book.outline.map((c, i) => `<section class="chapter">${book.show_section_titles !== false ? `<div class="chapter-number">${String(i + 1).padStart(2, "0")}</div><h2>${esc(c.title)}</h2>` : ""}${markdownHtml(book.chapters[c.id]?.content || "", imageMarkup)}</section>`).join("")}${thanksPage}${book.include_cover !== false ? `<section class="back-cover${rearImage ? " with-artwork" : ""}">${rearImage}<div><small>✦</small><h2>${esc(book.title)}</h2><p class="blurb">${esc(backBlurb)}</p></div>${authorBio ? `<div class="author-bio"><strong>${esc(book.author)}</strong><p>${esc(authorBio)}</p></div>` : ""}<small>${esc(book.author)}</small></section>` : ""}</body></html>`;
 }
 export async function makePdf(
   book: Book,
@@ -136,7 +136,7 @@ export async function makePdf(
       format: "A5",
       printBackground: true,
       preferCSSPageSize: true,
-      displayHeaderFooter: true,
+      displayHeaderFooter: book.show_page_numbers !== false,
       headerTemplate: "<span></span>",
       footerTemplate:
         '<div style="font-size:8px;width:100%;text-align:center;color:#888"><span class="pageNumber"></span></div>',
@@ -222,33 +222,24 @@ export async function makeDocx(
       }
     }
   }
-  children.push(
-    ...(book.include_cover === false && !children.length ? [] : [new Paragraph({ children: [new PageBreak()] })]),
-    new Paragraph({
+  if (book.include_toc !== false) {
+    if (children.length) children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({
       ...base,
       heading: HeadingLevel.HEADING_1,
-      children: [
-        text(
-          { en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language],
-          true,
-        ),
-      ],
-    }),
-  );
-  book.outline.forEach((c, i) =>
-    children.push(
-      new Paragraph({ ...base, children: [text(`${i + 1}. ${c.title}`)] }),
-    ),
-  );
-  for (const c of book.outline) {
-    children.push(
-      new Paragraph({ children: [new PageBreak()] }),
-      new Paragraph({
-        ...base,
-        heading: HeadingLevel.HEADING_1,
-        children: [text(c.title, true)],
-      }),
+      children: [text({ en: "Contents", ar: "الفهرس", sv: "Innehåll" }[book.language], true)],
+    }));
+    book.outline.forEach((c, i) =>
+      children.push(new Paragraph({ ...base, children: [text(`${i + 1}. ${c.title}`)] })),
     );
+  }
+  for (const c of book.outline) {
+    if (children.length) children.push(new Paragraph({ children: [new PageBreak()] }));
+    if (book.show_section_titles !== false) children.push(new Paragraph({
+      ...base,
+      heading: HeadingLevel.HEADING_1,
+      children: [text(c.title, true)],
+    }));
     for (const block of parseManuscript(book.chapters[c.id]?.content || "")) {
       const paragraphBase = { ...base, alignment: block.align ? ({left:AlignmentType.LEFT,right:AlignmentType.RIGHT,center:AlignmentType.CENTER,justify:AlignmentType.JUSTIFIED})[block.align] : base.alignment };
       if (block.type === "illustration") {
@@ -345,7 +336,7 @@ export async function makeDocx(
               margin: { top: 800, bottom: 800, left: 800, right: 800 },
             },
           },
-          footers: {
+          footers: book.show_page_numbers === false ? undefined : {
             default: new Footer({
               children: [
                 new Paragraph({

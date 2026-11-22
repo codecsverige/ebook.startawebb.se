@@ -1077,6 +1077,11 @@ export function Editor({
   const active =
     draft.outline.find((c) => c.id === chapterId) || draft.outline[0];
   const current = active ? draft.chapters[active.id] : null;
+  const partUnit = draft.section_unit === "page"
+    ? tr(locale, "pages", "صفحات", "sidor")
+    : draft.section_unit === "section"
+      ? tr(locale, "sections", "أقسام", "avsnitt")
+      : t.chapters;
   const complete = isComplete(book);
   const canExport = complete && book.unlocked && !busy;
   return (
@@ -1160,7 +1165,7 @@ export function Editor({
               <strong>
                 {draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length || draft.chapter_count}
               </strong>{" "}
-              {t.chapters}
+              {partUnit}
               <small>
                 {bookWords(draft).toLocaleString(locale)} {t.words}
               </small>
@@ -1180,17 +1185,18 @@ export function Editor({
           <p className="sidebar-note">{t.reviewNote}</p>
         </aside>
         <div className="editor-main">
-          <nav className="studio-progress-steps guided-four" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
-            {(["brief","outline","design","preview"] as const).map((step,i)=>{
+          <nav className="studio-progress-steps guided-five" aria-label={tr(locale,"Book creation stages","مراحل صناعة الكتاب","Bokens steg")}>
+            {(["brief","outline","write","design","preview"] as const).map((step,i)=>{
               const labels={
                 brief:tr(locale,"Idea","الفكرة","Idé"),
-                outline:tr(locale,"Chapters + Writing","الفصول والكتابة","Kapitel och skrivning"),
+                outline:tr(locale,"Plan","المخطط","Plan"),
+                write:tr(locale,"Writing","الكتابة","Skrivning"),
                 design:tr(locale,"Design","التصميم","Design"),
                 preview:tr(locale,"Review","المراجعة","Granska"),
               };
               const locked=(!draft.outline.length && !["brief","outline"].includes(step));
-              return <button type="button" key={step} className={(tab===step || (tab==="write" && step==="outline"))?"active":""}
-                disabled={locked} onClick={()=>setTab(step==="outline" && draft.outline.length ? "write" : step)} aria-current={(tab===step || (tab==="write" && step==="outline"))?"step":undefined}>
+              return <button type="button" key={step} className={tab===step?"active":""}
+                disabled={locked} onClick={()=>{setChapterWorkspaceOpen(false);setTab(step);}} aria-current={tab===step?"step":undefined}>
                 <span>{i+1}</span><span>{labels[step]}</span>
               </button>;
             })}
@@ -1350,10 +1356,10 @@ export function Editor({
                     "لتغيير اللغة وبدء كتاب جديد استخدم إدارة المشروع بالأسفل.",
                     "Använd projekthantering för att byta språk och starta om.")}</small>
                 </label>
-                {draft.outline.length===0 && <label>{tr(locale,"Number of chapters","عدد الفصول","Antal kapitel")}
+                {draft.outline.length===0 && <label>{draft.section_unit === "page" ? tr(locale,"Number of content pages","عدد صفحات المحتوى","Antal innehållssidor") : draft.section_unit === "section" ? tr(locale,"Number of sections","عدد الأقسام","Antal avsnitt") : tr(locale,"Number of chapters","عدد الفصول","Antal kapitel")}
                   <select disabled={disabled} value={draft.chapter_count}
                     onChange={e=>change(b=>({...b,chapter_count:Number(e.target.value)}))}>
-                    {[3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>{n}</option>)}
+                    {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>{n}</option>)}
                   </select>
                 </label>}
                 <label>{tr(locale,"Author name (optional)","اسم المؤلف (اختياري)","Författare (valfritt)")}
@@ -1417,10 +1423,10 @@ export function Editor({
               </div>
             </details>
           </section>}
-          {tab === "outline" && draft.outline.length === 0 && (
+          {tab === "outline" && (
             <section className="editor-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
+                <span className="eyebrow">{tr(locale,"Step 2 of 5","المرحلة 2 من 5","Steg 2 av 5")}</span>
                 <h2>
                   {draft.outline.length
                     ? t.outline
@@ -1611,18 +1617,24 @@ export function Editor({
               )}
             </section>
           )}
-          {(tab === "write" || (tab === "outline" && draft.outline.length > 0)) && (
+          {tab === "write" && (
             <section className="editor-panel chapter-panel chapter-flow">
               {!chapterWorkspaceOpen && <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 2 of 4","المرحلة 2 من 4","Steg 2 av 4")}</span>
+                <span className="eyebrow">{tr(locale,"Step 3 of 5","المرحلة 3 من 5","Steg 3 av 5")}</span>
                 <h2>{tr(locale,"Plan and write your chapters","خطّط فصول كتابك واكتبها","Planera och skriv dina kapitel")}</h2>
                 <p>{tr(locale,"Open any chapter to adjust its plan, generate or write the text, and edit it right here. Continue chapter by chapter.","افتح أي فصل لتعديل خطته وتوليد نصه أو كتابته وتحريره هنا، ثم انتقل للفصل التالي.","Öppna ett kapitel, ändra planen, skriv eller generera texten och gå sedan vidare.")}</p>
               </div>}
               {!chapterWorkspaceOpen && <div className="chapter-flow-overview">
-                <strong>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length} / {draft.outline.length} {tr(locale,"chapters with text","فصول مكتوبة","skrivna kapitel")}</strong>
+                <strong>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length} / {draft.outline.length} {partUnit}</strong>
                 <span>{bookWords(draft).toLocaleString(locale)} {t.words} · {tr(locale,"Approx.","نحو","Cirka")} {Math.ceil(bookWords(draft)/300)} {tr(locale,"pages","صفحة","sidor")}</span>
                 <div className="chapter-flow-track"><span style={{width:(draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length/draft.outline.length*100)+"%"}} /></div>
                 <small>{tr(locale,"Target for this outline: approximately","التقدير الأولي لهذا المخطط: نحو","För denna plan: ungefär")} {draft.outline.length*2}–{draft.outline.length*4} {tr(locale,"pages after writing. The final count depends on words, formatting and images.","صفحة بعد الكتابة. العدد النهائي يعتمد على الكلمات والتنسيق والصور.","sidor när boken skrivits. Slutligt antal beror på ord, layout och bilder.")}</small>
+              </div>}
+              {!chapterWorkspaceOpen && draft.outline.some(c=>!draft.chapters[c.id]?.content?.trim()) && <div className="editor-bottom-actions">
+                <button type="button" className="button button-primary" disabled={disabled||!config.ai}
+                  onClick={()=>void generate("book")}>
+                  <Sparkles size={17}/>{tr(locale,"Write all remaining parts with AI","اكتب جميع الأجزاء الناقصة بالذكاء الاصطناعي","Skriv alla återstående delar med AI")}
+                </button>
               </div>}
               {!chapterWorkspaceOpen && <details className="chapter-flow-book-settings">
                 <summary>{tr(locale,"Edit book title and subtitle","تعديل عنوان الكتاب والعنوان الفرعي","Ändra boktitel och undertitel")}</summary>
@@ -2083,9 +2095,29 @@ export function Editor({
           {tab === "design" && (
             <section className="editor-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 3 of 4","المرحلة 3 من 4","Steg 3 av 4")}</span>
+                <span className="eyebrow">{tr(locale,"Step 4 of 5","المرحلة 4 من 5","Steg 4 av 5")}</span>
                 <h2>{t.designTitle}</h2>
                 <p>{t.designBody}</p>
+                <fieldset className="studio-optional-settings">
+                  <legend>{tr(locale,"Book structure and numbering","شكل الكتاب والترقيم","Bokens struktur och numrering")}</legend>
+                  <label className="checkbox-label"><input type="checkbox" checked={draft.include_toc !== false} disabled={disabled}
+                    onChange={e=>change(b=>({...b,include_toc:e.target.checked}))}/>
+                    {tr(locale,"Include a table of contents","إظهار الفهرس في الكتاب","Inkludera innehållsförteckning")}
+                  </label>
+                  <label className="checkbox-label"><input type="checkbox" checked={draft.show_section_titles !== false} disabled={disabled}
+                    onChange={e=>change(b=>({...b,show_section_titles:e.target.checked}))}/>
+                    {tr(locale,"Show part titles inside the book","إظهار عناوين الأجزاء داخل الكتاب","Visa rubriker i boken")}
+                  </label>
+                  <label className="checkbox-label"><input type="checkbox" checked={draft.show_page_numbers !== false} disabled={disabled}
+                    onChange={e=>change(b=>({...b,show_page_numbers:e.target.checked}))}/>
+                    {tr(locale,"Number printed PDF and Word pages","ترقيم صفحات PDF وWord","Sidnummer i PDF och Word")}
+                  </label>
+                  {draft.section_unit==="page" && <p className="muted">
+                    {tr(locale,"Each planned page begins on a new printed page. Long text may overflow; covers are additional. EPUB pagination depends on the reader.",
+                      "كل صفحة محتوى تبدأ في صفحة مطبوعة جديدة. قد يمتد النص الطويل لصفحات إضافية، والغلاف منفصل. صفحات EPUB تختلف حسب جهاز القراءة.",
+                      "Varje innehållssida startar på en ny tryckt sida. Lång text kan fortsätta och omslag tillkommer. EPUB-sidor varierar.")}
+                  </p>}
+                </fieldset>
               </div>
               <div className="studio-cover-option">
                 <label className="studio-cover-option-label">
@@ -2367,7 +2399,7 @@ export function Editor({
           {tab === "preview" && (
             <section className="editor-panel preview-panel">
               <div className="panel-heading">
-                <span className="eyebrow">{tr(locale,"Step 4 of 4","المرحلة 4 من 4","Steg 4 av 4")}</span>
+                <span className="eyebrow">{tr(locale,"Step 5 of 5","المرحلة 5 من 5","Steg 5 av 5")}</span>
                 <h2>{t.previewTitle}</h2>
                 <p>{config.ownerTrial
                   ? tr(locale,
@@ -2447,17 +2479,17 @@ export function Editor({
                 dir={draft.language === "ar" ? "rtl" : "ltr"}
                 lang={draft.language}
               >
-                <div className="preview-cover">
+                {draft.include_cover !== false && <div className="preview-cover">
                   <BookCover
                     title={draft.title} subtitle={draft.subtitle} author={draft.author}
                     style={draft.cover_style} language={draft.language}
                     image={draft.use_artwork ? draft.cover_url : null}
                   />
-                </div>
+                </div>}
                 {draft.copyright_notice && <section className="preview-toc"><h2>{tr(draft.language,"Copyright","حقوق النشر","Upphovsrätt")}</h2><p>{draft.copyright_notice}</p></section>}
                 {draft.dedication && <section className="preview-toc"><h2>{tr(draft.language, "Dedication", "الإهداء", "Dedikation")}</h2><p>{draft.dedication}</p></section>}
                 {draft.preface && <section className="preview-toc"><h2>{tr(draft.language, "Preface", "المقدمة", "Förord")}</h2><Markdown text={draft.preface} /></section>}
-                <section className="preview-toc">
+                {draft.include_toc !== false && <section className="preview-toc">
                   <h2>
                     {tr(draft.language, "Contents", "الفهرس", "Innehåll")}
                   </h2>
@@ -2467,13 +2499,13 @@ export function Editor({
                       {c.title}
                     </p>
                   ))}
-                </section>
+                </section>}
                 {draft.outline.map((c, i) => (
                   <article className="preview-chapter" key={c.id}>
-                    <span className="small-label">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <h2>{c.title}</h2>
+                    {draft.show_section_titles !== false && <>
+                      <span className="small-label">{String(i + 1).padStart(2, "0")}</span>
+                      <h2>{c.title}</h2>
+                    </>}
                     {draft.chapters[c.id] ? (
                       <Markdown text={draft.chapters[c.id].content} illustrations={draft.illustrations} bookId={id} />
                     ) : (
@@ -2482,13 +2514,13 @@ export function Editor({
                   </article>
                 ))}
                 {draft.acknowledgments && <section className="preview-toc"><h2>{tr(draft.language,"Acknowledgments","الشكر والتقدير","Tack")}</h2><Markdown text={draft.acknowledgments}/></section>}
-                <div className="preview-cover">
+                {draft.include_cover !== false && <div className="preview-cover">
                   <BookBackCover title={draft.title} author={draft.author}
                     style={draft.cover_style} language={draft.language}
                     blurb={draft.back_blurb || draft.idea}
                     authorBio={draft.author_bio || ""}
                     image={draft.back_cover_url} />
-                </div>
+                </div>}
               </div>}
               <p className="review-note">{t.reviewNote}</p>
             </section>
