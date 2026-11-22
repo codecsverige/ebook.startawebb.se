@@ -39,6 +39,7 @@ type BookState = {
   covers: number;
   rewrites: Record<string, number>;
   deleting: boolean;
+  trashed_at?: string | null;
 };
 type StoredBook = Book & { state: BookState };
 export type WorkerJob = Job & {
@@ -144,7 +145,7 @@ export class FirestoreStudio {
     return data;
   }
   private checkedBook(data: StoredBook | undefined, uid?: string): StoredBook {
-    if (!data || data.state.deleting || (uid && data.user_id !== uid))
+    if (!data || data.state.deleting || data.state.trashed_at || (uid && data.user_id !== uid))
       fail("not_found");
     return data;
   }
@@ -157,17 +158,19 @@ export class FirestoreStudio {
       ),
     );
   }
+  /** Owner-scoped library query keeps recoverable books out of the active list. */
+  async listLibrary(uid: string): Promise<{ books: Book[]; trash: Book[] }> {
+    const result = await this.books().where("user_id", "==", uid).get();
+    const items = result.docs.map(d => d.data() as StoredBook)
+      .filter(book => !book.state.deleting)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    return {
+      books: items.filter(book => !book.state.trashed_at).slice(0, 30).map(bookOnly),
+      trash: items.filter(book => !!book.state.trashed_at).map(bookOnly),
+    };
+  }
   async listBooks(uid: string): Promise<Book[]> {
-    const result = await this.books()
-      .where("user_id", "==", uid)
-      .limit(31)
-      .get();
-    return result.docs
-      .map((d) => d.data() as StoredBook)
-      .filter((b) => !b.state.deleting)
-      .map(bookOnly)
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      .slice(0, 30);
+    return (await this.listLibrary(uid)).books;
   }
   async createBook(uid: string, raw: Brief): Promise<string> {
     const brief = briefSchema.parse(raw);
@@ -1102,13 +1105,59 @@ export class FirestoreStudio {
       if (!refunded) tx.update(pRef, { credits: profile!.credits + credits });
     });
   }
-  async lockBookDeletion(uid: string, id: string): Promise<void> {
+  /** Moving to trash never deletes chapters, saved versions or artwork. */
+  async trashBook(uid: string, id: string): Promise<void> {
+    if (!uuid(id)) fail("not_found");
+    await this.db.runTransaction(async tx => {
+      const ref = this.books().doc(id), profileRef = this.userRef(uid);
+      const [snapshot, profileSnapshot] = await tx.getAll(ref, profileRef);
+      const book = snapshot.data() as StoredBook | undefined;
+      const profile = this.checkedProfile(profileSnapshot.data() as Profile | undefined);
+      if (!book || book.user_id !== uid || book.state.deleting) fail("not_found");
+      if (book.state.trashed_at) return; // Idempotent retries.
+      if (book.state.active_job) fail("busy");
+      tx.update(ref, { "state.trashed_at": new Date().toISOString() });
+      tx.update(profileRef, { book_count: Math.max(0, profile.book_count - 1) });
+    });
+  }
+  async restoreTrashedBook(uid: string, id: string): Promise<Book> {
+    if (!uuid(id)) fail("not_found");
+    return this.db.runTransaction(async tx => {
+      const ref = this.books().doc(id), profileRef = this.userRef(uid);
+      const [snapshot, profileSnapshot] = await tx.getAll(ref, profileRef);
+      const book = snapshot.data() as StoredBook | undefined;
+      const profile = this.checkedProfile(profileSnapshot.data() as Profile | undefined);
+      if (!book || book.user_id !== uid || book.state.deleting || !book.state.trashed_at)
+        fail("not_found");
+      if (profile.book_count >= 30) fail("rate_limit");
+      tx.update(ref, { "state.trashed_at": null });
+      tx.update(profileRef, { book_count: profile.book_count + 1 });
+      return bookOnly({ ...book, state: { ...book.state, trashed_at: null } });
+    });
+  }
+  async renameBook(uid: string, id: string, revision: number, title: string): Promise<Book> {
+    if (!uuid(id)) fail("not_found");
+    return this.db.runTransaction(async tx => {
+      const ref = this.books().doc(id);
+      const [p, b] = await tx.getAll(this.userRef(uid), ref);
+      this.checkedProfile(p.data() as Profile | undefined);
+      const book = this.checkedBook(b.data() as StoredBook | undefined, uid);
+      if (book.state.active_job) fail("busy");
+      if (book.revision !== revision) fail("conflict");
+      const versions = await this.versionPlan(tx, ref);
+      this.writeVersion(tx, ref, book, versions);
+      const next = { ...book, title, revision: book.revision + 1, updated_at: new Date().toISOString() };
+      tx.set(ref, next);
+      return bookOnly(next);
+    });
+  }
+  async lockBookDeletion(uid: string, id: string, requireTrashed = false): Promise<void> {
     if (!uuid(id)) fail("not_found");
     await this.db.runTransaction(async (tx) => {
       const ref = this.books().doc(id),
         b = (await tx.get(ref)).data() as StoredBook | undefined;
-      if (!b || b.user_id !== uid) fail("not_found");
-      if (b.state.active_job) fail("busy");
+      if (!b || b.user_id !== uid || (requireTrashed && !b.state.trashed_at)) fail("not_found");
+      if (b.state.active_job || b.state.deleting) fail("busy");
       tx.update(ref, { "state.deleting": true });
     });
   }
@@ -1152,7 +1201,7 @@ export class FirestoreStudio {
       if (b.get("user_id") !== uid || !b.get("state.deleting"))
         fail("forbidden");
       tx.delete(ref);
-      if (p.exists)
+      if (p.exists && !b.get("state.trashed_at"))
         tx.update(pRef, { book_count: Math.max(0, p.get("book_count") - 1) });
     });
   }

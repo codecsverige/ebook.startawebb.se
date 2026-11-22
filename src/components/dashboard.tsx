@@ -10,6 +10,10 @@ import {
   Loader2,
   Coins,
   Settings2,
+  MoreHorizontal,
+  Trash2,
+  RotateCcw,
+  Pencil,
 } from "lucide-react";
 import { BookCover } from "./book-cover";
 import { Dialog } from "./dialog";
@@ -24,6 +28,7 @@ import {
   type Brief,
 } from "@/lib/domain";
 import { request, codeOf } from "@/lib/client";
+import { partLabel } from "@/lib/authoring-labels";
 
 function inferIdeaKind(idea: string): Brief["kind"] {
   const text = idea.toLowerCase();
@@ -53,6 +58,11 @@ export function Dashboard({
   const t = copy[locale];
   const router = useRouter();
   const [books, setBooks] = useState<BookshelfBook[]>([]);
+  const [trash, setTrash] = useState<BookshelfBook[]>([]);
+  const [bookAction, setBookAction] = useState<{ book: BookshelfBook; action: "trash" | "purge" | "rename" } | null>(null);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [renameTitle, setRenameTitle] = useState("");
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -101,10 +111,11 @@ export function Dashboard({
 
   async function load() {
     try {
-      const d = await request<{ books: BookshelfBook[]; credits: number }>(
+      const d = await request<{ books: BookshelfBook[]; trash: BookshelfBook[]; credits: number }>(
         "/api/books",
       );
       setBooks(d.books);
+      setTrash(d.trash || []);
       setCredits(d.credits);
       setError("");
     } catch (e) {
@@ -145,6 +156,37 @@ export function Dashboard({
     } catch (e) {
       setError(codeOf(e));
       setPending(false);
+    }
+  }
+  function openBookAction(book: BookshelfBook, action: "trash" | "purge" | "rename") {
+    setActionError("");
+    setRenameTitle(book.title || clipIdea(book.idea));
+    setBookAction({ book, action });
+  }
+  async function runBookAction(book: BookshelfBook, action: "trash" | "purge" | "rename" | "restore") {
+    if (actionPending) return;
+    setActionPending(book.id);
+    setActionError("");
+    try {
+      if (action === "restore" || action === "rename") {
+        await request(`/api/books/${book.id}`, {
+          method: "POST",
+          body: JSON.stringify(action === "restore"
+            ? { action: "restore" }
+            : { action: "rename", revision: book.revision, title: renameTitle.trim() }),
+        });
+      } else {
+        await request(`/api/books/${book.id}${action === "purge" ? "?permanent=1" : ""}`, { method: "DELETE" });
+      }
+      setBookAction(null);
+      await load();
+    } catch (e) {
+      const code = codeOf(e);
+      setActionError(code);
+      if (action === "restore") setError(code);
+      if (code === "conflict") void load();
+    } finally {
+      setActionPending(null);
     }
   }
   async function logout() {
@@ -284,42 +326,100 @@ export function Dashboard({
       ) : (
         <div className="bookshelf">
           {books.map((book) => (
-            <Link
-              className="shelf-book"
-              key={book.id}
-              href={`/${locale}/studio/${book.id}`}
-            >
-              <div className={`shelf-cover wrap-${book.cover_style}`}>
-                <BookCover
-                  title={book.title || clipIdea(book.idea)}
-                  subtitle={book.subtitle}
-                  author={book.author}
-                  style={book.cover_style}
-                  language={book.language}
-                  image={book.use_artwork ? book.cover_url : null}
-                  small
-                />
-              </div>
-              <div className="shelf-book-meta">
-                <span
-                  className={`status-tag ${book.complete ? "tag-green" : ""}`}
-                >
-                  {book.complete
-                    ? t.ready
-                    : book.unlocked
-                      ? t.unlocked
-                      : t.draft}
-                </span>
-                <ArrowUpRight size={18} />
-              </div>
-              <h2>{book.title || clipIdea(book.idea)}</h2>
-              <p>
-                {book.completed_chapters}/{book.chapter_count} {t.chapters} ·{" "}
-                {book.word_count.toLocaleString(locale)} {t.words}
-              </p>
-            </Link>
+            <div className="shelf-book" key={book.id}>
+              <Link className="shelf-book-link" href={`/${locale}/studio/${book.id}`}>
+                <div className={`shelf-cover wrap-${book.cover_style}`}>
+                  <BookCover title={book.title || clipIdea(book.idea)}
+                    subtitle={book.subtitle} author={book.author} style={book.cover_style}
+                    language={book.language} image={book.use_artwork ? book.cover_url : null} small/>
+                </div>
+                <div className="shelf-book-meta">
+                  <span className={`status-tag ${book.complete ? "tag-green" : ""}`}>
+                    {book.complete ? t.ready : book.unlocked ? t.unlocked : t.draft}
+                  </span>
+                  <ArrowUpRight size={18}/>
+                </div>
+                <h2>{book.title || clipIdea(book.idea)}</h2>
+                <p>{book.completed_chapters}/{book.outline.length || book.chapter_count} {partLabel(locale, book.section_unit, true)}
+                  {" · "}{book.word_count.toLocaleString(locale)} {t.words}</p>
+              </Link>
+              <details className="shelf-book-actions">
+                <summary aria-label={tr(locale, "Book options", "خيارات الكتاب", "Bokalternativ")}
+                  title={tr(locale, "Manage this book", "إدارة هذا الكتاب", "Hantera boken")}>
+                  <MoreHorizontal size={21}/>
+                </summary>
+                <div className="shelf-book-action-menu">
+                  <button type="button" onClick={() => openBookAction(book, "rename")}>
+                    <Pencil size={16}/>{tr(locale, "Rename", "إعادة التسمية", "Byt namn")}
+                  </button>
+                  <button type="button" className="action-danger" onClick={() => openBookAction(book, "trash")}>
+                    <Trash2 size={16}/>{tr(locale, "Move to trash", "نقل إلى المحذوفات", "Flytta till papperskorgen")}
+                  </button>
+                </div>
+              </details>
+            </div>
           ))}
         </div>
+      )}
+      {!loading && trash.length > 0 && (
+        <details className="bookshelf-trash">
+          <summary><Trash2 size={18}/>{tr(locale, "Deleted books", "الكتب المحذوفة", "Borttagna böcker")} <span>({trash.length})</span></summary>
+          <p>{tr(locale, "You can restore books here until you choose to permanently delete them. Restoring requires an available library slot.",
+            "يمكنك استعادة الكتب هنا إلى أن تختار حذفها نهائيًا. تتطلب الاستعادة مكانًا متاحًا في المكتبة.",
+            "Här kan du återställa böcker tills du väljer att radera dem permanent. Återställning kräver en ledig plats.")}</p>
+          <div className="bookshelf-trash-list">
+            {trash.map(book => <div className="bookshelf-trash-row" key={book.id}>
+              <div><strong>{book.title || clipIdea(book.idea)}</strong><span>{book.language.toUpperCase()}</span></div>
+              <div className="bookshelf-trash-actions">
+                <button type="button" className="button button-outline button-small"
+                  disabled={!!actionPending} onClick={() => void runBookAction(book, "restore")}>
+                  {actionPending === book.id ? <Loader2 className="spin" size={15}/> : <RotateCcw size={15}/>}
+                  {tr(locale, "Restore", "استعادة", "Återställ")}
+                </button>
+                <button type="button" className="button button-outline button-small bookshelf-purge"
+                  disabled={!!actionPending} onClick={() => openBookAction(book, "purge")}>
+                  <Trash2 size={15}/>{tr(locale, "Delete forever", "حذف نهائي", "Radera permanent")}
+                </button>
+              </div>
+            </div>)}
+          </div>
+        </details>
+      )}
+      {bookAction && (
+        <Dialog
+          title={bookAction.action === "rename"
+            ? tr(locale, "Rename book", "إعادة تسمية الكتاب", "Byt namn på boken")
+            : bookAction.action === "purge"
+              ? tr(locale, "Permanently delete book", "حذف الكتاب نهائيًا", "Radera boken permanent")
+              : tr(locale, "Move book to trash", "نقل الكتاب إلى المحذوفات", "Flytta boken till papperskorgen")}
+          closeLabel={t.cancel}
+          onClose={() => { if (!actionPending) { setBookAction(null); setActionError(""); } }}>
+          <div className="stack">
+            <p><strong>{bookAction.book.title || clipIdea(bookAction.book.idea)}</strong></p>
+            {bookAction.action === "rename" ? (
+              <label>{tr(locale, "Book title", "عنوان الكتاب", "Boktitel")}
+                <input value={renameTitle} onChange={e => setRenameTitle(e.target.value)}
+                  maxLength={180} disabled={!!actionPending}/>
+              </label>
+            ) : <p>{bookAction.action === "purge"
+              ? tr(locale, "The manuscript, saved versions and illustrations will be deleted permanently. This cannot be undone.",
+                "سيُحذف النص وجميع النسخ والصور نهائيًا. لا يمكن التراجع عن هذه العملية.",
+                "Manuskript, versioner och bilder raderas permanent. Åtgärden kan inte ångras.")
+              : tr(locale, "The book leaves your library but can be restored from the trash.",
+                "سيختفي الكتاب من المكتبة ويمكنك استعادته من المحذوفات.",
+                "Boken flyttas från biblioteket och kan återställas från papperskorgen.")}</p>}
+            {actionError && <p role="alert" className="error-message">{errorMessage(actionError, locale)}</p>}
+            <button type="button" className={`button ${bookAction.action === "purge" ? "button-danger" : "button-primary"}`}
+              disabled={!!actionPending || (bookAction.action === "rename" && !renameTitle.trim())}
+              onClick={() => void runBookAction(bookAction.book, bookAction.action)}>
+              {actionPending ? <Loader2 size={17} className="spin"/> :
+                bookAction.action === "rename" ? <Pencil size={17}/> : <Trash2 size={17}/>}
+              {bookAction.action === "rename" ? tr(locale, "Save name", "حفظ الاسم", "Spara namn") :
+                bookAction.action === "purge" ? tr(locale, "Delete permanently", "حذف نهائي", "Radera permanent") :
+                  tr(locale, "Move to trash", "نقل إلى المحذوفات", "Flytta till papperskorgen")}
+            </button>
+          </div>
+        </Dialog>
       )}
       {modal && (
         <Dialog

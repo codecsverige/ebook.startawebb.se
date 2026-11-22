@@ -35,6 +35,7 @@ import { VisualChapterEditor, type VisualSelection } from "./visual-chapter-edit
 import { DraftHistory } from "@/lib/draft-history";
 import { draftKey, editableBook, readDraft, restoreDraft, writeDraft } from "@/lib/draft-storage";
 import { BookSectionReader } from "./book-section-reader";
+import { partLabel } from "@/lib/authoring-labels";
 import { Dialog } from "./dialog";
 import { CreditPacks } from "./credit-packs";
 import { copy, errorMessage, tr } from "@/lib/i18n";
@@ -932,7 +933,11 @@ export function Editor({
     }
   }
   async function remove() {
-    if (!window.confirm(t.deleteBook)) return;
+    if (!window.confirm(tr(locale,
+      "Move this book to the trash? You can restore it from your library.",
+      "هل تريد نقل هذا الكتاب إلى المحذوفات؟ يمكنك استعادته من مكتبتك.",
+      "Flytta boken till papperskorgen? Du kan återställa den i biblioteket."))) return;
+    if ((dirtyRef.current || savingRef.current) && !(await save(true))) return;
     setPending("delete");
     setError("");
     try {
@@ -1077,20 +1082,21 @@ export function Editor({
   const active =
     draft.outline.find((c) => c.id === chapterId) || draft.outline[0];
   const current = active ? draft.chapters[active.id] : null;
-  const partUnit = draft.section_unit === "page"
-    ? tr(locale, "pages", "صفحات", "sidor")
-    : draft.section_unit === "section"
-      ? tr(locale, "sections", "أقسام", "avsnitt")
-      : t.chapters;
+  const partUnit = partLabel(locale, draft.section_unit, true);
+  const singleUnit = partLabel(locale, draft.section_unit);
   const complete = isComplete(book);
   const canExport = complete && book.unlocked && !busy;
   return (
     <div className={chapterWorkspaceOpen && (tab==="write"||tab==="outline") ? "editor-shell is-chapter-workspace" : "editor-shell"}>
       <div className="editor-topbar">
-        <Link className="text-link" href={`/${locale}/studio`}>
-          <ArrowLeft size={17} />
+        <button type="button" className="text-link editor-back-button" disabled={!!pending || saving}
+          onClick={async () => {
+            if ((dirtyRef.current || savingRef.current) && !(await save(true))) return;
+            window.location.assign(`/${locale}/studio`);
+          }}>
+          <ArrowLeft size={17}/>
           <span>{t.back}</span>
-        </Link>
+        </button>
         <div className="editor-top-actions">
           <span className={`save-status ${dirty ? "is-dirty" : ""}`}>
             {saving ? (
@@ -1150,7 +1156,7 @@ export function Editor({
             <BookOpen size={17}/>{tr(locale,"Project overview","ملخص المشروع","Projektöversikt")}
           </button>
           {draft.outline.length > 0 && <div className="studio-chapter-nav">
-            <strong>{tr(locale,"Chapters","الفصول","Kapitel")}</strong>
+            <strong>{partUnit}</strong>
             <div className="studio-chapter-links">{draft.outline.map((c,i)=><button type="button" key={c.id}
               className={tab==="write" && active?.id===c.id?"active":""}
               onClick={async()=>{if((dirtyRef.current||savingRef.current) && !(await save(true)))return;setTab("write");await openChapterWorkspace(c.id);}}>
@@ -1196,7 +1202,10 @@ export function Editor({
               };
               const locked=(!draft.outline.length && !["brief","outline"].includes(step));
               return <button type="button" key={step} className={tab===step?"active":""}
-                disabled={locked} onClick={()=>{setChapterWorkspaceOpen(false);setTab(step);}} aria-current={tab===step?"step":undefined}>
+                disabled={locked || disabled} onClick={async()=>{
+                  if ((dirtyRef.current || savingRef.current) && !(await save(true))) return;
+                  setChapterWorkspaceOpen(false);setTab(step);
+                }} aria-current={tab===step?"step":undefined}>
                 <span>{i+1}</span><span>{labels[step]}</span>
               </button>;
             })}
@@ -1205,14 +1214,14 @@ export function Editor({
             <div>
               <strong>{tr(locale,"From your idea to a finished book","من الفكرة إلى كتاب جاهز","Från idé till färdig bok")}</strong>
               <p>{tab==="brief"
-                ? tr(locale,"Check your book idea and settings, then create a chapter plan.","راجع فكرة كتابك وإعداداته، ثم أنشئ مخطط الفصول.","Granska din idé och skapa en kapitelplan.")
+                ? tr(locale,"Check your idea and settings, then create a plan.","راجع فكرتك وإعداداتك، ثم أنشئ المخطط.","Granska din idé och skapa en plan.")
                 :(tab==="outline"||tab==="write")
-                ? tr(locale,"Plan each chapter and write or generate the text directly underneath.","خطّط كل فصل واكتب أو ولّد النص تحته مباشرة.","Planera varje kapitel och skriv eller generera direkt under.")
+                ? tr(locale,"Plan each part and write or generate its content.","خطّط كل جزء واكتب محتواه أو ولّده.","Planera varje del och skriv eller generera innehållet.")
                 :tab==="design"
                 ? tr(locale,"Choose your cover and interior layout.","اختر الغلاف وتنسيق الصفحات.","Välj omslag och inlaga.")
                 :tr(locale,"Check missing parts, preview and download your book.","افحص الأجزاء الناقصة وعاين الكتاب ثم نزّله.","Kontrollera, förhandsgranska och ladda ner.")}</p>
             </div>
-            <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length}/{draft.outline.length} {tr(locale,"chapters ready","فصل جاهز","färdiga kapitel")}</span>
+            <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content?.trim()).length}/{draft.outline.length} {tr(locale,"parts written","أجزاء مكتملة","delar klara")}</span>
           </div>
           {draft.outline.length>0 && tab!=="write" && tab!=="outline" && <details className="studio-document-map">
             <summary>{tr(locale,"Book contents · choose a section","أجزاء الكتاب · اختر القسم الذي تريد العمل عليه","Bokens innehåll · välj avsnitt")}</summary>
@@ -1399,9 +1408,9 @@ export function Editor({
             </div>
             <details className="guided-project-management">
               <summary>{tr(locale,"Project management · restart, restore or delete","إدارة المشروع · البدء من جديد أو الاستعادة أو الحذف","Projekthantering · omstart, återställning, radering")}</summary>
-              <p>{tr(locale,"Restarting archives your current manuscript first. Deleting the entire project is irreversible.",
-                "البدء من جديد يحفظ النسخة الحالية في سجل الإصدارات. حذف المشروع نهائي ولا يمكن التراجع عنه.",
-                "Omstart sparar föregående version. Radering är permanent.")}</p>
+              <p>{tr(locale,"Restarting archives your manuscript first. Moving your book to trash is reversible from the library.",
+                "البدء من جديد يحفظ النسخة الحالية في سجل الإصدارات. يمكنك استعادة الكتاب بعد نقله إلى المحذوفات من المكتبة.",
+                "Omstart sparar manuskriptet. Böcker i papperskorgen kan återställas från biblioteket.")}</p>
               <label>{tr(locale,"Language for the restarted book","اللغة عند إعادة البدء","Språk vid omstart")}
                 <select value={restartLanguage} disabled={disabled} onChange={e=>setRestartLanguage(e.target.value as Locale)}>
                   <option value="ar">العربية</option><option value="en">English</option><option value="sv">Svenska</option>
@@ -1418,7 +1427,7 @@ export function Editor({
                 </button>
                 <button type="button" className="button button-danger" disabled={disabled}
                   onClick={remove}><Trash2 size={17}/>
-                  {tr(locale,"Delete project permanently","حذف المشروع نهائيًا","Radera projektet permanent")}
+                  {tr(locale,"Move project to trash","نقل المشروع إلى المحذوفات","Flytta projektet till papperskorgen")}
                 </button>
               </div>
             </details>
@@ -1605,7 +1614,7 @@ export function Editor({
                     </label>
                     <button type="button" className="button button-outline" disabled={disabled || draft.outline.length >= 30}
                       onClick={() => addChapter()}>
-                      <Plus size={17}/>{tr(locale,"Add chapter","إضافة فصل جديد","Lägg till kapitel")}
+                      <Plus size={17}/>{tr(locale,"Add","إضافة","Lägg till")} {singleUnit}
                     </button>
                     <button type="button" className="button button-primary"
                       disabled={disabled || !draft.title.trim()} onClick={()=>setTab("write")}>
@@ -1621,7 +1630,7 @@ export function Editor({
             <section className="editor-panel chapter-panel chapter-flow">
               {!chapterWorkspaceOpen && <div className="panel-heading">
                 <span className="eyebrow">{tr(locale,"Step 3 of 5","المرحلة 3 من 5","Steg 3 av 5")}</span>
-                <h2>{tr(locale,"Plan and write your chapters","خطّط فصول كتابك واكتبها","Planera och skriv dina kapitel")}</h2>
+                <h2>{tr(locale,"Plan and write your content","خطّط محتواك واكتبه","Planera och skriv ditt innehåll")}</h2>
                 <p>{tr(locale,"Open any chapter to adjust its plan, generate or write the text, and edit it right here. Continue chapter by chapter.","افتح أي فصل لتعديل خطته وتوليد نصه أو كتابته وتحريره هنا، ثم انتقل للفصل التالي.","Öppna ett kapitel, ändra planen, skriv eller generera texten och gå sedan vidare.")}</p>
               </div>}
               {!chapterWorkspaceOpen && <div className="chapter-flow-overview">
@@ -1703,8 +1712,8 @@ export function Editor({
                     disabled={disabled || !config.ai || !draft.title.trim()}
                     onClick={()=>void generate(!book.unlocked && i===0 && !draft.chapters[c.id]?"sample":"chapter",c.id)}>
                     <Sparkles size={16}/>{draft.chapters[c.id]?.content?.trim()
-                      ? tr(locale,"Regenerate this chapter","إعادة توليد هذا الفصل","Generera om kapitlet")
-                      : tr(locale,"Generate this chapter","توليد هذا الفصل","Generera kapitlet")}
+                      ? tr(locale,"Regenerate this part","إعادة توليد هذا الجزء","Generera om delen")
+                      : tr(locale,"Generate this part","توليد هذا الجزء","Generera delen")}
                   </button>
                 </div>
                 <details className="chapter-workspace-extra"><summary>{tr(locale,"More chapter options","المزيد من خيارات الفصل","Fler kapitelalternativ")}</summary>
@@ -2076,7 +2085,7 @@ export function Editor({
               </div>
               {!chapterWorkspaceOpen && <div className="chapter-flow-footer">
                 <button type="button" className="button button-outline" disabled={disabled||draft.outline.length>=30}
-                  onClick={()=>addChapter()}><Plus size={16}/>{tr(locale,"Add chapter","إضافة فصل","Lägg till kapitel")}</button>
+                  onClick={()=>addChapter()}><Plus size={16}/>{tr(locale,"Add","إضافة","Lägg till")} {singleUnit}</button>
                 <label className="button button-outline">{tr(locale,"Import full manuscript (Word/TXT/MD)","استيراد كتاب كامل (Word/TXT/MD)","Importera helt manus (Word/TXT/MD)")}
                   <input type="file" accept=".txt,.md,.docx" hidden disabled={disabled}
                     onChange={e=>{const f=e.currentTarget.files?.[0];e.currentTarget.value="";if(f)void importManuscript(f,"book");}}/>
@@ -2411,7 +2420,7 @@ export function Editor({
               <div className="studio-readiness" role="group" aria-label={tr(locale,"Publication readiness","جاهزية الكتاب","Publiceringskontroll")}>
                 <div className="studio-readiness-heading">
                   <Check size={18}/><strong>{tr(locale,"Ready to publish?","هل كتابك جاهز؟","Redo att publicera?")}</strong>
-                  <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length} {tr(locale,"chapters written","فصل مكتمل","skrivna kapitel")}</span>
+                  <span>{draft.outline.filter(c=>draft.chapters[c.id]?.content.trim()).length}/{draft.outline.length} {partUnit} {tr(locale,"written","مكتملة","klara")}</span>
                 </div>
                 <div className="studio-readiness-items">
                   {([

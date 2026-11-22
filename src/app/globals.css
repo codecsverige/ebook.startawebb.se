@@ -4039,3 +4039,61 @@ details.studio-optional-settings{padding:0;}
  .studio-optional-settings{padding:12px;}
  .studio-progress-steps.guided-five button{min-height:48px;font-size:10px;}
 }
+
+/* Professional bookshelf actions and recoverable trash */
+.shelf-book{position:relative;min-width:0;border:1px solid #dfe6ef;border-radius:16px;padding:12px;background:#fff;box-shadow:0 4px 18px #16253d0b;transition:box-shadow .16s,border-color .16s}
+.shelf-book:hover{box-shadow:0 9px 28px #16253d19;border-color:#c2d0e5}
+.shelf-book-link{display:block;min-width:0;border-radius:10px}
+.shelf-book-link:focus-visible{outline:3px solid #8ba6ff;outline-offset:4px}
+.shelf-book .shelf-cover{height:230px;padding:18px 26px;border-radius:11px}
+.shelf-book h2{font-size:16px;font-weight:700;line-height:1.5;margin:10px 0 6px}
+.shelf-book-link>p{font-size:13px;line-height:1.6;color:#52637a;margin-bottom:4px}
+.shelf-book .status-tag{font-size:12px;line-height:1.4;padding:4px 9px;font-weight:650}
+.shelf-book-actions{position:absolute;inset-inline-end:20px;top:20px;z-index:8}
+.shelf-book-actions summary{display:grid;place-items:center;width:44px;height:44px;list-style:none;cursor:pointer;background:#fff;border:1px solid #d5e0ee;border-radius:11px;box-shadow:0 4px 12px #182b4620;color:#2e4668}
+.shelf-book-actions summary::-webkit-details-marker{display:none}
+.shelf-book-actions summary:hover{background:#f2f6fc}
+.shelf-book-action-menu{position:absolute;inset-inline-end:0;top:50px;z-index:9;min-width:205px;background:#fff;border:1px solid #d7e0ec;border-radius:12px;padding:6px;box-shadow:0 12px 30px #182b4630;display:grid;gap:3px}
+.shelf-book-action-menu button{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 12px;border:0;border-radius:8px;background:transparent;color:#273c57;text-align:start;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.shelf-book-action-menu button:hover{background:#f0f4fa}
+.shelf-book-action-menu .action-danger{color:#9b2839}
+.bookshelf-trash{margin:32px 0 22px;border:1px solid #dce4ee;border-radius:14px;padding:17px 20px;background:#fafbfd}
+.bookshelf-trash>summary{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;cursor:pointer;color:#364a67}
+.bookshelf-trash>p{font-size:14px;margin:12px 0;color:#576b83;line-height:1.7}
+.bookshelf-trash-list{display:grid;gap:8px}
+.bookshelf-trash-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border:1px solid #e1e7f0;border-radius:11px;padding:12px;background:#fff}
+.bookshelf-trash-row>div:first-child{display:grid;gap:3px;min-width:0}
+.bookshelf-trash-row strong{font-size:15px;overflow-wrap:anywhere}
+.bookshelf-trash-row span{font-size:12px;color:#6b788d}
+.bookshelf-trash-actions{display:flex;gap:8px;flex-wrap:wrap}
+.bookshelf-trash-actions .button{min-height:42px;font-size:13px}
+.bookshelf-purge{color:#9b2839;border-color:#e2bcc5}
+.editor-back-button{background:transparent;border:0;padding:7px 0;display:inline-flex;align-items:center;gap:8px;font:inherit;cursor:pointer;min-height:44px}
+.editor-back-button:disabled{cursor:wait;opacity:.6}
+.book-reader-jump{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px;font-size:14px;font-weight:650;color:#435873;margin:0 0 14px}
+.book-reader-jump select{min-width:0;width:100%;max-width:420px;font:inherit;font-size:15px;padding:10px 12px;border:1px solid #cbd7e6;border-radius:10px;background:#fff;color:#243b5b;min-height:44px}
+.book-reader-nav .button{min-height:44px;font-size:14px}
+.book-section-reader[dir=rtl] .book-reader-nav svg{transform:rotate(180deg)}
+.studio-chapter-links button{font-size:14px;min-height:44px}
+.studio-chapter-nav>strong{font-size:14px}
+.studio-progress-steps.guided-five button{font-weight:600}
+.guided-progress-intro>span{font-size:13px}
+@media(max-width:760px){
+ .shelf-book{padding:8px;border-radius:13px}
+ .shelf-book .shelf-cover{height:205px;padding:13px}
+ .shelf-book h2{font-size:14px}
+ .shelf-book .status-tag{font-size:11px}
+ .shelf-book-link>p{font-size:12px}
+ .shelf-book-actions{inset-inline-end:14px;top:14px}
+ .shelf-book-action-menu{min-width:175px}
+ .studio-progress-steps.guided-five button{font-size:12px}
+ .bookshelf-trash{padding:14px}
+ .bookshelf-trash-row{align-items:stretch}
+ .bookshelf-trash-actions{width:100%}
+ .bookshelf-trash-actions .button{flex:1}
+ .book-reader-jump{grid-template-columns:1fr;gap:6px}
+ .book-reader-nav>span{max-width:40%}
+}
+@media(prefers-reduced-motion:reduce){
+ .shelf-book{transition:none}
+}

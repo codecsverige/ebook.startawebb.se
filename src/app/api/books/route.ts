@@ -1,29 +1,29 @@
 import { requireUser } from "@/lib/firebase-session";
 import { studioStore } from "@/lib/firebase-admin";
 import { assertOrigin, readJson, apiError, json, AppError } from "@/lib/http";
-import { briefSchema, bookWords, isComplete, isArabicBrief } from "@/lib/domain";
+import { briefSchema, bookWords, isComplete, isArabicBrief, type Book } from "@/lib/domain";
 import { withCover, takeRate } from "@/lib/books";
 
 export async function GET() {
   try {
     const { user } = await requireUser(),
       store = studioStore();
-    const [books, profile] = await Promise.all([
-      store.listBooks(user.id),
+    const [library, profile] = await Promise.all([
+      store.listLibrary(user.id),
       store.profile(user.id),
     ]);
+    const summarize = async (book: Book) => {
+      const { chapters, ...summary } = await withCover(book);
+      return {
+        ...summary,
+        word_count: bookWords(book),
+        completed_chapters: Object.values(chapters).filter(chapter => !!chapter.content?.trim()).length,
+        complete: isComplete(book),
+      };
+    };
     return json({
-      books: await Promise.all(
-        books.map(async (book) => {
-          const { chapters, ...summary } = await withCover(book);
-          return {
-            ...summary,
-            word_count: bookWords(book),
-            completed_chapters: Object.keys(chapters).length,
-            complete: isComplete(book),
-          };
-        }),
-      ),
+      books: await Promise.all(library.books.map(summarize)),
+      trash: await Promise.all(library.trash.map(summarize)),
       credits: profile?.credits || 0,
       free_book_id: profile?.free_book_id || null,
     });

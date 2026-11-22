@@ -5,6 +5,7 @@ import type { BookWithCover } from "@/lib/domain";
 import { tr } from "@/lib/i18n";
 import { BookCover, BookBackCover } from "./book-cover";
 import { Markdown } from "./markdown";
+import { partLabel } from "@/lib/authoring-labels";
 
 type Part = { id: string; title: string; type: "cover"|"back"|"text"|"toc"|"chapter"; content?: string; chapterId?: string };
 export function BookSectionReader({book, bookId}:{book:BookWithCover;bookId:string}) {
@@ -14,19 +15,27 @@ export function BookSectionReader({book, bookId}:{book:BookWithCover;bookId:stri
     if(book.copyright_notice?.trim())list.push({id:"rights",title:tr(book.language,"Copyright","حقوق النشر","Upphovsrätt"),type:"text",content:book.copyright_notice});
     if(book.dedication?.trim())list.push({id:"dedication",title:tr(book.language,"Dedication","الإهداء","Dedikation"),type:"text",content:book.dedication});
     if(book.preface?.trim())list.push({id:"preface",title:tr(book.language,"Preface","المقدمة","Förord"),type:"text",content:book.preface});
-    list.push({id:"toc",title:tr(book.language,"Contents","الفهرس","Innehåll"),type:"toc"});
+    if(book.include_toc !== false) list.push({id:"toc",title:tr(book.language,"Contents","الفهرس","Innehåll"),type:"toc"});
     book.outline.forEach(c=>list.push({id:c.id,title:c.title,type:"chapter",chapterId:c.id,content:book.chapters[c.id]?.content || ""}));
     if(book.acknowledgments?.trim())list.push({id:"thanks",title:tr(book.language,"Acknowledgments","الشكر والتقدير","Tack"),type:"text",content:book.acknowledgments});
     if (book.include_cover !== false) list.push({id:"back",title:tr(book.language,"Back cover","الغلاف الخلفي","Baksida"),type:"back"});
     return list;
   },[book]);
   const current=parts[Math.min(index,parts.length-1)];
+  if (!current) return <p className="muted">{tr(book.language,"Add content to preview this book.","أضف محتوى لتتمكن من معاينة الكتاب.","Lägg till innehåll för att förhandsgranska boken.")}</p>;
   return <section className="book-section-reader" dir={book.language==="ar"?"rtl":"ltr"}
       aria-label={tr(book.language,"Browse book sections","تصفح أقسام الكتاب","Bläddra genom boken")}>
     <div className="book-reader-header">
       <strong>{tr(book.language,"Browse your book","تصفح كتابك","Bläddra i din bok")}</strong>
       <span>{Math.min(index+1,parts.length)} / {parts.length}</span>
     </div>
+    <label className="book-reader-jump">
+      <span>{tr(book.language,"Go to","الانتقال إلى","Gå till")}</span>
+      <select aria-label={tr(book.language,"Select a book part","اختر جزءًا من الكتاب","Välj en del av boken")}
+        value={current.id} onChange={e=>{const i=parts.findIndex(part=>part.id===e.target.value);if(i>=0)setIndex(i);}}>
+        {parts.map(part=><option key={part.id} value={part.id}>{part.title}</option>)}
+      </select>
+    </label>
     <div className="book-reader-page" key={current.id}>
       {current.type==="cover" ? <div className="preview-cover">
         <BookCover title={book.title} subtitle={book.subtitle} author={book.author}
@@ -37,15 +46,15 @@ export function BookSectionReader({book, bookId}:{book:BookWithCover;bookId:stri
           language={book.language} blurb={book.back_blurb||book.idea}
           authorBio={book.author_bio||""} image={book.back_cover_url}/>
       </div> : <div className={`reader-content theme-${book.layout_theme || "classic"}`}>
-        <h2>{current.title}</h2>
+        {(current.type!=="chapter" || book.show_section_titles !== false) && <h2>{current.title}</h2>}
         {current.type==="toc" ? book.outline.map((c,i)=><p key={c.id}>
           <button type="button" onClick={()=>setIndex(parts.findIndex(part=>part.id===c.id))}>{i+1}. {c.title}</button>
         </p>) : current.content ? <Markdown text={current.content}
           illustrations={book.illustrations} bookId={bookId}/> :
-          <p className="muted">{tr(book.language,"Chapter not written yet","لم يُكتب هذا الفصل بعد","Kapitlet är inte skrivet än")}</p>}
+          <p className="muted">{tr(book.language,"Part not written yet","لم يُكتب هذا الجزء بعد","Delen är inte skriven än")}</p>}
       </div>}
     </div>
-    <div className="book-reader-nav">
+    <nav className="book-reader-nav" aria-label={tr(book.language,"Content navigation","التنقل بين الأجزاء","Navigera mellan delar")}>
       <button type="button" className="button button-outline button-small" disabled={index<=0}
         onClick={()=>setIndex(i=>Math.max(0,i-1))}>
         <ChevronLeft size={17}/>{tr(book.language,"Previous","السابق","Föregående")}
@@ -55,10 +64,11 @@ export function BookSectionReader({book, bookId}:{book:BookWithCover;bookId:stri
         onClick={()=>setIndex(i=>Math.min(parts.length-1,i+1))}>
         {tr(book.language,"Next","التالي","Nästa")}<ChevronRight size={17}/>
       </button>
-    </div>
+    </nav>
     <p className="book-reader-note">{tr(book.language,
       "This viewer navigates sections. Use PDF preview for exact printable page breaks.",
       "هذا القارئ يتنقّل بين أقسام الكتاب. استخدم معاينة PDF لرؤية حدود الصفحات الحقيقية.",
       "Den här läsaren visar avsnitt. För exakta sidbrytningar använder du PDF-förhandsvisningen.")}</p>
+    <span className="sr-only">{partLabel(book.language,book.section_unit,true)}</span>
   </section>;
 }

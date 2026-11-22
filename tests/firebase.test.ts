@@ -219,6 +219,32 @@ test(
         store.createManualOutline(other, manualBookId, manuallyPlanned.revision),
         /not_found/,
       );
+      // Library lifecycle: recovery never deletes versions, artwork or another user's work.
+      const trashId = await store.createBook(uid, brief);
+      const originalCount = (await store.profile(uid))!.book_count;
+      const renamed = await store.renameBook(uid, trashId, 0, "Saved draft");
+      assert.equal(renamed.title, "Saved draft");
+      await assert.rejects(store.renameBook(uid, trashId, 0, "Stale"), /conflict/);
+      await assert.rejects(store.renameBook(other, trashId, renamed.revision, "Foreign"), /not_found/);
+      await store.trashBook(uid, trashId);
+      await store.trashBook(uid, trashId); // Duplicate requests do not affect quotas.
+      assert.equal((await store.profile(uid))!.book_count, originalCount - 1);
+      assert.ok((await store.listLibrary(uid)).trash.some(b => b.id === trashId));
+      assert.ok(!(await store.listBooks(uid)).some(b => b.id === trashId));
+      await assert.rejects(store.ownedBook(trashId, uid), /not_found/);
+      await assert.rejects(store.restoreTrashedBook(other, trashId), /not_found/);
+      await assert.rejects(store.lockBookDeletion(uid, book2, true), /not_found/);
+      const reactivated = await store.restoreTrashedBook(uid, trashId);
+      assert.equal(reactivated.title, "Saved draft");
+      assert.equal((await store.profile(uid))!.book_count, originalCount);
+      await assert.rejects(store.restoreTrashedBook(uid, trashId), /not_found/);
+      await store.trashBook(uid, trashId);
+      await store.lockBookDeletion(uid, trashId, true);
+      await store.deleteBookRecords(uid, trashId);
+      assert.equal((await store.profile(uid))!.book_count, originalCount - 1);
+      assert.ok(!(await store.listLibrary(uid)).trash.some(b => b.id === trashId));
+      await assert.rejects(store.ownedBook(trashId, uid), /not_found/);
+
       for (let n = 0; n < 22; n++) {
         const current = await store.ownedBook(book, uid);
         await store.saveBook(uid, book, { ...current, title: `Save ${n}` });
